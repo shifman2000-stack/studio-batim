@@ -1,0 +1,313 @@
+/* ── Projects Page ── */
+.projects-container {
+  padding: 24px;
+  position: relative;
+}
+
+.projects-table-wrapper {
+  overflow-x: auto;
+  max-height: calc(100vh - 160px);
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.projects-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.projects-table th,
+.projects-table td {
+  text-align: center;
+  vertical-align: middle;
+  line-height: 16px;
+  padding: 0;
+}
+
+/* ── Colgroup column widths ── */
+/* serial=36px, info×2=120px, name+stage×9 share the rest equally */
+.col-w-serial { width: 36px; }
+.col-w-info   { width: 60px; }
+.col-w-name,
+.col-w-stage  { width: calc((100% - 36px - 120px) / 10); }
+
+/* ── Serial number column ── */
+.col-serial {
+  font-size: 11px;
+  color: #aaa;
+  border-left: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+
+/* ── Label column (sticky right) ── */
+.col-label {
+  white-space: nowrap;
+  position: sticky;
+  right: 0;
+  background: #fff;
+  border-left: 1px solid #ddd;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+  font-size: 12px;
+  height: 26px;
+  box-sizing: border-box;
+  z-index: 2;
+}
+
+/* ── All data columns ── */
+.col-project {
+  text-align: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid #eee;
+  border-right: 1px solid #eee;
+  font-size: 12px;
+  height: 26px;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* אחראית + דחיפות: shrink to content */
+.col-project.col-info {
+  white-space: nowrap;
+}
+
+/* Stage columns: fill remaining width equally */
+.col-project.col-stage {
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* colored cell: no padding so the inner div fills the full cell height */
+.col-project.col-colored {
+  padding: 0;
+}
+
+.col-project.col-colored .cell-fill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+/* Project name cell in body rows */
+.col-label.col-name {
+  font-weight: 600;
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* ── Sticky header row ── */
+.col-header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  font-weight: 700;
+  z-index: 3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* col-label + col-header together need higher z-index (corner cell) */
+.col-label.col-header {
+  z-index: 4;
+}
+
+/* ── Right-click Context Menu ── */
+.context-menu {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14);
+  z-index: 1000;
+  overflow: hidden;
+  min-width: 170px;
+}
+
+.context-menu-title {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #888;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  text-align: right;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+
+.context-menu-item:hover {
+  opacity: 0.75;
+}
+
+/* ── Footer Buttons ── */
+.projects-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.btn-add-project {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-archive {
+  background: #aaa;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-add-project:hover,
+.btn-archive:hover {
+  opacity: 0.82;
+}
+
+/* ── Add Project Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 28px;
+  width: 340px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.modal-label {
+  font-size: 13px;
+  color: #555;
+  text-align: right;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #000;
+  border-radius: 12px;
+  font-size: 14px;
+  text-align: right;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.modal-input:focus {
+  border-color: #555;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  justify-content: flex-start;
+  flex-direction: row-reverse;
+}
+
+.modal-btn-add {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 10px 28px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.modal-btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-btn-cancel {
+  background: #aaa;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.modal-btn-add:hover { opacity: 0.85; }
+.modal-btn-cancel:hover { opacity: 0.8; }
+
+/* ── Enhanced Context Menu ── */
+.context-menu-divider {
+  height: 1px;
+  background: #eee;
+  margin: 4px 0;
+}
+
+.context-menu-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.context-menu-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+
+.context-menu-save {
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.context-menu-item--active {
+  font-weight: 700;
+  outline: 2px solid #333;
+  outline-offset: -2px;
+}

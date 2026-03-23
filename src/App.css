@@ -1,14 +1,151 @@
-.container {
+/* ── Login / Register Page ── */
+.login-page {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  height: 100vh;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #fff;
 }
 
-h1 {
-  font-size: clamp(2rem, 8vw, 7rem);
-  font-weight: 700;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
+.login-logo {
+  width: 280px;
+  margin-bottom: 32px;
+}
+
+.login-box {
+  border: 1px solid #000;
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+.field-group label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #000;
+}
+
+.field-group input {
+  padding: 10px 12px;
+  border: 1px solid #000;
+  border-radius: 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  background: #fff;
+  color: #000;
+}
+
+.field-group input:focus {
+  border-color: #555;
+}
+
+/* ── Password toggle wrapper ── */
+.password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.password-input {
+  padding: 10px 12px;
+  padding-left: 38px;
+  border: 1px solid #000;
+  border-radius: 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  background: #fff;
+  color: #000;
+}
+
+.password-input:focus {
+  border-color: #555;
+}
+
+.eye-toggle {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+}
+
+.eye-toggle:hover {
+  opacity: 1;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #000;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+
+.login-btn:hover:not(:disabled) {
+  background-color: #222;
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Messages ── */
+.auth-error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-bottom: 12px;
+  text-align: right;
+}
+
+.auth-success {
+  color: #16a34a;
+  font-size: 13px;
+  margin-bottom: 12px;
+  text-align: right;
+}
+
+/* ── Switch mode ── */
+.auth-switch {
+  margin-top: 20px;
+  font-size: 13px;
   text-align: center;
+  color: #444;
+}
+
+.auth-link {
+  background: none;
+  border: none;
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 13px;
+  padding: 0;
+}
+
+.auth-link:hover {
+  opacity: 0.6;
 }

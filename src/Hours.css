@@ -1,0 +1,39 @@
+/* ── Hours Page ── */
+.hours-page {
+  min-height: 100vh;
+  background-color: #fff;
+}
+
+/* ── Tabs ── */
+.hours-tabs {
+  display: flex;
+  gap: 32px;
+  padding: 20px 24px 0px 24px;
+  border-bottom: 1px solid #ddd;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 400;
+  color: #000;
+  cursor: pointer;
+  padding: 4px 0 10px 0;
+  position: relative;
+}
+
+.tab-btn:hover {
+  opacity: 0.6;
+}
+
+.tab-btn.active {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* ── Content Area ── */
+.hours-content {
+  padding: 24px;
+}

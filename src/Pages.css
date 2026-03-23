@@ -1,0 +1,16 @@
+/* ── Shared page layout (Hours / Tasks / Clients) ── */
+.page {
+  min-height: 100vh;
+  background-color: #fff;
+}
+
+.page-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-bottom: 1px solid #ddd;
+}
+
+.page-logo {
+  width: 80px;
+}

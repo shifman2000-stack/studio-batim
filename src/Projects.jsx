@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from './Header'
 import { supabase } from './supabaseClient'
 import './Projects.css'
 
@@ -142,8 +141,6 @@ function Projects() {
   ──────────────────────────────────────── */
   return (
     <div className="page" dir="rtl">
-      <Header />
-
       <div className="projects-container">
         <div className="projects-table-wrapper">
           <table className="projects-table" dir="rtl">

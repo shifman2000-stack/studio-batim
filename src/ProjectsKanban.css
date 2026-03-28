@@ -167,6 +167,19 @@
   margin: 4px 0;
 }
 
+.context-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.context-menu-label {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
 .context-menu-item {
   display: block;
   width: 100%;

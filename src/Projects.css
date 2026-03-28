@@ -21,8 +21,10 @@
 .projects-table td {
   text-align: center;
   vertical-align: middle;
-  line-height: 16px;
-  padding: 0;
+  font-size: 15px;
+  line-height: 20px;
+  min-height: 33px;
+  padding: 3px 0;
 }
 
 /* ── Colgroup column widths ── */
@@ -34,7 +36,7 @@
 
 /* ── Serial number column ── */
 .col-serial {
-  font-size: 11px;
+  font-size: 13px;
   color: #aaa;
   border-left: 1px solid #eee;
   border-bottom: 1px solid #eee;
@@ -50,8 +52,8 @@
   border-left: 1px solid #ddd;
   border-bottom: 1px solid #eee;
   text-align: right;
-  font-size: 12px;
-  height: 26px;
+  font-size: 14px;
+  height: 33px;
   box-sizing: border-box;
   z-index: 2;
 }
@@ -62,8 +64,8 @@
   padding: 4px 8px;
   border-bottom: 1px solid #eee;
   border-right: 1px solid #eee;
-  font-size: 12px;
-  height: 26px;
+  font-size: 14px;
+  height: 33px;
   padding: 0;
   box-sizing: border-box;
   overflow: hidden;

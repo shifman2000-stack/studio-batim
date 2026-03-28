@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from './Header'
 import { supabase } from './supabaseClient'
 import './ProjectsKanban.css'
 
@@ -44,7 +43,34 @@ function ProjectsKanban() {
 
   const navigate = useNavigate()
 
-  useEffect(() => { fetchProjects(); fetchUserRole(); fetchUsers() }, [])
+  useEffect(() => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single()
+      if (profile) setUserRole(profile.role)
+
+      const { data: projectsData } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('archived', false)
+        .order('created_at', { ascending: false })
+      if (projectsData) setProjects(projectsData)
+
+      const { data: usersData } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('role', ['admin', 'employee'])
+        .order('first_name')
+      if (usersData) setUsers(usersData)
+    }
+    init()
+  }, [])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -59,19 +85,6 @@ function ProjectsKanban() {
     const { data, error } = await supabase
       .from('projects').select('*').eq('archived', false).order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
-  }
-
-  const fetchUserRole = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
-    if (data) setUserRole(data.role)
-  }
-
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name')
-    if (!error && data) setUsers(data)
   }
 
   const openModal = () => { setNewName(''); setNewResponsible(''); setModalError(''); setShowModal(true) }
@@ -145,8 +158,6 @@ function ProjectsKanban() {
 
   return (
     <div className="page" dir="rtl">
-      <Header />
-
       <div className="kanban-container">
 
         {/* Topbar */}
@@ -244,10 +255,8 @@ function ProjectsKanban() {
           className="context-menu"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
-          <div className="context-menu-title">{contextMenu.project.name}</div>
-          <div className="context-menu-divider" />
-          <div className="context-menu-title">אחראית</div>
-          <div className="context-menu-inline">
+          <div className="context-menu-row">
+            <span className="context-menu-label">אחראית</span>
             <select
               className="context-menu-input"
               value={ctxResponsible}
@@ -262,8 +271,8 @@ function ProjectsKanban() {
             </select>
           </div>
           <div className="context-menu-divider" />
-          <div className="context-menu-title">דחיפות</div>
-          <div className="context-menu-inline">
+          <div className="context-menu-row">
+            <span className="context-menu-label">דחיפות</span>
             <select
               className="context-menu-input"
               value={contextMenu.project.urgency || 'רגיל'}

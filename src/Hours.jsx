@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import GoogleCalendarPanel from './components/hours/GoogleCalendarPanel'
 import './Hours.css'
 
 // NOTE: Ensure the following columns exist in your Supabase tables:
@@ -81,6 +82,7 @@ const formatDate = (dateStr) => {
 function Hours() {
   const location = useLocation()
   const [userId, setUserId]       = useState(null)
+  const [userEmail, setUserEmail] = useState(null)
   const [userRole, setUserRole]   = useState(null)
   const [projects, setProjects]   = useState([])
 
@@ -89,7 +91,7 @@ function Hours() {
   const [calData, setCalData]     = useState({})
 
   // Form state
-  const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedDate, setSelectedDate] = useState(todayISO())
   const [arrival, setArrival]           = useState('')
   const [departure, setDeparture]       = useState('')
   const [dayType, setDayType]           = useState('work')
@@ -112,7 +114,7 @@ function Hours() {
     sickDays: 0, vacationDays: 0, totalMins: 0,
     pendingMins: 0, rejectedMins: 0, officeDays: 0, wfhDays: 0,
   })
-  const [adminTab, setAdminTab]           = useState(1) // 1=הזנת שעות 2=אישורים 3=דוחות
+  const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
   const [reportYear, setReportYear]       = useState(new Date().getFullYear())
   const [reportMonth, setReportMonth]     = useState(new Date().getMonth())
   const [reportData, setReportData]       = useState([])
@@ -121,7 +123,7 @@ function Hours() {
   useEffect(() => { init() }, [])
   useEffect(() => {
     if (location.state?.openTab === 'entry') {
-      setAdminTab(1)
+      setAdminTab(2)
       const dateStr = location.state?.date || todayISO()
       // Navigate calendar view to the correct month
       const d = new Date(dateStr + 'T00:00:00')
@@ -178,6 +180,7 @@ function Hours() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     setUserId(session.user.id)
+    setUserEmail(session.user.email || null)
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', session.user.id).single()
     if (profile) setUserRole(profile.role)
@@ -1220,10 +1223,14 @@ function Hours() {
                 <button
                   className={`hours-admin-tab${adminTab === 1 ? ' active' : ''}`}
                   onClick={() => setAdminTab(1)}
-                >הזנת שעות</button>
+                >פגישות</button>
                 <button
                   className={`hours-admin-tab${adminTab === 2 ? ' active' : ''}`}
                   onClick={() => setAdminTab(2)}
+                >הזנת שעות</button>
+                <button
+                  className={`hours-admin-tab${adminTab === 3 ? ' active' : ''}`}
+                  onClick={() => setAdminTab(3)}
                 >
                   אישורים
                   {approvalsList.length > 0 && (
@@ -1231,14 +1238,17 @@ function Hours() {
                   )}
                 </button>
                 <button
-                  className={`hours-admin-tab${adminTab === 3 ? ' active' : ''}`}
-                  onClick={() => setAdminTab(3)}
+                  className={`hours-admin-tab${adminTab === 4 ? ' active' : ''}`}
+                  onClick={() => setAdminTab(4)}
                 >דוחות</button>
               </div>
 
-              {adminTab === 1 && entryFormBody}
-              {adminTab === 2 && approvalsContent}
-              {adminTab === 3 && reportsContent}
+              {adminTab === 1 && (
+                <GoogleCalendarPanel selectedDate={selectedDate} userEmail={userEmail} />
+              )}
+              {adminTab === 2 && entryFormBody}
+              {adminTab === 3 && approvalsContent}
+              {adminTab === 4 && reportsContent}
             </div>
           </>
         ) : (

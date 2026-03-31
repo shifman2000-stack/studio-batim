@@ -24,6 +24,10 @@ dist-ssr
 .env.test.local
 .env.production.local
 
+# Local notes and docs (may contain secrets)
+*.txt
+*.docx
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

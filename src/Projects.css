@@ -1,5 +1,8 @@
 /* ── Projects Page ── */
 .projects-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 24px;
   position: relative;
 }
@@ -52,7 +55,7 @@
   border-left: 1px solid #ddd;
   border-bottom: 1px solid #eee;
   text-align: right;
-  font-size: 14px;
+  font-size: 15px;
   height: 33px;
   box-sizing: border-box;
   z-index: 2;
@@ -64,7 +67,7 @@
   padding: 4px 8px;
   border-bottom: 1px solid #eee;
   border-right: 1px solid #eee;
-  font-size: 14px;
+  font-size: 15px;
   height: 33px;
   padding: 0;
   box-sizing: border-box;

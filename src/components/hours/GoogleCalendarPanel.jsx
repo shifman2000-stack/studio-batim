@@ -3,6 +3,22 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const SCOPE     = 'https://www.googleapis.com/auth/calendar.readonly'
 
+// Google Calendar colorId → hex
+const GCAL_COLORS = {
+  '1':  '#7986CB',
+  '2':  '#33B679',
+  '3':  '#8E24AA',
+  '4':  '#E67C73',
+  '5':  '#F6BF26',
+  '6':  '#F4511E',
+  '7':  '#039BE5',
+  '8':  '#616161',
+  '9':  '#3F51B5',
+  '10': '#0B8043',
+  '11': '#D50000',
+}
+const DEFAULT_COLOR = '#4285F4'
+
 const HEBREW_MONTHS = [
   'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
   'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
@@ -22,7 +38,14 @@ function formatTime(isoStr) {
   })
 }
 
-export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
+// Returns the local YYYY-MM-DD string for an event's start
+function eventDateStr(ev) {
+  if (ev.start?.date) return ev.start.date          // all-day
+  if (ev.start?.dateTime) return ev.start.dateTime.slice(0, 10)
+  return null
+}
+
+export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear, viewMonth, onMonthEvents }) {
   const [connected, setConnected]       = useState(false)
   const [events, setEvents]             = useState([])
   const [loading, setLoading]           = useState(false)
@@ -41,7 +64,6 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
           )
           setGapiReady(true)
 
-          // Restore persisted token
           const saved = sessionStorage.getItem('gcal_token')
           if (saved) {
             window.gapi.client.setToken(JSON.parse(saved))
@@ -76,7 +98,6 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
       tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope:     SCOPE,
-        // Always show account picker, pre-filled with the app user's email
         prompt:     'select_account',
         login_hint: userEmail || '',
         callback:   (resp) => {
@@ -85,7 +106,6 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
             setError('שגיאה בהתחברות: ' + resp.error)
             return
           }
-          // Persist token for this browser session
           sessionStorage.setItem('gcal_token', JSON.stringify(window.gapi.client.getToken()))
           setConnected(true)
           setError('')
@@ -95,7 +115,60 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
     waitForGoogle()
   }, [gapiReady, userEmail])
 
-  // ── 3. Fetch events whenever date or connection changes ───────────────────
+  // ── 3. Handle 401 — clears connection and notifies parent ─────────────────
+  const handleExpired = useCallback(() => {
+    sessionStorage.removeItem('gcal_token')
+    window.gapi.client.setToken(null)
+    setConnected(false)
+    setEvents([])
+    if (onMonthEvents) onMonthEvents({})
+    setError('פג תוקף החיבור — אנא התחבר מחדש')
+  }, [onMonthEvents])
+
+  // ── 4. Fetch events for the full visible month → pass dots to parent ───────
+  const fetchMonthEvents = useCallback(async (year, month) => {
+    if (!gapiReady || !connected || onMonthEvents == null) return
+    try {
+      const firstDay  = new Date(year, month, 1)
+      const lastDay   = new Date(year, month + 1, 0)
+      const timeMin   = firstDay.toISOString()
+      const timeMax   = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59).toISOString()
+      const res = await window.gapi.client.calendar.events.list({
+        calendarId:   'primary',
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy:      'startTime',
+        maxResults:   500,
+      })
+      const items = res.result.items || []
+
+      // Build { 'YYYY-MM-DD': ['#hex', ...] }
+      const dots = {}
+      items.forEach(ev => {
+        const ds = eventDateStr(ev)
+        if (!ds) return
+        const color = ev.colorId ? (GCAL_COLORS[ev.colorId] || DEFAULT_COLOR) : DEFAULT_COLOR
+        if (!dots[ds]) dots[ds] = []
+        if (dots[ds].length < 3) dots[ds].push(color)
+      })
+      onMonthEvents(dots)
+    } catch (e) {
+      console.error('gcal month fetch error:', e)
+      if (e.status === 401) handleExpired()
+    }
+  }, [gapiReady, connected, onMonthEvents, handleExpired])
+
+  // Re-fetch month dots whenever month/year changes or connection established
+  useEffect(() => {
+    if (connected && viewYear != null && viewMonth != null) {
+      fetchMonthEvents(viewYear, viewMonth)
+    } else if (!connected && onMonthEvents) {
+      onMonthEvents({})
+    }
+  }, [connected, viewYear, viewMonth, fetchMonthEvents, onMonthEvents])
+
+  // ── 5. Fetch events for the selected day ──────────────────────────────────
   const fetchEvents = useCallback(async (dateStr) => {
     if (!dateStr || !gapiReady || !connected) return
     setLoading(true)
@@ -114,29 +187,20 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
       setEvents(res.result.items || [])
     } catch (e) {
       console.error('gcal fetch error:', e)
-      if (e.status === 401) {
-        // Token expired — clear and ask to reconnect
-        sessionStorage.removeItem('gcal_token')
-        window.gapi.client.setToken(null)
-        setConnected(false)
-        setEvents([])
-        setError('פג תוקף החיבור — אנא התחבר מחדש')
-      } else {
-        setError('שגיאה בטעינת אירועים')
-      }
+      if (e.status === 401) handleExpired()
+      else setError('שגיאה בטעינת אירועים')
     }
     setLoading(false)
-  }, [gapiReady, connected])
+  }, [gapiReady, connected, handleExpired])
 
   useEffect(() => {
     if (connected && selectedDate) fetchEvents(selectedDate)
     else if (!connected)           setEvents([])
   }, [connected, selectedDate, fetchEvents])
 
-  // ── 4. Handlers ───────────────────────────────────────────────────────────
+  // ── 6. Handlers ───────────────────────────────────────────────────────────
   const handleConnect = () => {
     if (!tokenClientRef.current) return
-    // Re-init with latest userEmail in case it arrived after mount
     if (userEmail) tokenClientRef.current.login_hint = userEmail
     tokenClientRef.current.requestAccessToken()
   }
@@ -151,19 +215,18 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
     setConnected(false)
     setEvents([])
     setError('')
+    if (onMonthEvents) onMonthEvents({})
   }
 
-  // ── 5. Render ─────────────────────────────────────────────────────────────
+  // ── 7. Render ─────────────────────────────────────────────────────────────
   return (
     <div className="gcal-panel">
-      {/* Header */}
       <div className="gcal-panel-header">
         <span className="gcal-panel-title">
           {selectedDate ? `לוז יומי — ${formatDateHebrew(selectedDate)}` : 'לוז יומי'}
         </span>
       </div>
 
-      {/* Not connected */}
       {!connected && (
         <div className="gcal-connect-area">
           <p className="gcal-connect-hint">
@@ -186,7 +249,6 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
         </div>
       )}
 
-      {/* Connected */}
       {connected && (
         <div className="gcal-events-area">
           {!selectedDate && (
@@ -208,13 +270,17 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail }) {
                 const timeLabel = isAllDay
                   ? 'כל היום'
                   : `${formatTime(ev.start.dateTime)} – ${formatTime(ev.end.dateTime)}`
+                const dotColor = ev.colorId ? (GCAL_COLORS[ev.colorId] || DEFAULT_COLOR) : DEFAULT_COLOR
                 return (
                   <li key={ev.id} className="gcal-event-card">
-                    <div className="gcal-event-time">{timeLabel}</div>
-                    <div className="gcal-event-title">{ev.summary || '(ללא כותרת)'}</div>
-                    {ev.location && (
-                      <div className="gcal-event-location">📍 {ev.location}</div>
-                    )}
+                    <span className="gcal-event-dot" style={{ background: dotColor }} />
+                    <div className="gcal-event-body">
+                      <div className="gcal-event-time">{timeLabel}</div>
+                      <div className="gcal-event-title">{ev.summary || '(ללא כותרת)'}</div>
+                      {ev.location && (
+                        <div className="gcal-event-location">📍 {ev.location}</div>
+                      )}
+                    </div>
                   </li>
                 )
               })}

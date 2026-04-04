@@ -1,0 +1,531 @@
+/* ── Root ── */
+.tt-root {
+  direction: rtl;
+  max-width: 50%;
+}
+
+.tt-loading {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+/* ── Milestone Timeline ── */
+.tt-timeline-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 16px 20px 20px;
+  margin-bottom: 16px;
+}
+
+.tt-timeline-inner {
+  position: relative;
+}
+
+/* Track line sits behind the nodes, vertically centered on circles */
+/* circle center = half-circle(12px) from top of nodes area */
+.tt-timeline-track {
+  position: absolute;
+  top: 12px;
+  right: 12px; /* inset by half circle width so line starts/ends at circle centers */
+  left: 12px;
+  height: 2px;
+  background: #9E9E9E;
+  border-radius: 99px;
+}
+
+/* Fill goes from the RIGHT (first milestone in RTL) inward */
+.tt-timeline-fill {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  background: #2D3748;
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
+
+/* Nodes row: RTL, evenly spaced */
+.tt-timeline-nodes {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  direction: rtl;
+  position: relative;
+}
+
+/* Individual node column */
+.tt-timeline-node-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+  max-width: 80px;
+}
+
+/* Circle node */
+.tt-timeline-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* Label below circle */
+.tt-timeline-label {
+  font-size: 12px;
+  color: #374151;
+  text-align: center;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  max-width: 80px;
+}
+
+/* ── Progress bar ── */
+.tt-progress-section {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tt-progress-label {
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tt-progress-label strong {
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.tt-progress-track {
+  flex: 1;
+  height: 7px;
+  background: #e5e7eb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.tt-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #7bc1b5, #87526d);
+  transition: width 0.4s ease;
+}
+
+.tt-progress-pct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 34px;
+  text-align: left;
+}
+
+/* ── Accordions ── */
+.tt-accordions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tt-accordion {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+/* ── Accordion header ── */
+.tt-accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  direction: rtl;
+  transition: filter 0.12s;
+}
+
+.tt-accordion-header:hover {
+  filter: brightness(0.96);
+}
+
+.tt-accordion-arrow {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.tt-accordion-title {
+  flex: 1;
+  text-align: right;
+}
+
+.tt-accordion-count {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 1px 9px;
+  flex-shrink: 0;
+}
+
+/* ── Accordion body ── */
+.tt-accordion-body {
+  border-top: 1px solid rgba(0,0,0,0.07);
+}
+
+/* ── Column header row ── */
+.tt-table-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  direction: rtl;
+  gap: 6px;
+}
+
+/* ── Task row ── */
+.tt-task-row {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  gap: 6px;
+  border-bottom: 1px solid #f3f4f6;
+  direction: rtl;
+  min-height: 36px;
+  background: #fff;
+  border-right: 3px solid transparent;
+  box-sizing: border-box;
+}
+
+.tt-task-row--even {
+  background: #f9fafb;
+}
+
+.tt-task-row:last-of-type {
+  border-bottom: none;
+}
+
+/* Milestone highlight — border-right is set inline with stage color */
+.tt-task-row--milestone {
+  background: #fdfcf7;
+}
+
+.tt-task-row--even.tt-task-row--milestone {
+  background: #faf9f2;
+}
+
+/* ── Column widths ── */
+.tt-col-milestone { flex: 0 0 52px; display: flex; justify-content: center; }
+.tt-col-name      { flex: 2;        min-width: 0; }
+.tt-col-status    { flex: 0 0 96px; }
+.tt-col-date      { flex: 0 0 120px; }
+.tt-col-notes     { flex: 1.5;      min-width: 0; }
+.tt-col-delete    { flex: 0 0 28px; display: flex; justify-content: center; }
+
+/* ── Star / milestone button ── */
+.tt-star-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #d1d5db;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.tt-star-btn:hover {
+  color: #f59e0b;
+}
+
+.tt-star-btn--active {
+  color: #f59e0b;
+}
+
+/* ── Task name ── */
+.tt-task-name {
+  font-size: 13px;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.tt-task-name--milestone {
+  font-weight: 600;
+}
+
+/* ── Status popover ── */
+.tt-status-popover-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tt-status-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tt-status-popover {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 130px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tt-status-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a1a2e;
+  width: 100%;
+  text-align: right;
+  direction: rtl;
+  transition: background 0.1s;
+}
+
+.tt-status-option:hover {
+  background: #f3f4f6;
+}
+
+.tt-status-option--active {
+  background: #f0fdf4;
+}
+
+/* ── Date input ── */
+.tt-date-input {
+  width: 100%;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: inherit;
+  background: transparent;
+  color: #374151;
+  outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.tt-date-input:hover,
+.tt-date-input:focus {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.tt-date-input:focus {
+  border-color: #7bc1b5;
+}
+
+/* ── Notes input ── */
+.tt-notes-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  background: transparent;
+  color: #374151;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.tt-notes-input:hover,
+.tt-notes-input:focus {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.tt-notes-input:focus {
+  border-color: #7bc1b5;
+}
+
+/* ── Delete button ── */
+.tt-row-delete-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #E24B4A;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.tt-row-delete-btn:hover {
+  opacity: 1;
+}
+
+/* ── Inline delete confirmation ── */
+.tt-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tt-delete-confirm-text {
+  font-size: 11px;
+  color: #E24B4A;
+  font-weight: 600;
+}
+
+.tt-delete-confirm-yes {
+  background: #E24B4A;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.tt-delete-confirm-no {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+}
+
+/* ── Add custom task ── */
+.tt-add-row-link {
+  display: block;
+  background: none;
+  border: none;
+  color: #7bc1b5;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: right;
+  width: 100%;
+  opacity: 0.75;
+  transition: opacity 0.12s;
+}
+
+.tt-add-row-link:hover {
+  opacity: 1;
+}
+
+.tt-add-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: #f7faf9;
+  border-top: 1px solid #e5e7eb;
+  direction: rtl;
+}
+
+.tt-add-row-input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid #7bc1b5;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  color: #1a1a2e;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(123,193,181,0.15);
+}
+
+.tt-add-row-confirm {
+  background: #7bc1b5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.tt-add-row-confirm:hover {
+  background: #4a9a8c;
+}
+
+.tt-add-row-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #888;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.tt-add-row-cancel:hover {
+  border-color: #aaa;
+}

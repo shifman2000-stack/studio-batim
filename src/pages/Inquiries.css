@@ -1,0 +1,703 @@
+/* ── Page shell ── */
+.inq-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #F7F8FA;
+  padding: 32px 40px;
+  box-sizing: border-box;
+  direction: rtl;
+}
+
+/* ── Header row ── */
+.inq-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.inq-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+/* ── Add button ── */
+.inq-add-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.inq-add-btn:hover {
+  background: #1a2535;
+}
+
+/* ── Table card ── */
+.inq-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.inq-loading,
+.inq-empty {
+  color: #888;
+  font-size: 14px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+/* ── Table ── */
+.inq-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+  direction: rtl;
+}
+
+.inq-table thead,
+.inq-table tbody {
+  display: block;
+  width: 100%;
+}
+
+.inq-table tr {
+  display: flex;
+  width: 100%;
+}
+
+.inq-table th {
+  background: #2D3748;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-left: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+}
+
+.inq-table th:last-child {
+  border-left: none;
+}
+
+.inq-table td {
+  padding: 10px 14px;
+  color: #374151;
+  border-bottom: 1px solid #f0f0f0;
+  border-left: 1px solid #f0f0f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.inq-table td:last-child {
+  border-left: none;
+}
+
+.inq-table tbody tr:nth-child(odd) td  { background: #fff; }
+.inq-table tbody tr:nth-child(even) td { background: #F9FAFB; }
+
+.inq-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.inq-row:hover td {
+  background: #EEF4FB !important;
+}
+
+/* ── Column widths ── */
+.inq-col-name        { flex: 1.5; min-width: 0; }
+.inq-col-phone       { flex: 1;   min-width: 0; justify-content: center; text-align: center; }
+.inq-col-date        { flex: 1;   min-width: 0; }
+.inq-col-action      { flex: 1;   min-width: 0; display: flex; align-items: center; justify-content: center; }
+.inq-col-convert     { flex: 1;   min-width: 0; display: flex; align-items: center; justify-content: center; }
+.inq-col-delete      { flex: 0 0 56px; display: flex; align-items: center; justify-content: center; }
+
+/* ── Status trigger ── */
+.inq-status-trigger {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.inq-status-trigger:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+/* ── Status popover ── */
+.inq-status-popover {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 140px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inq-status-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a1a2e;
+  width: 100%;
+  text-align: right;
+  direction: rtl;
+  transition: background 0.1s;
+}
+
+.inq-status-option:hover {
+  background: #f3f4f6;
+}
+
+.inq-status-option--active {
+  background: #f0fdf4;
+}
+
+/* ── Inline date input ── */
+.inq-date-input {
+  width: 100%;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: inherit;
+  background: transparent;
+  color: #374151;
+  outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.inq-date-input:hover,
+.inq-date-input:focus {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.inq-date-input:focus {
+  border-color: #7bc1b5;
+}
+
+/* ── Already-converted indicator ── */
+.inq-converted-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+/* ── Convert to project button ── */
+.inq-convert-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+
+.inq-convert-btn:hover {
+  color: #6b7280;
+}
+
+/* ── Delete button ── */
+.inq-delete-btn {
+  background: none;
+  border: none;
+  padding: 3px;
+  cursor: pointer;
+  color: #E24B4A;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.inq-delete-btn:hover {
+  opacity: 1;
+}
+
+/* ── Inline delete confirm ── */
+.inq-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.inq-delete-confirm-text {
+  font-size: 11px;
+  color: #E24B4A;
+  font-weight: 600;
+}
+
+.inq-delete-confirm-yes {
+  background: #E24B4A;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.inq-delete-confirm-no {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+}
+
+/* ── Modal overlay ── */
+.inq-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* ── Modal box ── */
+.inq-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 520px;
+  direction: rtl;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+
+/* ── Modal header ── */
+.inq-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.inq-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.inq-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.inq-modal-close:hover {
+  color: #555;
+}
+
+/* ── Modal body ── */
+.inq-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Section divider in modal ── */
+.inq-modal-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 6px;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 2px;
+}
+
+/* ── Form rows ── */
+.inq-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.inq-form-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.inq-form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.inq-form-input {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+  color: #1a1a2e;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+  direction: rtl;
+}
+
+.inq-form-input:focus {
+  border-color: #4F86C6;
+  box-shadow: 0 0 0 3px rgba(79,134,198,0.12);
+}
+
+.inq-form-select {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+  color: #1a1a2e;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+  direction: rtl;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.inq-form-select:focus {
+  border-color: #4F86C6;
+  box-shadow: 0 0 0 3px rgba(79,134,198,0.12);
+}
+
+.inq-form-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+/* ── Status selector row (in modal) ── */
+.inq-modal-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inq-modal-status-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.inq-modal-status-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inq-modal-status-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  background: none;
+  font-size: 12px;
+  font-family: inherit;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.inq-modal-status-btn:hover {
+  border-color: #aaa;
+  background: #f9fafb;
+}
+
+.inq-modal-status-btn--active {
+  border-color: currentColor;
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+/* ── Additional contacts ── */
+.inq-additional-contacts-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.inq-additional-contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+/* Main contact has no × button — 3 equal columns only */
+.inq-main-contact-row {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.inq-additional-contact-remove {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #ccc;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.12s;
+  font-family: inherit;
+}
+
+.inq-additional-contact-remove:hover {
+  color: #ef4444;
+}
+
+.inq-additional-contact-add {
+  background: none;
+  border: 1px dashed #d1d5db;
+  border-radius: 7px;
+  color: #888;
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  margin-top: 2px;
+  width: 100%;
+}
+
+.inq-additional-contact-add:hover {
+  border-color: #4F86C6;
+  color: #4F86C6;
+}
+
+/* ── WhatsApp button (grayed out) ── */
+.inq-whatsapp-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #aaa;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: not-allowed;
+  font-weight: 500;
+}
+
+.inq-whatsapp-dev {
+  font-size: 11px;
+  color: #bbb;
+  font-style: italic;
+}
+
+/* ── Modal footer ── */
+.inq-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.inq-modal-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inq-modal-save {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.inq-modal-save:hover:not(:disabled) {
+  background: #1a2535;
+}
+
+.inq-modal-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inq-modal-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.inq-modal-cancel:hover {
+  border-color: #aaa;
+}
+
+/* ── Convert button in modal footer ── */
+.inq-modal-convert-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #555;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.inq-modal-convert-btn:hover {
+  border-color: #2D3748;
+  color: #2D3748;
+}
+
+/* ── Trash button in modal footer ── */
+.inq-modal-trash-btn {
+  background: none;
+  border: none;
+  color: #E24B4A;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: color 0.12s;
+  flex-shrink: 0;
+}
+
+.inq-modal-trash-btn:hover {
+  color: #b91c1c;
+}
+
+/* ── Delete confirm in modal ── */
+.inq-modal-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inq-modal-delete-confirm-text {
+  font-size: 13px;
+  color: #E24B4A;
+  font-weight: 600;
+}
+
+.inq-modal-delete-yes {
+  background: #E24B4A;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.inq-modal-delete-no {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+}

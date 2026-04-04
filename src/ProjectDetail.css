@@ -1,0 +1,617 @@
+/* ── Page shell ── */
+.pd-page {
+  flex: 1;
+  min-height: 0;           /* required in flex context to allow shrinking */
+  background: #F7F8FA;
+  padding: 32px 40px 0;
+  box-sizing: border-box;
+  direction: rtl;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header row ── */
+.pd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.pd-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.pd-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.pd-stage-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pd-back-btn {
+  background: none;
+  border: none;
+  color: #4F86C6;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.pd-back-btn:hover {
+  color: #2a5fa8;
+  text-decoration: underline;
+}
+
+/* ── Tabs bar ── */
+.pd-tabs-bar {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.pd-tab {
+  background: none;
+  border: none;
+  padding: 10px 22px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pd-tab:hover:not(.pd-tab--disabled) {
+  color: #1a1a2e;
+}
+
+.pd-tab--active {
+  color: #1a1a2e;
+  font-weight: 700;
+}
+
+.pd-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: #4F86C6;
+  border-radius: 2px 2px 0 0;
+}
+
+.pd-tab--disabled {
+  color: #bbb;
+  cursor: not-allowed;
+}
+
+.pd-tab-soon {
+  font-size: 10px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #888;
+  border-radius: 8px;
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Tab content card (tabs 2 & 3) ── */
+.pd-content-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 32px;
+  min-height: 240px;
+}
+
+.pd-placeholder {
+  color: #aaa;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 60px;
+}
+
+/* ── Scrollable tab content area ── */
+/* direction: rtl causes browsers to place the scrollbar on the LEFT side */
+.pd-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 20px;
+  padding-bottom: 32px;
+  padding-left: 12px;
+  direction: rtl;
+}
+
+/* ── Tab 1 layout ── */
+.pd-tab1-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pd-info-cards-row {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+
+.pd-info-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  padding: 20px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* אנשי קשר — right 50% */
+.pd-info-cards-row > .pd-info-card:first-child {
+  flex: 2;
+}
+/* פרטי מגרש + בעלי מקצוע — 25% each (flex: 1 each, so ratio 2:1:1) */
+
+.pd-info-card--wide {
+  flex: none;
+  width: 100%;
+}
+
+.pd-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* ── Inline field ── */
+.pd-field-value {
+  display: block;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f7f8fa;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1a1a2e;
+  min-height: 28px;
+  transition: background 0.15s;
+}
+
+.pd-field-value:hover {
+  background: #eef0f5;
+}
+
+.pd-field-empty {
+  color: #bbb;
+  font-style: italic;
+}
+
+.pd-field-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #4F86C6;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+  box-sizing: border-box;
+  font-family: inherit;
+  direction: rtl;
+}
+
+/* ── Contact rows ── */
+.pd-contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1.5fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  direction: rtl;
+}
+
+.pd-contact-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1.5fr auto;
+  gap: 6px;
+  margin-bottom: 4px;
+  direction: rtl;
+}
+
+.pd-contact-col-label {
+  font-size: 14px;
+  color: #888;
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.pd-delete-btn {
+  background: none;
+  border: none;
+  color: #ccc;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 4px;
+  line-height: 1;
+}
+
+.pd-delete-btn:hover {
+  color: #ef4444;
+}
+
+.pd-add-btn {
+  margin-top: 10px;
+  background: none;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  color: #888;
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.pd-add-btn:hover {
+  border-color: #4F86C6;
+  color: #4F86C6;
+}
+
+/* ── Field rows in cards 2 & 4 ── */
+.pd-field-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  direction: rtl;
+}
+
+.pd-field-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+  width: 120px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.pd-field-cell {
+  flex: 1;
+}
+
+/* ── Card 3: professionals ── */
+.pd-prof-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  direction: rtl;
+}
+
+.pd-prof-label {
+  font-size: 14px;
+  color: #888;
+  font-weight: 400;
+  text-align: right;
+  width: 110px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Right side: name + icons in one row */
+.pd-prof-value-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Clickable professional name */
+.pd-prof-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1a1a2e;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.pd-prof-name-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Dash when no professional selected */
+.pd-prof-empty {
+  font-size: 14px;
+  color: #bbb;
+  flex: 1;
+}
+
+/* Trash — clear selection */
+.pd-prof-clear-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #E24B4A;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: color 0.12s;
+}
+
+.pd-prof-clear-btn:hover {
+  color: #b91c1c;
+}
+
+/* Plus button — plain icon, matches Trash icon weight */
+.pd-prof-pick-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+  color: #2D3748;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.12s;
+}
+
+.pd-prof-pick-btn:hover {
+  color: #4F86C6;
+}
+
+/* Popover wrapper (relative anchor) */
+.pd-prof-popover-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Dropdown panel */
+.pd-prof-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  min-width: 160px;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.pd-prof-popover-item {
+  background: none;
+  border: none;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a1a2e;
+  cursor: pointer;
+  text-align: right;
+  border-radius: 5px;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.pd-prof-popover-item:hover {
+  background: #f3f4f6;
+}
+
+.pd-prof-popover-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+}
+
+/* Transparent backdrop to close popover on outside click */
+.pd-prof-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+/* ── Mini-modal (add professional from ProjectDetail) ── */
+.pd-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pd-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 520px;
+  direction: rtl;
+  overflow: hidden;
+}
+
+.pd-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.pd-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.pd-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.pd-modal-close:hover { color: #555; }
+
+.pd-modal-body {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.pd-mf-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pd-mf-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pd-mf-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.pd-mf-input {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+  color: #1a1a2e;
+  direction: rtl;
+  box-sizing: border-box;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.pd-mf-input:focus {
+  border-color: #4F86C6;
+  box-shadow: 0 0 0 3px rgba(79,134,198,0.10);
+}
+
+.pd-mf-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.pd-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.pd-modal-save {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pd-modal-save:hover:not(:disabled) { background: #1a2535; }
+.pd-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pd-modal-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.pd-modal-cancel:hover { border-color: #aaa; }
+
+/* ── Card 4 committee grid ── */
+.pd-committee-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  direction: rtl;
+}
+
+.pd-committee-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Label width override for committee card (wider than other cards) */
+.pd-committee-col .pd-field-label {
+  width: 140px;
+  white-space: nowrap;
+}

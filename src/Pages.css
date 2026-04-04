@@ -1,6 +1,8 @@
 /* ── Shared page layout (Hours / Tasks / Clients) ── */
 .page {
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background-color: #fff;
 }
 

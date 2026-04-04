@@ -11,6 +11,11 @@ import Projects from './Projects.jsx'
 import ProjectDetail from './ProjectDetail.jsx'
 import ProjectsKanban from './ProjectsKanban.jsx'
 import Professionals from './Professionals.jsx'
+import Reports from './pages/Reports'
+import Inquiries from './pages/Inquiries'
+import ProjectStagesReport from './pages/reports/ProjectStagesReport'
+import HoursReport from './pages/reports/HoursReport'
+import InquiriesReport from './pages/reports/InquiriesReport'
 
 function Layout() {
   return (
@@ -34,6 +39,11 @@ createRoot(document.getElementById('root')).render(
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/פרויקטים" element={<ProjectsKanban />} />
           <Route path="/professionals" element={<Professionals />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/project-stages" element={<ProjectStagesReport />} />
+          <Route path="/reports/hours" element={<HoursReport />} />
+          <Route path="/inquiries" element={<Inquiries />} />
+          <Route path="/reports/inquiries" element={<InquiriesReport />} />
         </Route>
       </Routes>
     </BrowserRouter>

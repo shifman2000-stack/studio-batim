@@ -114,6 +114,7 @@ function Hours() {
     sickDays: 0, vacationDays: 0, totalMins: 0,
     pendingMins: 0, rejectedMins: 0, officeDays: 0, wfhDays: 0,
   })
+  const [gcalDots, setGcalDots]           = useState({}) // { 'YYYY-MM-DD': ['#hex',...] }
   const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
   const [reportYear, setReportYear]       = useState(new Date().getFullYear())
   const [reportMonth, setReportMonth]     = useState(new Date().getMonth())
@@ -834,11 +835,13 @@ function Hours() {
     <>
       <div className="hours-cal-header">
         <button className="hours-cal-nav" onClick={() => {
+          setGcalDots({})
           if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
           else setViewMonth(m => m + 1)
         }}>‹</button>
         <span className="hours-cal-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
         <button className="hours-cal-nav" onClick={() => {
+          setGcalDots({})
           if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
           else setViewMonth(m => m - 1)
         }}>›</button>
@@ -865,9 +868,18 @@ function Hours() {
           if (ds === today) cls += ' cal-today'
           if (isSel)        cls += ' cal-selected'
 
+          const dots = gcalDots[ds] || []
+
           return (
             <div key={ds} className={cls} onClick={() => selectDay(ds)}>
               <span className="cal-day-num">{day}</span>
+              {isAdmin && dots.length > 0 && (
+                <div className="cal-gcal-dots">
+                  {dots.slice(0, 3).map((color, i) => (
+                    <span key={i} className="cal-gcal-dot" style={{ background: color }} />
+                  ))}
+                </div>
+              )}
               {calStatus === 'approved' && dt === 'work' && (
                 <>
                   <span className="cal-status-approved">✓</span>
@@ -1244,7 +1256,13 @@ function Hours() {
               </div>
 
               {adminTab === 1 && (
-                <GoogleCalendarPanel selectedDate={selectedDate} userEmail={userEmail} />
+                <GoogleCalendarPanel
+                  selectedDate={selectedDate}
+                  userEmail={userEmail}
+                  viewYear={viewYear}
+                  viewMonth={viewMonth}
+                  onMonthEvents={setGcalDots}
+                />
               )}
               {adminTab === 2 && entryFormBody}
               {adminTab === 3 && approvalsContent}

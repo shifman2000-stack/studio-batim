@@ -189,6 +189,12 @@ function Header() {
           <NavLink to="/professionals" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>
             בעלי מקצוע
           </NavLink>
+          {role === 'admin' && (
+            <NavLink to="/inquiries" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>פניות</NavLink>
+          )}
+          {role === 'admin' && (
+            <NavLink to="/reports" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>דוחות</NavLink>
+          )}
         </nav>
 
       </div>

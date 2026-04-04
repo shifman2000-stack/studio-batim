@@ -1,0 +1,249 @@
+/* ── Page shell ── */
+.report-table-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #F7F8FA;
+  padding: 32px 40px;
+  direction: rtl;
+  box-sizing: border-box;
+}
+
+/* ── Header row: title left, back link right ── */
+.report-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.report-page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.report-back-btn {
+  background: none;
+  border: none;
+  color: #4F86C6;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.report-back-btn:hover {
+  color: #2a5fa8;
+  text-decoration: underline;
+}
+
+/* ── Controls: label + dropdown ── */
+.report-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.report-select-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2D3748;
+}
+
+.report-project-select {
+  padding: 9px 14px;
+  font-size: 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  direction: rtl;
+  width: 320px;
+  max-width: 100%;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  cursor: pointer;
+  color: #2D3748;
+  appearance: auto;
+}
+
+.report-project-select:focus {
+  border-color: #4F86C6;
+  box-shadow: 0 0 0 3px rgba(79,134,198,0.12);
+}
+
+/* ── Empty / loading states ── */
+.report-empty,
+.report-loading {
+  color: #888;
+  font-size: 14px;
+  margin-top: 24px;
+}
+
+/* ── White card used by both table-wrap and chart-wrap ── */
+.report-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+/* ── Chart + table side-by-side layout ── */
+.report-content-row {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: stretch;
+  direction: rtl;
+}
+
+.report-table-wrap {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.report-chart-wrap {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 16px 16px;
+  box-sizing: border-box;
+}
+
+.report-chart-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2D3748;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+/* ── Table ── */
+.report-stage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+  direction: rtl;
+}
+
+.report-stage-table th {
+  background: #2D3748;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
+
+.report-stage-table th:last-child {
+  border-left: none;
+}
+
+.report-stage-table tbody tr:nth-child(odd) td {
+  background: #fff;
+}
+
+.report-stage-table tbody tr:nth-child(even) td {
+  background: #F9FAFB;
+}
+
+.report-stage-table tbody tr:hover td {
+  background: #EEF4FB;
+}
+
+.report-stage-table td {
+  padding: 12px 16px;
+  color: #374151;
+  border-bottom: 1px solid #f0f0f0;
+  border-left: 1px solid #f0f0f0;
+}
+
+.report-stage-table td:last-child {
+  border-left: none;
+}
+
+/* Current stage: blue-green left border */
+.report-row-current td:first-child {
+  border-right: 4px solid #4F86C6;
+  padding-right: 12px;
+}
+
+.report-row-current td {
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+/* ── HoursReport page specific ── */
+.report-print-header-standalone {
+  display: none; /* visible only on print */
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 20px 16px 8px;
+  direction: rtl;
+}
+
+.hours-report-export-row {
+  display: flex;
+  justify-content: flex-start;
+  padding: 10px 16px;
+}
+
+.hours-report-export-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #555;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.hours-report-export-btn:hover {
+  color: #111;
+}
+
+.hours-report-fetch-btn {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hours-report-fetch-btn:hover {
+  background: #1a2535;
+}
+
+@media print {
+  body * { visibility: hidden !important; }
+  .report-print-header-standalone {
+    display: block !important;
+    visibility: visible !important;
+  }
+  .report-card,
+  .report-card * { visibility: visible !important; }
+  .report-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+  }
+  .hours-report-export-row { display: none !important; }
+}
+
+/* Totals row */
+.report-totals-row td {
+  font-weight: 700;
+  background: #F3F4F6 !important;
+  border-top: 2px solid #d1d5db;
+  color: #111;
+}

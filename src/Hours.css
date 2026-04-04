@@ -1,6 +1,8 @@
 /* ── Hours Page ── */
 .hours-page {
-  min-height: 100vh;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   background: #fff;
 }
 
@@ -461,6 +463,22 @@
 .cal-day-hours {
   font-size: 10px;
   color: #555;
+}
+
+/* Google Calendar event dots on calendar cells */
+.cal-gcal-dots {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.cal-gcal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .cal-day-label {
@@ -1062,12 +1080,27 @@
 .gcal-event-card {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-right: 3px solid #6366f1;
   border-radius: 6px;
   padding: 8px 10px;
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.gcal-event-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.gcal-event-body {
+  display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
 }
 
 .gcal-event-time {

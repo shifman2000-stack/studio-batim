@@ -1,0 +1,284 @@
+/* ── New Task Modal (ktm) ── */
+.ktm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ktm-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.20);
+  width: 100%;
+  max-width: 1050px;
+  direction: rtl;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ktm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ktm-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.ktm-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.ktm-close:hover { color: #555; }
+
+.ktm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 22px 0;
+}
+
+.ktm-row--inline {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ktm-inline-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ktm-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.ktm-project-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+  padding: 6px 10px;
+  background: #f7f8fa;
+  border-radius: 7px;
+}
+
+/* ── Project autocomplete ── */
+.ktm-project-search {
+  position: relative;
+}
+
+.ktm-project-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  direction: rtl;
+  outline: none;
+  box-sizing: border-box;
+  color: #1a1a2e;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+.ktm-project-input:focus { border-color: #4F86C6; }
+
+.ktm-project-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.ktm-project-option {
+  background: none;
+  border: none;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a1a2e;
+  cursor: pointer;
+  text-align: right;
+  border-radius: 5px;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.ktm-project-option:hover { background: #f3f4f6; }
+
+/* ── Pills ── */
+.ktm-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ktm-pills--nowrap {
+  flex-wrap: nowrap;
+}
+
+.ktm-pill {
+  height: 32px;
+  width: 120px;
+  padding: 0 12px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  background: #f0f0f0;
+  color: #333;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  transition: border-color 0.12s, opacity 0.12s;
+}
+
+.ktm-pill:hover { opacity: 0.85; }
+
+.ktm-pill--selected {
+  border-color: #000 !important;
+  font-weight: 700;
+}
+
+.ktm-pill--disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ktm-pill--stage {
+  /* bg and color set inline */
+}
+
+/* ── Date input ── */
+.ktm-date {
+  padding: 5px 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  direction: ltr;
+}
+
+.ktm-date:focus { border-color: #4F86C6; }
+
+/* ── Textarea ── */
+.ktm-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  direction: rtl;
+  box-sizing: border-box;
+}
+
+.ktm-textarea:focus { border-color: #4F86C6; }
+
+/* ── Footer ── */
+.ktm-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 22px 18px;
+  margin-top: 14px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.ktm-btn-save {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.ktm-btn-save:hover:not(:disabled) { background: #1a2535; }
+.ktm-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ktm-btn-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.ktm-btn-cancel:hover { border-color: #aaa; }
+
+.ktm-btn-clear {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #9ca3af;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0 4px;
+  margin-right: auto;
+}
+
+.ktm-btn-clear:hover { color: #6b7280; }
+
+/* ── Toast ── */
+.ktm-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2D3748;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 1200;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}

@@ -48,8 +48,9 @@ function Header() {
     // Step 3: clear any localStorage draft keys for this user
     localStorage.removeItem(`arrival_${uid}_${today}`)
     localStorage.removeItem(`departure_${uid}_${today}`)
-    // Step 4: reload with clean slate
-    window.location.reload()
+    // Step 4: navigate to the correct page for the switched user's role
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', uid).single()
+    window.location.href = profile?.role === 'employee' ? '/tasks' : '/פרויקטים'
   }
 
   useEffect(() => {

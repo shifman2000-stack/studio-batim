@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState, useRef } from 'react'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import ProfessionalModal from './components/professionals/ProfessionalModal'
 import DocumentsTab from './components/documents/DocumentsTab'
 import TasksTab from './components/tasks/TasksTab'
+import NewTaskModal from './NewTaskModal'
 import './ProjectDetail.css'
 
 const STAGE_COLORS = {
@@ -18,10 +20,123 @@ const STAGE_COLORS = {
   'השהייה':        { bg: '#bcaaae', text: '#000' },
 }
 
+// ── Tasks tab constants ──
+const PD_STAGES = [
+  'קליטת פרויקט', 'סקיצות', 'הדמיה', 'גרמושקה', 'רישוי',
+  'תכניות עבודה', 'בניה', 'גמר',
+]
+const PD_STATUSES = ['דחוף', 'פעיל', 'הושלם']
+const PD_STATUS_META = {
+  'דחוף':  { color: '#E24B4A' },
+  'פעיל':  { color: '#F6BF26' },
+  'הושלם': { color: '#1D9E75' },
+}
+
+const PdIconClock = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+)
+const PdIconCheckCircle = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+)
+const PdIconTrash2 = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+    <path d="M9 6V4h6v2"/>
+  </svg>
+)
+
+function pdStatusIcon(status, size = 18) {
+  if (status === 'הושלם') return <PdIconCheckCircle size={size} />
+  return <PdIconClock size={size} />
+}
+
+function PdStatusPopover({ status, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [pos,  setPos]  = useState({ top: 0, right: 0 })
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e) {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        popoverRef.current && !popoverRef.current.contains(e.target)
+      ) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function handleOpen() {
+    if (open) { setOpen(false); return }
+    const rect  = triggerRef.current.getBoundingClientRect()
+    const popH  = 116
+    const below = rect.bottom + 4
+    const above = rect.top - popH - 4
+    const top   = below + popH > window.innerHeight ? above : below
+    setPos({ top, right: window.innerWidth - rect.right })
+    setOpen(true)
+  }
+
+  const cur = PD_STATUS_META[status] ? status : 'פעיל'
+
+  return (
+    <div className="tasks-status-wrap">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="tasks-status-trigger"
+        style={{ color: PD_STATUS_META[cur].color }}
+        onClick={handleOpen}
+        title={cur}
+      >
+        {pdStatusIcon(cur)}
+      </button>
+      {open && createPortal(
+        <div
+          ref={popoverRef}
+          className="tasks-status-popover"
+          style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
+        >
+          {PD_STATUSES.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              className={'tasks-status-option' + (opt === cur ? ' tasks-status-option--active' : '')}
+              onClick={() => { setOpen(false); onSelect(opt) }}
+            >
+              <span style={{ color: PD_STATUS_META[opt].color, display: 'flex', alignItems: 'center' }}>
+                {pdStatusIcon(opt, 15)}
+              </span>
+              <span>{opt}</span>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 const TABS = [
+  { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
   { id: 3, label: 'מעקב שלבי התקדמות' },
   { id: 2, label: 'מעקב מסמכים' },
+  { id: 6, label: 'כתב כמויות', disabled: true },
+  { id: 7, label: 'חומרי גמר', disabled: true },
   { id: 4, label: 'שעות', disabled: true },
 ]
 
@@ -37,13 +152,13 @@ const PROF_ROLES = [
 ]
 
 /* ── Inline editable field ── */
-function InlineField({ value, onSave, placeholder = '', type = 'text', multiline = false }) {
+function InlineField({ value, onSave, placeholder = '', type = 'text', multiline = false, readOnly = false }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal]         = useState(value ?? '')
 
   useEffect(() => { setVal(value ?? '') }, [value])
 
-  if (editing) {
+  if (editing && !readOnly) {
     const props = {
       value: val,
       onChange: e => setVal(e.target.value),
@@ -59,7 +174,8 @@ function InlineField({ value, onSave, placeholder = '', type = 'text', multiline
   return (
     <span
       className={'pd-field-value' + (val ? '' : ' pd-field-empty')}
-      onClick={() => setEditing(true)}
+      onClick={() => { if (!readOnly) setEditing(true) }}
+      style={readOnly ? { cursor: 'default' } : {}}
     >
       {val || placeholder}
     </span>
@@ -68,30 +184,48 @@ function InlineField({ value, onSave, placeholder = '', type = 'text', multiline
 
 /* ── Main component ── */
 function ProjectDetail() {
-  const { id }     = useParams()
-  const navigate   = useNavigate()
+  const { id }      = useParams()
+  const navigate    = useNavigate()
+  const location    = useLocation()
+  const fromTasks   = location.state?.from === 'tasks'
+  const fromArchive = location.state?.fromArchive === true
 
   const [project, setProject]       = useState(null)
   const [activeTab, setActiveTab]   = useState(1)
   const [contacts, setContacts]     = useState([])
   const [clientInfo, setClientInfo] = useState(null)
 
-  /* professionals list — lightweight (id, name, profession only) */
+  /* professionals list */
   const [profList, setProfList] = useState([])
 
   /* shared professional modal */
   const [profModalOpen, setProfModalOpen]       = useState(false)
-  const [profModalEditRow, setProfModalEditRow] = useState(null) // null = add new
+  const [profModalEditRow, setProfModalEditRow] = useState(null)
 
-  /* selection popover — tracks which role's popover is open (idField or null) */
+  /* selection popover */
   const [selectionPopover, setSelectionPopover] = useState(null)
+
+  // ── Tasks tab state ──
+  const [pdTasks,    setPdTasks]    = useState([])
+  const [pdUsers,    setPdUsers]    = useState([])
+  const [pdLoading,  setPdLoading]  = useState(false)
+  const [pdFilterAssignee, setPdFilterAssignee] = useState('')
+  const [pdFilterStage,    setPdFilterStage]    = useState('')
+  const [pdFilterStatus,   setPdFilterStatus]   = useState('')
+  const [pdEditingCell, setPdEditingCell] = useState(null)
+  const [pdEditValue,   setPdEditValue]   = useState('')
+  const [pdConfirmDeleteId,  setPdConfirmDeleteId]  = useState(null)
+  const [pdDeletePopoverPos, setPdDeletePopoverPos] = useState({ top: 0, left: 0 })
+  const pdDeletePopoverRef = useRef(null)
+  const [pdShowNewTask, setPdShowNewTask] = useState(false)
+  const [pdTaskToast,   setPdTaskToast]   = useState(false)
 
   /* ── fetch project ── */
   useEffect(() => {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage')
+        .select('id, name, current_stage, is_favorite')
         .eq('id', id)
         .single()
       if (data) setProject(data)
@@ -123,6 +257,43 @@ function ProjectDetail() {
     }
     fetchProfessionals()
   }, [])
+
+  /* ── delete popover click-outside ── */
+  useEffect(() => {
+    if (!pdConfirmDeleteId) return
+    function handler(e) {
+      if (pdDeletePopoverRef.current && !pdDeletePopoverRef.current.contains(e.target)) {
+        setPdConfirmDeleteId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [pdConfirmDeleteId])
+
+  /* ── tasks tab fetch ── */
+  useEffect(() => {
+    if (activeTab !== 5) return
+    const load = async () => {
+      setPdLoading(true)
+      const [{ data: t }, { data: u }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('*, profiles!responsible_id(first_name)')
+          .eq('project_id', id)
+          .or('archived.eq.false,archived.is.null')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id, first_name')
+          .in('role', ['admin', 'employee'])
+          .order('first_name'),
+      ])
+      setPdTasks(t || [])
+      setPdUsers(u || [])
+      setPdLoading(false)
+    }
+    load()
+  }, [activeTab, id])
 
   /* ── Contact helpers ── */
   const saveContact = async (contactId, field, val) => {
@@ -182,7 +353,6 @@ function ProjectDetail() {
     const slim = { id: row.id, first_name: row.first_name, last_name: row.last_name, profession: row.profession }
     if (isNew) {
       setProfList(prev => [...prev, slim])
-      // Auto-select in the matching role dropdown if the slot is empty
       const role = PROF_ROLES.find(r => r.profession === row.profession)
       if (role && !clientInfo?.[role.idField]) {
         await saveClientInfo(role.idField, row.id)
@@ -193,18 +363,84 @@ function ProjectDetail() {
     closeProfModal()
   }
 
-  const handleProfDeleted = async (id) => {
-    setProfList(prev => prev.filter(p => p.id !== id))
-    // Clear any client_info references to this professional
+  const handleProfDeleted = async (profId) => {
+    setProfList(prev => prev.filter(p => p.id !== profId))
     const clearedFields = {}
     PROF_ROLES.forEach(role => {
-      if (clientInfo?.[role.idField] === id) clearedFields[role.idField] = null
+      if (clientInfo?.[role.idField] === profId) clearedFields[role.idField] = null
     })
     if (Object.keys(clearedFields).length > 0 && clientInfo?.id) {
       await supabase.from('client_info').update(clearedFields).eq('id', clientInfo.id)
       setClientInfo(prev => ({ ...prev, ...clearedFields }))
     }
     closeProfModal()
+  }
+
+  /* ── Tasks tab handlers ── */
+  async function handlePdStatusChange(taskId, newStatus) {
+    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId)
+    if (!error) setPdTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+  }
+
+  function pdStartEdit(taskId, field, current) {
+    setPdEditingCell({ taskId, field })
+    setPdEditValue(current ?? '')
+  }
+
+  async function pdSaveEdit() {
+    if (!pdEditingCell) return
+    const { taskId, field } = pdEditingCell
+    const value = pdEditValue === '' ? null : pdEditValue
+    const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
+    if (!error) {
+      if (field === 'responsible_id') {
+        const user = pdUsers.find(u => u.id === value)
+        setPdTasks(prev => prev.map(t => t.id === taskId
+          ? { ...t, responsible_id: value, profiles: user ? { first_name: user.first_name } : null }
+          : t
+        ))
+      } else {
+        setPdTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
+      }
+    }
+    setPdEditingCell(null)
+    setPdEditValue('')
+  }
+
+  function pdHandleEditKey(e) {
+    if (e.key === 'Enter')  pdSaveEdit()
+    if (e.key === 'Escape') { setPdEditingCell(null); setPdEditValue('') }
+  }
+
+  async function pdDoDelete(taskId) {
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (!error) setPdTasks(prev => prev.filter(t => t.id !== taskId))
+    setPdConfirmDeleteId(null)
+  }
+
+  function pdHandleTaskSaved() {
+    setPdTaskToast(true)
+    setTimeout(() => setPdTaskToast(false), 2500)
+    supabase
+      .from('tasks')
+      .select('*, profiles!responsible_id(first_name)')
+      .eq('project_id', id)
+      .or('archived.eq.false,archived.is.null')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { if (data) setPdTasks(data) })
+  }
+
+  function pdFormatDate(d) {
+    if (!d) return ''
+    const [y, m, day] = d.split('-')
+    return `${day}/${m}/${y}`
+  }
+
+  /* ── Favorite toggle ── */
+  const toggleFavorite = async () => {
+    const next = !project?.is_favorite
+    setProject(prev => ({ ...prev, is_favorite: next }))
+    await supabase.from('projects').update({ is_favorite: next }).eq('id', id)
   }
 
   const stageColor = project?.current_stage
@@ -223,6 +459,79 @@ function ProjectDetail() {
     { label: 'מהות הבקשה',               field: 'request_essence', multiline: true },
   ]
 
+  // ── Tasks tab computed values ──
+  const pdDistinctResponsibles = Object.values(
+    pdTasks.reduce((acc, t) => {
+      if (t.responsible_id && t.profiles?.first_name && !acc[t.responsible_id]) {
+        acc[t.responsible_id] = { id: t.responsible_id, firstName: t.profiles.first_name }
+      }
+      return acc
+    }, {})
+  ).sort((a, b) => a.firstName.localeCompare(b.firstName))
+
+  const pdFiltered = pdTasks.filter(t => {
+    if (pdFilterAssignee && t.responsible_id !== pdFilterAssignee) return false
+    if (pdFilterStage    && t.stage !== pdFilterStage) return false
+    if (pdFilterStatus   && t.status !== pdFilterStatus) return false
+    return true
+  })
+
+  const pdAnyFilter = !!(pdFilterAssignee || pdFilterStage || pdFilterStatus)
+
+  // ── Tasks tab inline edit cell ──
+  function PdEditCell({ task, field, className, children }) {
+    const isEditing = pdEditingCell?.taskId === task.id && pdEditingCell?.field === field
+    if (isEditing) {
+      if (field === 'stage') {
+        return (
+          <td className={className}>
+            <select className="tasks-cell-input" value={pdEditValue}
+              onChange={e => setPdEditValue(e.target.value)}
+              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
+              <option value="">—</option>
+              {PD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </td>
+        )
+      }
+      if (field === 'responsible_id') {
+        return (
+          <td className={className}>
+            <select className="tasks-cell-input" value={pdEditValue}
+              onChange={e => setPdEditValue(e.target.value)}
+              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
+              <option value="">—</option>
+              {pdUsers.map(u => (
+                <option key={u.id} value={u.id}>{u.first_name}</option>
+              ))}
+            </select>
+          </td>
+        )
+      }
+      if (field === 'due_date') {
+        return (
+          <td className={className}>
+            <input type="date" className="tasks-cell-input" value={pdEditValue || ''}
+              onChange={e => setPdEditValue(e.target.value)}
+              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
+          </td>
+        )
+      }
+      return (
+        <td className={className}>
+          <input className="tasks-cell-input" value={pdEditValue}
+            onChange={e => setPdEditValue(e.target.value)}
+            onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
+        </td>
+      )
+    }
+    return (
+      <td className={className} onClick={() => pdStartEdit(task.id, field, task[field])}>
+        {children}
+      </td>
+    )
+  }
+
   return (
     <div className="pd-page" dir="rtl">
 
@@ -230,19 +539,52 @@ function ProjectDetail() {
       <div className="pd-header">
         <div className="pd-header-left">
           <h1 className="pd-title">{project ? project.name : '…'}</h1>
-          {project?.current_stage && stageColor && (
-            <span
-              className="pd-stage-badge"
-              style={{ background: stageColor.bg, color: stageColor.text }}
-            >
-              {project.current_stage}
+          {project && !fromArchive && (
+            <button className="pd-star-btn" onClick={toggleFavorite} title={project.is_favorite ? 'הסר מהמועדפים' : 'הוסף למועדפים'}>
+              {project.is_favorite ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#F6BF26" stroke="#F6BF26" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              )}
+            </button>
+          )}
+          {fromArchive ? (
+            <span className="pd-stage-badge" style={{ background: '#E24B4A', color: '#fff' }}>
+              ארכיון
             </span>
+          ) : (
+            project?.current_stage && stageColor && (
+              <span className="pd-stage-badge" style={{ background: stageColor.bg, color: stageColor.text }}>
+                {project.current_stage}
+              </span>
+            )
           )}
         </div>
-        <button className="pd-back-btn" onClick={() => navigate('/פרויקטים')}>
-          ← חזרה לפרויקטים
-        </button>
+        {fromArchive ? (
+          <button className="pd-back-btn" onClick={() => navigate('/פרויקטים', { state: { showArchive: true } })}>
+            ← חזור לארכיון
+          </button>
+        ) : fromTasks ? (
+          <button className="pd-back-btn" onClick={() => navigate('/tasks')}>
+            ← חזור לניהול משימות
+          </button>
+        ) : (
+          <button className="pd-back-btn" onClick={() => navigate('/פרויקטים')}>
+            ← חזרה לפרויקטים
+          </button>
+        )}
       </div>
+
+      {/* ── Archive read-only banner ── */}
+      {fromArchive && (
+        <div className="pd-archive-banner">
+          פרויקט בארכיון — מצב קריאה בלבד
+        </div>
+      )}
 
       {/* ── Tabs bar ── */}
       <div className="pd-tabs-bar">
@@ -263,14 +605,123 @@ function ProjectDetail() {
         ))}
       </div>
 
-      {/* ── Scrollable tab content ── */}
-      <div className="pd-tab-content">
+      {/* ── Tab content ── */}
+      <div className={`pd-tab-content${activeTab === 5 ? ' pd-tab-content--tasks' : ''}`}>
+
+        {/* ── Tab 5 — משימות ── */}
+        {activeTab === 5 && (
+          <div className="pd-tasks-tab">
+            <div className="tasks-filter-bar">
+              <div className="tasks-filter-selects">
+                <div className="tasks-filter-group">
+                  <span className="tasks-filter-label">אחראית</span>
+                  <select className="tasks-filter-select" value={pdFilterAssignee} onChange={e => setPdFilterAssignee(e.target.value)}>
+                    <option value="">הכל</option>
+                    {pdDistinctResponsibles.map(r => <option key={r.id} value={r.id}>{r.firstName}</option>)}
+                  </select>
+                </div>
+                <div className="tasks-filter-group">
+                  <span className="tasks-filter-label">שלב</span>
+                  <select className="tasks-filter-select" value={pdFilterStage} onChange={e => setPdFilterStage(e.target.value)}>
+                    <option value="">הכל</option>
+                    {PD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="tasks-filter-group">
+                  <span className="tasks-filter-label">סטטוס</span>
+                  <select className="tasks-filter-select" value={pdFilterStatus} onChange={e => setPdFilterStatus(e.target.value)}>
+                    <option value="">הכל</option>
+                    {PD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="tasks-filter-group tasks-filter-group--reset">
+                  <button
+                    className="tasks-filter-reset"
+                    onClick={() => { setPdFilterAssignee(''); setPdFilterStage(''); setPdFilterStatus('') }}
+                    disabled={!pdAnyFilter}
+                  >
+                    בטל סינונים
+                  </button>
+                </div>
+              </div>
+              <div className="tasks-filter-actions">
+                <button className="tasks-new-btn" onClick={() => setPdShowNewTask(true)}>
+                  <span className="tasks-new-btn-icon">+</span>
+                  משימה חדשה
+                </button>
+              </div>
+            </div>
+
+            <div className="tasks-table-card">
+              <div className="tasks-table-scroll">
+                <table className="tasks-table">
+                  <thead>
+                    <tr>
+                      <th className="tasks-col-status"></th>
+                      <th className="tasks-col-stage">שלב</th>
+                      <th className="tasks-col-desc">תיאור</th>
+                      <th className="tasks-col-assignee">אחראית</th>
+                      <th className="tasks-col-date">תאריך יעד</th>
+                      <th className="tasks-col-notes">הערות</th>
+                      <th className="tasks-col-delete"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pdLoading ? (
+                      <tr><td colSpan={7} style={{ display: 'block' }}><p className="tasks-empty">טוען...</p></td></tr>
+                    ) : pdFiltered.length === 0 ? (
+                      <tr><td colSpan={7} style={{ display: 'block' }}><p className="tasks-empty">אין משימות להצגה</p></td></tr>
+                    ) : pdFiltered.map(task => {
+                      const isUrgent = task.status === 'דחוף'
+                      return (
+                        <tr key={task.id} className={`tasks-row${isUrgent ? ' tasks-row--urgent' : ''}`}>
+                          <td className="tasks-col-status" onClick={e => e.stopPropagation()}>
+                            <PdStatusPopover
+                              status={task.status}
+                              onSelect={val => handlePdStatusChange(task.id, val)}
+                            />
+                          </td>
+                          <PdEditCell task={task} field="stage" className="tasks-col-stage">
+                            <span className="tasks-cell-value">{task.stage || ''}</span>
+                          </PdEditCell>
+                          <PdEditCell task={task} field="description" className="tasks-col-desc">
+                            <span className="tasks-cell-value">{task.description || ''}</span>
+                          </PdEditCell>
+                          <PdEditCell task={task} field="responsible_id" className="tasks-col-assignee">
+                            <span className="tasks-cell-value">{task.profiles?.first_name || ''}</span>
+                          </PdEditCell>
+                          <PdEditCell task={task} field="due_date" className="tasks-col-date">
+                            <span className="tasks-cell-value">{pdFormatDate(task.due_date)}</span>
+                          </PdEditCell>
+                          <PdEditCell task={task} field="notes" className="tasks-col-notes">
+                            <span className="tasks-cell-value">{task.notes || ''}</span>
+                          </PdEditCell>
+                          <td className="tasks-col-delete" onClick={e => e.stopPropagation()}>
+                            <button
+                              className="tasks-delete-btn"
+                              onClick={e => {
+                                const rect = e.currentTarget.getBoundingClientRect()
+                                setPdDeletePopoverPos({ top: rect.bottom + 4, left: rect.left })
+                                setPdConfirmDeleteId(task.id)
+                              }}
+                            >
+                              <PdIconTrash2 />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Tab 1 — פרטי תיק ── */}
         {activeTab === 1 && (
           <div className="pd-tab1-grid">
 
-            {/* Top row: 3 cards */}
             <div className="pd-info-cards-row">
 
               {/* Right 50%: אנשי קשר */}
@@ -290,68 +741,37 @@ function ProjectDetail() {
 
                 {contacts.map(contact => (
                   <div key={contact.id} className="pd-contact-row">
-                    <InlineField
-                      value={contact.first_name}
-                      placeholder="שם פרטי"
-                      onSave={val => saveContact(contact.id, 'first_name', val)}
-                    />
-                    <InlineField
-                      value={contact.last_name}
-                      placeholder="שם משפחה"
-                      onSave={val => saveContact(contact.id, 'last_name', val)}
-                    />
-                    <InlineField
-                      value={contact.id_number}
-                      placeholder="ת.ז"
-                      onSave={val => saveContact(contact.id, 'id_number', val)}
-                    />
-                    <InlineField
-                      value={contact.phone}
-                      placeholder="טלפון"
-                      type="tel"
-                      onSave={val => saveContact(contact.id, 'phone', val)}
-                    />
-                    <InlineField
-                      value={contact.email}
-                      placeholder="מייל"
-                      type="email"
-                      onSave={val => saveContact(contact.id, 'email', val)}
-                    />
-                    <button
-                      className="pd-delete-btn"
-                      onClick={() => deleteContact(contact.id)}
-                      title="מחק איש קשר"
-                    >
-                      ×
-                    </button>
+                    <InlineField value={contact.first_name} placeholder="שם פרטי" onSave={val => saveContact(contact.id, 'first_name', val)} readOnly={fromArchive} />
+                    <InlineField value={contact.last_name} placeholder="שם משפחה" onSave={val => saveContact(contact.id, 'last_name', val)} readOnly={fromArchive} />
+                    <InlineField value={contact.id_number} placeholder="ת.ז" onSave={val => saveContact(contact.id, 'id_number', val)} readOnly={fromArchive} />
+                    <InlineField value={contact.phone} placeholder="טלפון" type="tel" onSave={val => saveContact(contact.id, 'phone', val)} readOnly={fromArchive} />
+                    <InlineField value={contact.email} placeholder="מייל" type="email" onSave={val => saveContact(contact.id, 'email', val)} readOnly={fromArchive} />
+                    {!fromArchive && (
+                      <button className="pd-delete-btn" onClick={() => deleteContact(contact.id)} title="מחק איש קשר">×</button>
+                    )}
                   </div>
                 ))}
 
-                <button className="pd-add-btn" onClick={addContact}>
-                  + הוסף איש קשר
-                </button>
+                {!fromArchive && (
+                  <button className="pd-add-btn" onClick={addContact}>+ הוסף איש קשר</button>
+                )}
               </div>
 
               {/* Middle 25%: פרטי מגרש */}
               <div className="pd-info-card">
                 <div className="pd-card-title">פרטי מגרש</div>
                 {[
-                  { label: 'ישוב',                 field: 'city' },
-                  { label: 'גוש',                  field: 'gush' },
-                  { label: 'חלקה',                 field: 'helka' },
-                  { label: 'מגרש',                 field: 'migrash' },
-                  { label: 'שטח המגרש',            field: 'area' },
-                  { label: 'תוכניות חלות במקום',   field: 'active_plans', multiline: true },
+                  { label: 'ישוב',               field: 'city' },
+                  { label: 'גוש',                field: 'gush' },
+                  { label: 'חלקה',               field: 'helka' },
+                  { label: 'מגרש',               field: 'migrash' },
+                  { label: 'שטח המגרש',          field: 'area' },
+                  { label: 'תוכניות חלות במקום', field: 'active_plans', multiline: true },
                 ].map(({ label, field, multiline }) => (
                   <div key={field} className="pd-field-row">
                     <span className="pd-field-label">{label}</span>
                     <div className="pd-field-cell">
-                      <InlineField
-                        value={clientInfo?.[field]}
-                        placeholder="—"
-                        multiline={multiline}
-                        onSave={val => saveClientInfo(field, val)}
-                      />
+                      <InlineField value={clientInfo?.[field]} placeholder="—" multiline={multiline} onSave={val => saveClientInfo(field, val)} readOnly={fromArchive} />
                     </div>
                   </div>
                 ))}
@@ -371,30 +791,16 @@ function ProjectDetail() {
                     <div key={idField} className="pd-prof-row">
                       <span className="pd-prof-label">{label}</span>
                       <div className="pd-prof-value-wrap">
-                        {/* Name or dash */}
                         {selectedId && fullName ? (
-                          <button
-                            type="button"
-                            className="pd-prof-name-btn"
-                            onClick={() => openProfEdit(selectedId)}
-                            title="ערוך פרטי בעל מקצוע"
-                          >
+                          <button type="button" className="pd-prof-name-btn" onClick={() => openProfEdit(selectedId)} title="ערוך פרטי בעל מקצוע">
                             {fullName}
                           </button>
                         ) : (
                           <span className="pd-prof-empty">—</span>
                         )}
-
-                        {/* Trash — clear selection */}
-                        {selectedId && (
-                          <button
-                            type="button"
-                            className="pd-prof-clear-btn"
-                            onClick={() => saveClientInfo(idField, '')}
-                            title="הסר בחירה"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {selectedId && !fromArchive && (
+                          <button type="button" className="pd-prof-clear-btn" onClick={() => saveClientInfo(idField, '')} title="הסר בחירה">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="3 6 5 6 21 6"/>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                               <line x1="10" y1="11" x2="10" y2="17"/>
@@ -402,17 +808,9 @@ function ProjectDetail() {
                             </svg>
                           </button>
                         )}
-
-                        {/* Plus — open selection popover */}
-                        <div className="pd-prof-popover-wrap">
-                          <button
-                            type="button"
-                            className="pd-prof-pick-btn"
-                            onClick={() => setSelectionPopover(selectionPopover === idField ? null : idField)}
-                            title="בחר בעל מקצוע"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {!fromArchive && <div className="pd-prof-popover-wrap">
+                          <button type="button" className="pd-prof-pick-btn" onClick={() => setSelectionPopover(selectionPopover === idField ? null : idField)} title="בחר בעל מקצוע">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="12" cy="12" r="10"/>
                               <line x1="12" y1="8" x2="12" y2="16"/>
                               <line x1="8" y1="12" x2="16" y2="12"/>
@@ -424,29 +822,22 @@ function ProjectDetail() {
                                 <div className="pd-prof-popover-empty">אין בעלי מקצוע במקצוע זה</div>
                               ) : (
                                 options.map(p => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    className="pd-prof-popover-item"
-                                    onClick={() => {
-                                      saveClientInfo(idField, p.id)
-                                      setSelectionPopover(null)
-                                    }}
-                                  >
+                                  <button key={p.id} type="button" className="pd-prof-popover-item"
+                                    onClick={() => { saveClientInfo(idField, p.id); setSelectionPopover(null) }}>
                                     {`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—'}
                                   </button>
                                 ))
                               )}
                             </div>
                           )}
-                        </div>
+                        </div>}
                       </div>
                     </div>
                   )
                 })}
-                <button type="button" className="pd-add-btn" onClick={openProfNew}>
-                  + הוסף בעל מקצוע חדש
-                </button>
+                {!fromArchive && (
+                  <button type="button" className="pd-add-btn" onClick={openProfNew}>+ הוסף בעל מקצוע חדש</button>
+                )}
               </div>
 
             </div>{/* end pd-info-cards-row */}
@@ -455,34 +846,22 @@ function ProjectDetail() {
             <div className="pd-info-card pd-info-card--wide">
               <div className="pd-card-title">פרטי רישוי</div>
               <div className="pd-committee-grid">
-                {/* Right column: ועדה, בודקת, תיק מידע רישוי זמין, תיק בניין */}
                 <div className="pd-committee-col">
                   {committeeFields.slice(0, 4).map(({ label, field, multiline }) => (
                     <div key={field} className="pd-field-row">
                       <span className="pd-field-label">{label}</span>
                       <div className="pd-field-cell">
-                        <InlineField
-                          value={clientInfo?.[field]}
-                          placeholder="—"
-                          multiline={multiline}
-                          onSave={val => saveClientInfo(field, val)}
-                        />
+                        <InlineField value={clientInfo?.[field]} placeholder="—" multiline={multiline} onSave={val => saveClientInfo(field, val)} readOnly={fromArchive} />
                       </div>
                     </div>
                   ))}
                 </div>
-                {/* Left column: מספר בקשה פנימי/ועדה, מספר בקשה רישוי זמין, תיק הג"א, מהות הבקשה */}
                 <div className="pd-committee-col">
                   {committeeFields.slice(4).map(({ label, field, multiline }) => (
                     <div key={field} className="pd-field-row">
                       <span className="pd-field-label">{label}</span>
                       <div className="pd-field-cell">
-                        <InlineField
-                          value={clientInfo?.[field]}
-                          placeholder="—"
-                          multiline={multiline}
-                          onSave={val => saveClientInfo(field, val)}
-                        />
+                        <InlineField value={clientInfo?.[field]} placeholder="—" multiline={multiline} onSave={val => saveClientInfo(field, val)} readOnly={fromArchive} />
                       </div>
                     </div>
                   ))}
@@ -510,7 +889,7 @@ function ProjectDetail() {
         <div className="pd-prof-backdrop" onClick={() => setSelectionPopover(null)} />
       )}
 
-      {/* ── Professional modal (shared component) ── */}
+      {/* ── Professional modal ── */}
       {profModalOpen && (
         <ProfessionalModal
           key={profModalEditRow?.id ?? 'new'}
@@ -519,6 +898,34 @@ function ProjectDetail() {
           onSaved={handleProfSaved}
           onDeleted={handleProfDeleted}
         />
+      )}
+
+      {/* ── Tasks tab: delete confirm popover ── */}
+      {pdConfirmDeleteId && createPortal(
+        <div
+          ref={pdDeletePopoverRef}
+          className="tasks-delete-popover"
+          style={{ position: 'fixed', top: pdDeletePopoverPos.top, left: pdDeletePopoverPos.left, zIndex: 9999 }}
+          dir="rtl"
+        >
+          <span className="tasks-delete-popover-text">מחק משימה?</span>
+          <button className="tasks-delete-yes" onClick={() => pdDoDelete(pdConfirmDeleteId)}>מחק</button>
+          <button className="tasks-delete-no" onClick={() => setPdConfirmDeleteId(null)}>ביטול</button>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Tasks tab: new task modal ── */}
+      {pdShowNewTask && project && (
+        <NewTaskModal
+          project={project}
+          onClose={() => setPdShowNewTask(false)}
+          onSaved={pdHandleTaskSaved}
+        />
+      )}
+
+      {pdTaskToast && (
+        <div className="ktm-toast">המשימה נשמרה ✓</div>
       )}
 
     </div>

@@ -1,11 +1,8 @@
 /* ── Kanban Page ── */
 .kanban-container {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 24px;
   display: flex;
   flex-direction: column;
+  padding: 16px 24px 0;
   gap: 12px;
 }
 
@@ -36,38 +33,71 @@
 }
 
 .kanban-filter-reset {
-  padding: 4px 10px;
-  border: 1px solid #aaa;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
   border-radius: 6px;
   font-size: 15px;
-  background: #f5f5f5;
+  background: #fff;
   cursor: pointer;
-  color: #555;
+  outline: none;
+  direction: rtl;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: background 0.12s;
 }
 
-.kanban-filter-reset:hover {
-  background: #eee;
+.kanban-filter-reset:hover { background: #f5f5f5; }
+
+.kanban-filter-sep {
+  width: 1px;
+  height: 20px;
+  background: #d1d5db;
+  margin: 0 4px;
+  flex-shrink: 0;
 }
+
+.kanban-filter-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.kanban-filter-icon:hover { background: #f0f0f0; }
+.kanban-filter-icon--active { background: #f5f5f5; }
 
 /* ── Board ── */
 .kanban-board {
+  height: calc(100vh - 150px);
+  overflow-x: auto;
+  overflow-y: scroll;
+  padding-bottom: 16px;
+  padding-right: 16px;
+  padding-left: 12px;
+  direction: ltr;
+}
+
+.kanban-columns-wrap {
   display: flex;
   gap: 6px;
   align-items: flex-start;
-  width: 100%;
+  direction: rtl;
 }
 
 /* ── Column ── */
 .kanban-column {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 160px;
   display: flex;
   flex-direction: column;
   border-radius: 8px;
-  overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   background: #f7f7f7;
-  min-height: 80px;
 }
 
 .kanban-col-header {
@@ -114,22 +144,29 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.18);
 }
 
+.kanban-card-top-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
 .kanban-card-days {
   font-size: 11px;
   color: #999;
-  text-align: left;
   direction: ltr;
-  margin-bottom: 1px;
+  flex-shrink: 0;
 }
 
 .kanban-card-name {
   font-size: 14px;
   font-weight: 700;
   color: #222;
-  margin-bottom: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
 }
 
 .kanban-card-meta {
@@ -137,6 +174,28 @@
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
+}
+
+.kanban-card-tasks {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+  justify-content: flex-end;
+}
+
+.kanban-task-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kanban-task-overflow {
+  font-size: 10px;
+  color: #999;
+  line-height: 1;
 }
 
 .kanban-card-responsible {
@@ -153,6 +212,23 @@
 }
 
 /* ── Context Menu ── */
+.context-menu-favorite-btn {
+  display: block;
+  width: 100%;
+  text-align: right;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: #374151;
+  cursor: pointer;
+  direction: rtl;
+  transition: background 0.12s;
+}
+
+.context-menu-favorite-btn:hover { background: #f3f4f6; }
+
 .context-menu {
   position: fixed;
   background: #fff;
@@ -265,3 +341,197 @@
   font-size: 15px;
   color: #666;
 }
+
+/* ktm-* styles live in NewTaskModal.css */
+
+/* ── Archive button (outline) ── */
+.kanban-archive-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.kanban-archive-btn:hover { border-color: #aaa; color: #333; }
+
+/* Topbar vertical separator */
+.kanban-topbar-sep {
+  width: 1px;
+  height: 24px;
+  background: #d1d5db;
+  flex-shrink: 0;
+}
+
+/* ── Context menu archive option ── */
+.context-menu-archive-btn {
+  display: block;
+  width: 100%;
+  text-align: right;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: #E24B4A;
+  cursor: pointer;
+  direction: rtl;
+  transition: background 0.12s;
+}
+
+.context-menu-archive-btn:hover { background: #fff5f5; }
+
+/* ── Archive confirm dialogs ── */
+.kanban-confirm-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  padding: 28px 32px 24px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.kanban-confirm-text {
+  font-size: 15px;
+  color: #1a1a2e;
+  margin: 0 0 22px;
+  text-align: right;
+  line-height: 1.6;
+}
+
+.kanban-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.kanban-confirm-yes {
+  background: #E24B4A;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.kanban-confirm-yes:hover { background: #c73b3a; }
+
+.kanban-confirm-no {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.kanban-confirm-no:hover { border-color: #aaa; }
+
+/* ── Archive view ── */
+.kanban-archive-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.kanban-archive-back-btn {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  margin-right: auto;
+  transition: background 0.15s;
+}
+
+.kanban-archive-back-btn:hover { background: #1a2535; }
+
+.kanban-archive-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kanban-archive-search {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  width: 280px;
+  transition: border-color 0.15s;
+}
+
+.kanban-archive-search:focus { border-color: #4F86C6; }
+
+.kanban-archive-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+  max-width: 50%;
+}
+
+.kanban-archive-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+  direction: rtl;
+}
+
+.kanban-archive-table thead {
+  background: #2D3748;
+  color: #fff;
+}
+
+.kanban-archive-table th {
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.kanban-archive-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #374151;
+}
+
+.kanban-archive-table tbody tr:last-child td { border-bottom: none; }
+.kanban-archive-table tbody tr:hover td { background: #f9fafb; }
+
+.kanban-restore-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.kanban-restore-btn:hover { border-color: #4F86C6; color: #4F86C6; }

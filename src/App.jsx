@@ -82,7 +82,17 @@ function App() {
     if (error) {
       setErrorMsg('אימייל או סיסמה שגויים')
     } else {
-      navigate('/dashboard')
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      if (profile?.role === 'admin') {
+        navigate('/פרויקטים')
+      } else {
+        navigate('/tasks')
+      }
     }
   }
 

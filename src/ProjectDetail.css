@@ -11,6 +11,20 @@
   overflow: hidden;
 }
 
+/* ── Archive read-only banner ── */
+.pd-archive-banner {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
 /* ── Header row ── */
 .pd-header {
   display: flex;
@@ -35,6 +49,20 @@
   margin: 0;
   line-height: 1.2;
 }
+
+.pd-star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.pd-star-btn:hover { transform: scale(1.15); }
 
 .pd-stage-badge {
   display: inline-block;
@@ -593,6 +621,24 @@
 }
 
 .pd-modal-cancel:hover { border-color: #aaa; }
+
+/* ── Tasks tab layout ── */
+.pd-tab-content--tasks {
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pd-tasks-tab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 16px;
+}
 
 /* ── Card 4 committee grid ── */
 .pd-committee-grid {

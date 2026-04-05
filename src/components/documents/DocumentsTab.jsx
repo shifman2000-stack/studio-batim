@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+import * as mammoth from 'mammoth'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -44,7 +45,25 @@ async function downloadBlob(url, fileName) {
   URL.revokeObjectURL(href)
 }
 
+/* ── Utilities ── */
+function previewType(url) {
+  if (!url) return null
+  const ext = fileExt(url.split('?')[0])
+  if (['jpg','jpeg','png','gif','webp','bmp','svg','tiff','tif'].includes(ext)) return 'image'
+  if (ext === 'pdf') return 'pdf'
+  if (['doc','docx'].includes(ext)) return 'word'
+  return 'unsupported'
+}
+
 /* ── Inline SVGs ── */
+const IconEye = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+)
+
 const IconDownload = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,7 +136,7 @@ function StatusIcon({ status }) {
 }
 
 /* ── Single document row ── */
-function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete }) {
+function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPreview }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
@@ -163,6 +182,10 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete }) {
         ) : doc.file_url ? (
           <div className="dt-file-existing">
             <span className="dt-file-name" title={fullName}>{ext}</span>
+            <button type="button" className="dt-file-icon-btn"
+              onClick={() => onPreview({ url: doc.file_url, name: fullName })} title="תצוגה מקדימה">
+              <IconEye />
+            </button>
             <button type="button" className="dt-file-icon-btn"
               onClick={() => downloadBlob(doc.file_url, fullName)} title="הורד">
               <IconDownload />
@@ -253,9 +276,35 @@ function AddDocRow({ stage, onAdd }) {
 
 /* ── Main component ── */
 export default function DocumentsTab({ projectId }) {
-  const [docs,       setDocs]       = useState([])
-  const [loading,    setLoading]    = useState(true)
-  const [openStages, setOpenStages] = useState({})
+  const [docs,        setDocs]        = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [openStages,  setOpenStages]  = useState({})
+  const [previewFile,    setPreviewFile]    = useState(null) // { url, name }
+  const [wordHtml,       setWordHtml]       = useState('')
+  const [wordLoading,    setWordLoading]    = useState(false)
+  const [wordError,      setWordError]      = useState(false)
+
+  useEffect(() => {
+    if (!previewFile || previewType(previewFile.url) !== 'word') return
+    setWordHtml('')
+    setWordError(false)
+    setWordLoading(true)
+    ;(async () => {
+      try {
+        const filePath = storagePath(previewFile.url)
+        if (!filePath) throw new Error('bad path')
+        const { data, error } = await supabase.storage.from(BUCKET).download(filePath)
+        if (error || !data) throw error
+        const arrayBuffer = await data.arrayBuffer()
+        const result = await mammoth.convertToHtml({ arrayBuffer })
+        setWordHtml(result.value)
+      } catch {
+        setWordError(true)
+      } finally {
+        setWordLoading(false)
+      }
+    })()
+  }, [previewFile])
 
   useEffect(() => { loadDocs() }, [projectId])
 
@@ -378,73 +427,107 @@ export default function DocumentsTab({ projectId }) {
 
   if (loading) return <p className="dt-loading">טוען מסמכים...</p>
 
+  const pType = previewFile ? previewType(previewFile.url) : null
+
   return (
     <div className="dt-root" dir="rtl">
 
-      {/* ── Progress bar ── */}
-      <div className="dt-progress-section">
-        <div className="dt-progress-label">
-          <strong>{receivedDocs.length} מתוך {docs.length}</strong> מסמכים התקבלו
+      {/* ── Right panel: accordion list ── */}
+      <div className="dt-panel-right">
+
+        {/* Progress bar */}
+        <div className="dt-progress-section">
+          <div className="dt-progress-label">
+            <strong>{receivedDocs.length} מתוך {docs.length}</strong> מסמכים התקבלו
+          </div>
+          <div className="dt-progress-track">
+            <div className="dt-progress-fill" style={{ width: `${pct}%`, background: ACCENT }} />
+          </div>
+          <span className="dt-progress-pct">{pct}%</span>
         </div>
-        <div className="dt-progress-track">
-          <div className="dt-progress-fill" style={{ width: `${pct}%`, background: ACCENT }} />
+
+        {/* Accordions */}
+        <div className="dt-accordions">
+          {STAGE_ORDER.map(stage => {
+            const stageDocs     = byStage[stage] || []
+            const stageReceived = stageDocs.filter(d => d.status === 'התקבל')
+            const isComplete    = stageDocs.length > 0 && stageReceived.length === stageDocs.length
+            const isOpen        = openStages[stage]
+
+            return (
+              <div key={stage} className="dt-accordion">
+                <button
+                  type="button"
+                  className={'dt-accordion-header' + (isComplete ? ' dt-accordion-header--complete' : '')}
+                  onClick={() => toggleStage(stage)}
+                >
+                  <span className="dt-accordion-arrow">{isOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
+                  <span className="dt-accordion-title">{stage}</span>
+                  <span className={'dt-accordion-count' + (isComplete ? ' dt-accordion-count--complete' : '')}>
+                    {stageReceived.length}/{stageDocs.length}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="dt-accordion-body">
+                    <div className="dt-table-header">
+                      <div className="dt-col-name">שם המסמך</div>
+                      <div className="dt-col-status">סטטוס</div>
+                      <div className="dt-col-date">תאריך</div>
+                      <div className="dt-col-file">קובץ</div>
+                      <div className="dt-col-notes">הערות</div>
+                      <div className="dt-col-delete" />
+                    </div>
+
+                    {stageDocs.map((doc, i) => (
+                      <DocRow
+                        key={doc.id}
+                        doc={doc}
+                        index={i}
+                        onPatch={patchDoc}
+                        onUpload={uploadFile}
+                        onFileDelete={deleteFile}
+                        onDocDelete={deleteDoc}
+                        onPreview={setPreviewFile}
+                      />
+                    ))}
+
+                    <AddDocRow stage={stage} onAdd={addCustomDoc} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-        <span className="dt-progress-pct">{pct}%</span>
+
       </div>
 
-      {/* ── Accordions ── */}
-      <div className="dt-accordions">
-        {STAGE_ORDER.map(stage => {
-          const stageDocs     = byStage[stage] || []
-          const stageReceived = stageDocs.filter(d => d.status === 'התקבל')
-          const isComplete    = stageDocs.length > 0 && stageReceived.length === stageDocs.length
-          const isOpen        = openStages[stage]
-
-          return (
-            <div key={stage} className="dt-accordion">
-              <button
-                type="button"
-                className={'dt-accordion-header' + (isComplete ? ' dt-accordion-header--complete' : '')}
-                onClick={() => toggleStage(stage)}
-              >
-                <span className="dt-accordion-arrow">{isOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
-                <span className="dt-accordion-title">{stage}</span>
-                <span className={'dt-accordion-count' + (isComplete ? ' dt-accordion-count--complete' : '')}>
-                  {stageReceived.length}/{stageDocs.length}
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="dt-accordion-body">
-
-                  {/* Column headers */}
-                  <div className="dt-table-header">
-                    <div className="dt-col-name">שם המסמך</div>
-                    <div className="dt-col-status">סטטוס</div>
-                    <div className="dt-col-date">תאריך</div>
-                    <div className="dt-col-file">קובץ</div>
-                    <div className="dt-col-notes">הערות</div>
-                    <div className="dt-col-delete" />
-                  </div>
-
-                  {stageDocs.map((doc, i) => (
-                    <DocRow
-                      key={doc.id}
-                      doc={doc}
-                      index={i}
-                      onPatch={patchDoc}
-                      onUpload={uploadFile}
-                      onFileDelete={deleteFile}
-                      onDocDelete={deleteDoc}
+      {/* ── Left panel: preview ── */}
+      <div className="dt-panel-left">
+        {previewFile && (
+          <>
+            <div className="dt-preview-label" title={previewFile.name}>{previewFile.name}</div>
+            {pType === 'image' && (
+              <img src={previewFile.url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt={previewFile.name} />
+            )}
+            {pType === 'pdf' && (
+              <iframe src={previewFile.url} width="100%" height="100%" style={{ border: 'none', flex: 1 }} title={previewFile.name} />
+            )}
+            {pType === 'word' && (
+              wordLoading
+                ? <div className="dt-preview-unsupported">טוען...</div>
+                : wordError
+                  ? <div className="dt-preview-unsupported">שגיאה בטעינת הקובץ</div>
+                  : <div
+                      dangerouslySetInnerHTML={{ __html: wordHtml }}
+                      style={{ background: '#fff', padding: '16px', overflowY: 'auto', fontFamily: 'inherit', flex: 1, minHeight: 0 }}
                     />
-                  ))}
-
-                  <AddDocRow stage={stage} onAdd={addCustomDoc} />
-                </div>
-              )}
-            </div>
-          )
-        })}
+            )}
+            {pType === 'unsupported' && (
+              <p className="dt-preview-unsupported">תצוגה מקדימה אינה זמינה לסוג קובץ זה</p>
+            )}
+          </>
+        )}
       </div>
 
     </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import NewTaskModal from './NewTaskModal'
 import './ProjectsKanban.css'
 
 const STAGES = [
@@ -20,11 +21,6 @@ const STAGE_COLORS = {
   'השהייה':        { bg: '#bcaaae', text: '#000' },
 }
 
-const URGENCY_COLOR = {
-  'דחוף':      '#f59e0b',
-  'דחוף מאוד': '#ef4444',
-}
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -36,6 +32,22 @@ function daysInStage(stage_entered_at) {
   entered.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
   return Math.max(0, Math.round((today - entered) / 86400000))
+}
+
+const IconArchive = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="21 8 21 21 3 21 3 8"/>
+    <rect x="1" y="3" width="22" height="5"/>
+    <line x1="10" y1="12" x2="14" y2="12"/>
+  </svg>
+)
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = iso.slice(0, 10)
+  const [y, m, day] = d.split('-')
+  return `${day}/${m}/${y}`
 }
 
 function ProjectsKanban() {
@@ -52,15 +64,43 @@ function ProjectsKanban() {
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
   const [ctxResponsible, setCtxResponsible] = useState('')
   const [filterResponsible, setFilterResponsible] = useState('')
-  const [filterUrgency, setFilterUrgency]         = useState('')
+  const [tasksByProject, setTasksByProject]       = useState({})
   const menuRef                             = useRef(null)
+
   // Inquiry search state
   const [showInquirySearch, setShowInquirySearch] = useState(false)
   const [inquiryQuery, setInquiryQuery]           = useState('')
   const [inquiries, setInquiries]                 = useState([])
-  const [selectedInquiry, setSelectedInquiry]     = useState(null) // inquiry to link on save
+  const [selectedInquiry, setSelectedInquiry]     = useState(null)
+
+  // Archive feature
+  const [archiveView, setArchiveView]           = useState(false)
+  const [archivedProjects, setArchivedProjects] = useState([])
+  const [archiveSearch, setArchiveSearch]       = useState('')
+  const [archiveLoading, setArchiveLoading]     = useState(false)
+  // Two-step archive confirmation
+  const [archiveStep, setArchiveStep]   = useState(0) // 0=none, 1=dialog1, 2=dialog2
+  const [archiveTarget, setArchiveTarget] = useState(null) // project to archive
 
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // On mount or navigation: open archive view if requested, otherwise exit it
+  useEffect(() => {
+    if (location.state?.showArchive) {
+      openArchiveView()
+    } else if (archiveView) {
+      setArchiveView(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
+
+  // Archive toast
+  const [archiveToast, setArchiveToast]   = useState('')
+  const showArchiveToast = (msg) => {
+    setArchiveToast(msg)
+    setTimeout(() => setArchiveToast(''), 2800)
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -79,11 +119,10 @@ function ProjectsKanban() {
 
       const { data: projectsData } = await supabase
         .from('projects')
-        .select('*')
+        .select('*, profiles!responsible_id(first_name)')
         .eq('archived', false)
         .order('created_at', { ascending: false })
       if (projectsData) {
-        // Patch projects with no stage_entered_at
         const today = todayISO()
         const nullIds = projectsData.filter(p => !p.stage_entered_at).map(p => p.id)
         if (nullIds.length > 0) {
@@ -99,6 +138,20 @@ function ProjectsKanban() {
         .in('role', ['admin', 'employee'])
         .order('first_name')
       if (usersData) setUsers(usersData)
+
+      const { data: tasksData } = await supabase
+        .from('tasks')
+        .select('project_id, status')
+        .neq('status', 'הושלם')
+      if (tasksData) {
+        const grouped = {}
+        tasksData.forEach(t => {
+          if (!t.project_id) return
+          if (!grouped[t.project_id]) grouped[t.project_id] = []
+          grouped[t.project_id].push(t.status)
+        })
+        setTasksByProject(grouped)
+      }
     }
     init()
   }, [])
@@ -114,8 +167,73 @@ function ProjectsKanban() {
 
   const fetchProjects = async () => {
     const { data, error } = await supabase
-      .from('projects').select('*').eq('archived', false).order('created_at', { ascending: false })
+      .from('projects').select('*, profiles!responsible_id(first_name)').eq('archived', false).order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
+  }
+
+  // ── Archive view fetch ──
+  const fetchArchivedProjects = async () => {
+    setArchiveLoading(true)
+    const { data } = await supabase
+      .from('projects')
+      .select('id, name, archived_at, client_info(city)')
+      .eq('archived', true)
+      .order('archived_at', { ascending: false })
+    setArchivedProjects(data || [])
+    setArchiveLoading(false)
+  }
+
+  const openArchiveView = () => {
+    setArchiveView(true)
+    setArchiveSearch('')
+    fetchArchivedProjects()
+  }
+
+  const closeArchiveView = () => {
+    setArchiveView(false)
+    setArchivedProjects([])
+    setArchiveSearch('')
+  }
+
+  // ── Restore archived project ──
+  const handleRestoreProject = async (projectId) => {
+    const target = archivedProjects.find(p => p.id === projectId)
+    const { error } = await supabase
+      .from('projects')
+      .update({ archived: false, archived_at: null })
+      .eq('id', projectId)
+    if (!error) {
+      setArchivedProjects(prev => prev.filter(p => p.id !== projectId))
+      const { data: restored } = await supabase
+        .from('projects')
+        .select('*, profiles!responsible_id(first_name)')
+        .eq('id', projectId)
+        .single()
+      if (restored) setProjects(prev => [restored, ...prev])
+      showArchiveToast(`הפרויקט "${target?.name ?? ''}" שוחזר בהצלחה`)
+    }
+  }
+
+  // ── Two-step archive flow ──
+  const startArchiveFlow = (project) => {
+    setArchiveTarget(project)
+    setContextMenu(null)
+    setArchiveStep(1)
+  }
+
+  const handleArchiveStep1Confirm = () => setArchiveStep(2)
+  const handleArchiveCancel = () => { setArchiveStep(0); setArchiveTarget(null) }
+
+  const handleArchiveStep2Confirm = async () => {
+    if (!archiveTarget) return
+    const projectId = archiveTarget.id
+    const projectName = archiveTarget.name
+    setArchiveStep(0)
+    setArchiveTarget(null)
+    await supabase.from('tasks').delete().eq('project_id', projectId)
+    await supabase.from('projects').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', projectId)
+    setProjects(prev => prev.filter(p => p.id !== projectId))
+    showArchiveToast(`הפרויקט "${projectName}" הועבר לארכיון בהצלחה`)
   }
 
   const openModal = () => {
@@ -129,13 +247,19 @@ function ProjectsKanban() {
     if (!newName.trim()) { setModalError('יש להזין שם פרויקט'); return }
     setAdding(true); setModalError('')
     const { data, error } = await supabase.from('projects')
-      .insert([{ name: newName.trim(), responsible: newResponsible || null, current_stage: 'קליטת פרויקט', stage_entered_at: todayISO(), urgency: 'רגיל', archived: false }])
+      .insert([{ name: newName.trim(), responsible_id: newResponsible || null, current_stage: 'קליטת פרויקט', stage_entered_at: todayISO(), archived: false }])
       .select().single()
     setAdding(false)
     if (error) { setModalError(`שגיאה: ${error.message}`); return }
     if (!data) return
 
-    // If an inquiry was linked, create contacts/client_info and mark it converted
+    const { data: fullProject } = await supabase
+      .from('projects')
+      .select('*, profiles!responsible_id(first_name)')
+      .eq('id', data.id)
+      .single()
+    const projectToAdd = fullProject || data
+
     if (selectedInquiry) {
       const inq = selectedInquiry
       const coupled = splitCoupledFirstName(inq.first_name ?? '')
@@ -155,16 +279,15 @@ function ProjectsKanban() {
       await supabase.from('project_contacts').insert(contactRows)
       await supabase.from('client_info').insert([{ project_id: data.id, city: inq.city ?? null }])
       await supabase.from('inquiries').update({ converted_to_project: true }).eq('id', inq.id)
-      setProjects(prev => [data, ...prev])
+      setProjects(prev => [projectToAdd, ...prev])
       setShowModal(false)
       navigate('/פרויקטים')
     } else {
-      setProjects(prev => [data, ...prev])
+      setProjects(prev => [projectToAdd, ...prev])
       setShowModal(false)
     }
   }
 
-  // ── Inquiry helpers ──
   function splitCoupledFirstName(firstName) {
     if (!firstName) return null
     const words = firstName.trim().split(/\s+/)
@@ -188,7 +311,6 @@ function ProjectsKanban() {
     setInquiries(data ?? [])
   }
 
-  // Selecting an inquiry only populates the form — does NOT create anything
   const selectInquiry = (inq) => {
     const fullName = [inq.first_name, inq.last_name].filter(Boolean).join(' ')
     setNewName(fullName)
@@ -197,32 +319,35 @@ function ProjectsKanban() {
     setInquiryQuery('')
   }
 
-  // ── Context menu handlers (admin only) ──
   const handleCardRightClick = (e, project) => {
     if (!isAdmin) return
     e.preventDefault()
-    const menuW = 180, menuH = 260
+    const menuW = 180, menuH = 300
     const x = e.clientX + menuW > window.innerWidth  ? e.clientX - menuW : e.clientX
     const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY
-    setCtxResponsible(project.responsible || '')
+    setCtxResponsible(project.responsible_id || '')
     setContextMenu({ x, y, project })
+  }
+
+  const handleToggleFavorite = async () => {
+    if (!contextMenu) return
+    const next = !contextMenu.project.is_favorite
+    await supabase.from('projects').update({ is_favorite: next }).eq('id', contextMenu.project.id)
+    setProjects(prev => prev.map(p => p.id === contextMenu.project.id ? { ...p, is_favorite: next } : p))
+    setContextMenu(null)
   }
 
   const handleResponsibleChange = async (value) => {
     if (!contextMenu) return
-    await supabase.from('projects').update({ responsible: value || null }).eq('id', contextMenu.project.id)
-    setProjects(prev => prev.map(p => p.id === contextMenu.project.id ? { ...p, responsible: value || null } : p))
+    const user = users.find(u => u.id === value)
+    await supabase.from('projects').update({ responsible_id: value || null }).eq('id', contextMenu.project.id)
+    setProjects(prev => prev.map(p => p.id === contextMenu.project.id
+      ? { ...p, responsible_id: value || null, profiles: user ? { first_name: user.first_name } : null }
+      : p
+    ))
     setContextMenu(null)
   }
 
-  const handleUrgencySelect = async (urgency) => {
-    if (!contextMenu) return
-    await supabase.from('projects').update({ urgency }).eq('id', contextMenu.project.id)
-    setProjects(prev => prev.map(p => p.id === contextMenu.project.id ? { ...p, urgency } : p))
-    setContextMenu(null)
-  }
-
-  // ── Drag handlers (admin only) ──
   const handleDragStart = (e, projectId) => {
     if (userRole !== 'admin') { e.preventDefault(); return }
     setDragId(projectId)
@@ -244,7 +369,6 @@ function ProjectsKanban() {
     const enteredAt  = project.stage_entered_at || today
     const days       = daysInStage(enteredAt)
 
-    // Log history for the stage being left
     await supabase.from('project_stage_history').insert([{
       project_id:    project.id,
       stage:         project.current_stage,
@@ -253,7 +377,6 @@ function ProjectsKanban() {
       days_in_stage: days,
     }])
 
-    // Move to new stage, reset timer
     await supabase.from('projects')
       .update({ current_stage: stage, stage_entered_at: today })
       .eq('id', dragId)
@@ -271,12 +394,107 @@ function ProjectsKanban() {
     const label = [inq.first_name, inq.last_name].filter(Boolean).join(' ') + (inq.city ? ` ${inq.city}` : '')
     return label.includes(inquiryQuery)
   })
-  const hasFilter = filterResponsible !== '' || filterUrgency !== ''
+
+  const [filterFavorite, setFilterFavorite]   = useState(false)
+  const [filterUrgentTask, setFilterUrgentTask] = useState(false)
+  const [filterActiveTask, setFilterActiveTask] = useState(false)
+
+  const [taskModal, setTaskModal] = useState(null)
+  const [taskToast, setTaskToast] = useState(false)
+
+  const openTaskModal = (project) => {
+    setTaskModal(project)
+    setContextMenu(null)
+  }
+
+  const handleTaskSaved = async () => {
+    setTaskToast(true)
+    setTimeout(() => setTaskToast(false), 2500)
+    const { data: tasksData } = await supabase.from('tasks').select('project_id, status').neq('status', 'הושלם')
+    if (tasksData) {
+      const grouped = {}
+      tasksData.forEach(t => {
+        if (!t.project_id) return
+        if (!grouped[t.project_id]) grouped[t.project_id] = []
+        grouped[t.project_id].push(t.status)
+      })
+      setTasksByProject(grouped)
+    }
+  }
 
   const isVisible = (project) => {
-    if (filterResponsible && project.responsible !== filterResponsible) return false
-    if (filterUrgency && (project.urgency || 'רגיל') !== filterUrgency) return false
+    if (filterResponsible && project.responsible_id !== filterResponsible) return false
+    if (filterFavorite && !project.is_favorite) return false
+    if (filterUrgentTask && !tasksByProject[project.id]?.some(s => s === 'דחוף')) return false
+    if (filterActiveTask && !tasksByProject[project.id]?.some(s => s === 'פעיל')) return false
     return true
+  }
+
+  const filteredArchived = archivedProjects.filter(p =>
+    !archiveSearch.trim() || p.name.toLowerCase().includes(archiveSearch.trim().toLowerCase())
+  )
+
+  // ── Archive view ──
+  if (archiveView) {
+    return (
+      <div className="page" dir="rtl">
+        <div className="kanban-container">
+          <div className="kanban-topbar">
+            <h1 className="kanban-archive-title">ארכיון פרויקטים</h1>
+            <button className="kanban-archive-back-btn" onClick={closeArchiveView}>
+              חזור לפרויקטים
+            </button>
+          </div>
+
+          <div className="kanban-archive-toolbar">
+            <input
+              className="kanban-archive-search"
+              placeholder="חיפוש לפי שם פרויקט..."
+              value={archiveSearch}
+              onChange={e => setArchiveSearch(e.target.value)}
+              dir="rtl"
+            />
+          </div>
+
+          <div className="kanban-archive-table-wrap">
+            {archiveLoading ? (
+              <p style={{ textAlign: 'center', color: '#888', padding: 40 }}>טוען...</p>
+            ) : (
+              <table className="kanban-archive-table" dir="rtl">
+                <thead>
+                  <tr>
+                    <th>שם פרויקט</th>
+                    <th>יישוב</th>
+                    <th>תאריך העברה</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredArchived.length === 0 ? (
+                    <tr><td colSpan={4} style={{ textAlign: 'center', color: '#888', padding: 40 }}>אין פרויקטים בארכיון</td></tr>
+                  ) : filteredArchived.map(p => (
+                    <tr key={p.id}>
+                      <td
+                        style={{ cursor: 'pointer' }}
+                        onDoubleClick={() => navigate(`/projects/${p.id}`, { state: { fromArchive: true } })}
+                      >{p.name}</td>
+                      <td>{p.client_info?.city || ''}</td>
+                      <td>{formatDate(p.archived_at)}</td>
+                      <td>
+                        <button className="kanban-restore-btn" onClick={() => handleRestoreProject(p.id)}>
+                          שחזר
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+        {archiveToast && <div className="ktm-toast">{archiveToast}</div>}
+      </div>
+    )
   }
 
   return (
@@ -287,26 +505,70 @@ function ProjectsKanban() {
         <div className="kanban-topbar">
           <span className="kanban-total">סה״כ פרויקטים: {projects.length}</span>
           <div className="kanban-filters">
+            <button
+              className={'kanban-filter-icon' + (filterFavorite ? ' kanban-filter-icon--active' : '')}
+              onClick={() => setFilterFavorite(v => !v)}
+              title="מועדפים בלבד"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24"
+                fill={filterFavorite ? '#F6BF26' : 'none'}
+                stroke={filterFavorite ? '#F6BF26' : '#9ca3af'}
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </button>
+
+            <button
+              className={'kanban-filter-icon' + (filterUrgentTask ? ' kanban-filter-icon--active' : '')}
+              onClick={() => setFilterUrgentTask(v => !v)}
+              title="יש משימות דחופות"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24"
+                fill={filterUrgentTask ? '#E24B4A' : 'none'}
+                stroke="#E24B4A"
+                strokeWidth="2.2">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+            </button>
+
+            <button
+              className={'kanban-filter-icon' + (filterActiveTask ? ' kanban-filter-icon--active' : '')}
+              onClick={() => setFilterActiveTask(v => !v)}
+              title="יש משימות פעילות"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24"
+                fill={filterActiveTask ? '#2D3748' : 'none'}
+                stroke="#2D3748"
+                strokeWidth="2.2">
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
+            </button>
+
             <select className="kanban-filter-select" value={filterResponsible} onChange={e => setFilterResponsible(e.target.value)}>
               <option value="">אחראית: הכל</option>
               {users.map(u => (
-                <option key={u.id} value={`${u.first_name} ${u.last_name}`}>
-                  {u.first_name} {u.last_name}
-                </option>
+                <option key={u.id} value={u.id}>{u.first_name}</option>
               ))}
             </select>
-            <select className="kanban-filter-select" value={filterUrgency} onChange={e => setFilterUrgency(e.target.value)}>
-              <option value="">דחיפות: הכל</option>
-              {['רגיל', 'דחוף', 'דחוף מאוד'].map(u => (
-                <option key={u} value={u}>{u}</option>
-              ))}
-            </select>
-            {hasFilter && (
-              <button className="kanban-filter-reset" onClick={() => { setFilterResponsible(''); setFilterUrgency('') }}>
-                בטל סינון
-              </button>
-            )}
+            <button
+              className="kanban-filter-reset"
+              onClick={() => {
+                setFilterResponsible('')
+                setFilterFavorite(false)
+                setFilterUrgentTask(false)
+                setFilterActiveTask(false)
+              }}
+            >
+              בטל סינון
+            </button>
           </div>
+
+          {/* Archive button + separator + add button */}
+          <button className="kanban-archive-btn" onClick={openArchiveView}>
+            <IconArchive size={14} />
+            ארכיון
+          </button>
+          {isAdmin && <div className="kanban-topbar-sep" />}
           {isAdmin && (
             <button className="btn-add-project kanban-add-btn" title="פרויקט חדש" onClick={openModal}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -322,6 +584,7 @@ function ProjectsKanban() {
 
         {/* Board */}
         <div className="kanban-board">
+          <div className="kanban-columns-wrap">
           {STAGES.map(stage => {
             const { bg, text } = STAGE_COLORS[stage]
             const cards = projects.filter(p => p.current_stage === stage)
@@ -332,13 +595,11 @@ function ProjectsKanban() {
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, stage)}
               >
-                {/* Column header */}
                 <div className="kanban-col-header" style={{ background: bg, color: text }}>
                   {stage}
                   <span className="kanban-col-count">{cards.length}</span>
                 </div>
 
-                {/* Cards */}
                 <div className="kanban-cards">
                   {cards.map(project => (
                     <div
@@ -348,31 +609,46 @@ function ProjectsKanban() {
                       onDragStart={(e) => handleDragStart(e, project.id)}
                       onDoubleClick={() => navigate(`/projects/${project.id}`)}
                       onContextMenu={(e) => handleCardRightClick(e, project)}
-                      style={!isVisible(project) ? { opacity: 0.25, filter: 'grayscale(1)' } : undefined}
+                      style={{
+                        ...(project.is_favorite ? { border: '2.5px solid #2D3748' } : {}),
+                        ...(!isVisible(project) ? { opacity: 0.25, filter: 'grayscale(1)' } : {}),
+                      }}
                     >
-                      <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
-                      <div className="kanban-card-name">{project.name}</div>
+                      <div className="kanban-card-top-row">
+                        <div className="kanban-card-name">{project.name}</div>
+                        <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
+                      </div>
                       <div className="kanban-card-meta">
-                        {project.responsible && (
+                        {project.profiles?.first_name && (
                           <span className="kanban-card-responsible">
-                            {(project.responsible).split(' ')[0]}
-                          </span>
-                        )}
-                        {project.urgency && project.urgency !== 'רגיל' && (
-                          <span
-                            className="kanban-card-urgency"
-                            style={{ background: URGENCY_COLOR[project.urgency] }}
-                          >
-                            {project.urgency}
+                            {project.profiles.first_name}
                           </span>
                         )}
                       </div>
+                      {tasksByProject[project.id]?.length > 0 && (() => {
+                        const statuses = tasksByProject[project.id]
+                        const dots = statuses.slice(0, 5)
+                        const overflow = statuses.length > 5
+                        return (
+                          <div className="kanban-card-tasks">
+                            {dots.map((s, i) => (
+                              <span
+                                key={i}
+                                className="kanban-task-dot"
+                                style={{ background: s === 'דחוף' ? '#E24B4A' : '#2D3748' }}
+                              />
+                            ))}
+                            {overflow && <span className="kanban-task-overflow">5+</span>}
+                          </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>
               </div>
             )
           })}
+          </div>
         </div>
 
       </div>
@@ -384,6 +660,14 @@ function ProjectsKanban() {
           className="context-menu"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
+          <button className="context-menu-favorite-btn" onClick={() => openTaskModal(contextMenu.project)}>
+            ＋ פתח משימה חדשה
+          </button>
+          <div className="context-menu-divider" />
+          <button className="context-menu-favorite-btn" onClick={handleToggleFavorite}>
+            {contextMenu.project.is_favorite ? '☆ הסר ממועדפים' : '★ הוסף למועדפים'}
+          </button>
+          <div className="context-menu-divider" />
           <div className="context-menu-row">
             <span className="context-menu-label">אחראית</span>
             <select
@@ -393,25 +677,21 @@ function ProjectsKanban() {
             >
               <option value="">ללא</option>
               {users.map(u => (
-                <option key={u.id} value={`${u.first_name} ${u.last_name}`}>
-                  {u.first_name} {u.last_name}
-                </option>
+                <option key={u.id} value={u.id}>{u.first_name}</option>
               ))}
             </select>
           </div>
-          <div className="context-menu-divider" />
-          <div className="context-menu-row">
-            <span className="context-menu-label">דחיפות</span>
-            <select
-              className="context-menu-input"
-              value={contextMenu.project.urgency || 'רגיל'}
-              onChange={e => handleUrgencySelect(e.target.value)}
-            >
-              {['רגיל', 'דחוף', 'דחוף מאוד'].map(urg => (
-                <option key={urg} value={urg}>{urg}</option>
-              ))}
-            </select>
-          </div>
+          {isAdmin && (
+            <>
+              <div className="context-menu-divider" />
+              <button
+                className="context-menu-archive-btn"
+                onClick={() => startArchiveFlow(contextMenu.project)}
+              >
+                העבר לארכיון
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -429,16 +709,12 @@ function ProjectsKanban() {
             <select className="modal-input" value={newResponsible} onChange={e => setNewResponsible(e.target.value)}>
               <option value="">בחר אחראי...</option>
               {users.map(u => (
-                <option key={u.id} value={`${u.first_name} ${u.last_name}`}>
-                  {u.first_name} {u.last_name}
-                </option>
+                <option key={u.id} value={u.id}>{u.first_name}</option>
               ))}
             </select>
 
-            {/* טען פניה — below אחראית */}
             <div style={{ marginTop: 10, position: 'relative' }}>
               {selectedInquiry ? (
-                /* Selected state — read-only display matching input style */
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', background: '#F3F4F6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#1a1a2e', fontFamily: 'inherit', minHeight: 38, boxSizing: 'border-box' }}>
                   <span style={{ flex: 1 }}>
                     {[selectedInquiry.first_name, selectedInquiry.last_name].filter(Boolean).join(' ')}
@@ -448,13 +724,9 @@ function ProjectsKanban() {
                     type="button"
                     onClick={() => { setSelectedInquiry(null); setShowInquirySearch(false); setInquiryQuery('') }}
                     style={{ background: 'none', border: 'none', fontSize: 16, color: '#9ca3af', cursor: 'pointer', padding: '0 2px', lineHeight: 1, fontFamily: 'inherit', flexShrink: 0 }}
-                    title="נקה בחירה"
-                  >
-                    ×
-                  </button>
+                  >×</button>
                 </div>
               ) : showInquirySearch ? (
-                /* Search input + dropdown */
                 <>
                   <input
                     className="modal-input"
@@ -469,16 +741,11 @@ function ProjectsKanban() {
                       {filteredInquiries.slice(0, 8).map(inq => {
                         const label = [inq.first_name, inq.last_name].filter(Boolean).join(' ') + (inq.city ? ` — ${inq.city}` : '')
                         return (
-                          <button
-                            key={inq.id}
-                            type="button"
-                            onClick={() => selectInquiry(inq)}
+                          <button key={inq.id} type="button" onClick={() => selectInquiry(inq)}
                             style={{ display: 'block', width: '100%', textAlign: 'right', padding: '9px 14px', background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0', fontSize: 13, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
                             onMouseOver={e => e.currentTarget.style.background = '#f3f4f6'}
                             onMouseOut={e => e.currentTarget.style.background = 'none'}
-                          >
-                            {label}
-                          </button>
+                          >{label}</button>
                         )
                       })}
                     </div>
@@ -488,14 +755,9 @@ function ProjectsKanban() {
                   )}
                 </>
               ) : (
-                /* Trigger button */
-                <button
-                  type="button"
-                  onClick={() => { setShowInquirySearch(true); loadInquiries() }}
+                <button type="button" onClick={() => { setShowInquirySearch(true); loadInquiries() }}
                   style={{ background: 'none', border: '1px dashed #d1d5db', borderRadius: 7, padding: '6px 14px', fontSize: 13, color: '#888', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}
-                >
-                  + טען פניה
-                </button>
+                >+ טען פניה</button>
               )}
             </div>
 
@@ -506,6 +768,50 @@ function ProjectsKanban() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Archive step 1 dialog ── */}
+      {archiveStep === 1 && (
+        <div className="modal-overlay" onClick={handleArchiveCancel}>
+          <div className="kanban-confirm-dialog" onClick={e => e.stopPropagation()} dir="rtl">
+            <p className="kanban-confirm-text">כל המשימות של הפרויקט "{archiveTarget?.name}" ימחקו לצמיתות. להמשיך?</p>
+            <div className="kanban-confirm-actions">
+              <button className="kanban-confirm-yes" onClick={handleArchiveStep1Confirm}>אשר</button>
+              <button className="kanban-confirm-no" onClick={handleArchiveCancel}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Archive step 2 dialog ── */}
+      {archiveStep === 2 && (
+        <div className="modal-overlay" onClick={handleArchiveCancel}>
+          <div className="kanban-confirm-dialog" onClick={e => e.stopPropagation()} dir="rtl">
+            <p className="kanban-confirm-text">הפרויקט "{archiveTarget?.name}" יועבר לארכיון ולא יהיה ניתן לעריכה. להמשיך?</p>
+            <div className="kanban-confirm-actions">
+              <button className="kanban-confirm-yes" onClick={handleArchiveStep2Confirm}>אשר</button>
+              <button className="kanban-confirm-no" onClick={handleArchiveCancel}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Task Modal ── */}
+      {taskModal && (
+        <NewTaskModal
+          project={taskModal}
+          users={users}
+          onClose={() => setTaskModal(null)}
+          onSaved={handleTaskSaved}
+        />
+      )}
+
+      {taskToast && (
+        <div className="ktm-toast">המשימה נשמרה ✓</div>
+      )}
+
+      {archiveToast && (
+        <div className="ktm-toast">{archiveToast}</div>
       )}
     </div>
   )

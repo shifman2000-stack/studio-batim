@@ -3,7 +3,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  background: #F7F8FA;
+  background: #fff;
   padding: 32px 40px;
   box-sizing: border-box;
   direction: rtl;
@@ -85,13 +85,15 @@
 }
 
 .inq-table th {
-  background: #2D3748;
-  color: #fff;
-  font-weight: 600;
-  font-size: 13px;
+  background: #e8e3dc;
+  color: #1a1a18;
+  font-weight: 500;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
   padding: 12px 16px;
   white-space: nowrap;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  border-top: 0.5px solid rgba(26,26,24,0.1);
+  border-left: 0.5px solid rgba(26,26,24,0.1);
   overflow: hidden;
   text-overflow: ellipsis;
   display: flex;
@@ -104,23 +106,25 @@
 
 .inq-table td {
   padding: 10px 14px;
-  color: #374151;
-  border-bottom: 1px solid #f0f0f0;
-  border-left: 1px solid #f0f0f0;
+  color: #1a1a18;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 14px;
+  border-bottom: 0.5px solid rgba(26,26,24,0.1);
+  border-left: 0.5px solid rgba(26,26,24,0.1);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  font-size: 13px;
 }
 
 .inq-table td:last-child {
   border-left: none;
 }
 
-.inq-table tbody tr:nth-child(odd) td  { background: #fff; }
-.inq-table tbody tr:nth-child(even) td { background: #F9FAFB; }
+.inq-table tbody tr:nth-child(odd) td  { background: #f8f6f3; }
+.inq-table tbody tr:nth-child(even) td { background: #faf9f7; }
 
 .inq-row {
   cursor: pointer;
@@ -128,7 +132,7 @@
 }
 
 .inq-row:hover td {
-  background: #EEF4FB !important;
+  background: #e8e3dc !important;
 }
 
 /* ── Column widths ── */

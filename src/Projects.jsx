@@ -63,7 +63,7 @@ function Projects() {
 
   const fetchProjects = async () => {
     const { data, error } = await supabase
-      .from('projects').select('*').eq('archived', false).order('created_at', { ascending: false })
+      .from('projects').select('*, profiles!responsible_id(first_name)').eq('archived', false).order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
   }
 
@@ -86,7 +86,7 @@ function Projects() {
     if (!newName.trim()) { setModalError('יש להזין שם פרויקט'); return }
     setAdding(true); setModalError('')
     const { data, error } = await supabase.from('projects')
-      .insert([{ name: newName.trim(), responsible: newResponsible || null, current_stage: 'קליטת פרויקט', urgency: 'רגיל', archived: false }])
+      .insert([{ name: newName.trim(), responsible_id: newResponsible || null, current_stage: 'קליטת פרויקט', urgency: 'רגיל', archived: false }])
       .select().single()
     setAdding(false)
     if (error) { setModalError(`שגיאה: ${error.message}`); return }
@@ -96,7 +96,7 @@ function Projects() {
   const handleRightClick = (e, project) => {
     if (userRole !== 'admin') return
     e.preventDefault()
-    setCtxResponsible(project.responsible || '')
+    setCtxResponsible(project.responsible_id || '')
     setCtxUrgency(project.urgency || 'רגיל')
     const menuW = 180
     const menuH = 330
@@ -114,8 +114,12 @@ function Projects() {
 
   const handleResponsibleSave = async () => {
     const { project } = contextMenu
-    await supabase.from('projects').update({ responsible: ctxResponsible }).eq('id', project.id)
-    setProjects(prev => prev.map(p => p.id === project.id ? { ...p, responsible: ctxResponsible } : p))
+    const user = users.find(u => u.id === ctxResponsible)
+    await supabase.from('projects').update({ responsible_id: ctxResponsible || null }).eq('id', project.id)
+    setProjects(prev => prev.map(p => p.id === project.id
+      ? { ...p, responsible_id: ctxResponsible || null, profiles: user ? { first_name: user.first_name } : null }
+      : p
+    ))
     setContextMenu(null)
   }
 
@@ -128,7 +132,7 @@ function Projects() {
 
   // Returns the value and active color for a given project × column
   const getCell = (project, col) => {
-    if (col === 'אחראית') return { value: (project.responsible || '').split(' ')[0], color: null }
+    if (col === 'אחראית') return { value: project.profiles?.first_name || '', color: null }
     if (col === 'דחיפות')  return { value: project.urgency || '', color: null }
     const isActive = project.current_stage === col
     return { value: '', color: isActive ? STAGE_COLORS[col] : null }
@@ -199,7 +203,7 @@ function Projects() {
                   </td>
 
                   {/* אחראית + דחיפות cells */}
-                  <td className="col-project col-info">{(project.responsible || '').split(' ')[0]}</td>
+                  <td className="col-project col-info">{project.profiles?.first_name || ''}</td>
                   <td className="col-project col-info">{project.urgency || ''}</td>
 
                   {/* 9 stage cells */}
@@ -246,9 +250,7 @@ function Projects() {
             <select className="modal-input" value={newResponsible} onChange={e => setNewResponsible(e.target.value)}>
               <option value="">בחר אחראי...</option>
               {users.map(u => (
-                <option key={u.id} value={`${u.first_name} ${u.last_name}`}>
-                  {u.first_name} {u.last_name}
-                </option>
+                <option key={u.id} value={u.id}>{u.first_name}</option>
               ))}
             </select>
             {modalError && <p style={{ color: 'red', fontSize: '13px', margin: '4px 0 0', textAlign: 'right' }}>{modalError}</p>}
@@ -277,9 +279,7 @@ function Projects() {
             <select className="context-menu-input" value={ctxResponsible} onChange={e => setCtxResponsible(e.target.value)}>
               <option value="">בחר אחראי...</option>
               {users.map(u => (
-                <option key={u.id} value={`${u.first_name} ${u.last_name}`}>
-                  {u.first_name} {u.last_name}
-                </option>
+                <option key={u.id} value={u.id}>{u.first_name}</option>
               ))}
             </select>
             <button className="context-menu-save" onClick={handleResponsibleSave}>✓</button>

@@ -14,7 +14,7 @@
 }
 
 .login-box {
-  border: 1px solid #000;
+  border: 1px solid #C1BCAF;
   border-radius: 12px;
   padding: 32px;
   width: 100%;
@@ -31,22 +31,26 @@
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 6px;
-  color: #000;
+  color: #C1BCAF;
 }
 
 .field-group input {
   padding: 10px 12px;
-  border: 1px solid #000;
+  border: 1px solid #C1BCAF;
   border-radius: 12px;
   font-size: 14px;
   outline: none;
   width: 100%;
-  background: #fff;
-  color: #000;
+  background-color: #F7F5F2 !important;
+  color: #C1BCAF;
 }
 
 .field-group input:focus {
-  border-color: #555;
+  border-color: #a8a39a;
+}
+
+.field-group input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #F7F5F2 inset !important;
 }
 
 /* ── Password toggle wrapper ── */
@@ -58,17 +62,21 @@
 .password-input {
   padding: 10px 12px;
   padding-left: 38px;
-  border: 1px solid #000;
+  border: 1px solid #C1BCAF;
   border-radius: 12px;
   font-size: 14px;
   outline: none;
   width: 100%;
-  background: #fff;
-  color: #000;
+  background-color: #F7F5F2 !important;
+  color: #C1BCAF;
 }
 
 .password-input:focus {
-  border-color: #555;
+  border-color: #a8a39a;
+}
+
+.password-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #F7F5F2 inset !important;
 }
 
 .eye-toggle {
@@ -92,7 +100,7 @@
 .login-btn {
   width: 100%;
   padding: 12px;
-  background-color: #000;
+  background-color: #1C1C1C;
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -104,7 +112,7 @@
 }
 
 .login-btn:hover:not(:disabled) {
-  background-color: #222;
+  background-color: #333;
 }
 
 .login-btn:disabled {
@@ -148,4 +156,48 @@
 
 .auth-link:hover {
   opacity: 0.6;
+}
+
+/* ── Auth divider "או" ── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
+  color: #C1BCAF;
+  font-size: 13px;
+  font-family: 'Heebo', sans-serif;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #C1BCAF;
+}
+
+/* ── Google sign-in button ── */
+.google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 12px;
+  background: #fff;
+  border: 1px solid #C1BCAF;
+  border-radius: 12px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  color: #1a1a18;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  direction: rtl;
+}
+
+.google-btn:hover {
+  background: #F7F5F2;
+  border-color: #a8a39a;
 }

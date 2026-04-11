@@ -9,11 +9,6 @@ import './Hours.css'
 //   attendance:        work_from_home (boolean, default false)
 //   hour_reports:      date, hours, minutes (NOT work_date / hours_worked)
 
-const STAGES = [
-  'קליטת פרויקט', 'סקיצות', 'הדמיה', 'גרמושקה',
-  'רישוי', 'תכניות עבודה', 'בניה', 'גמר',
-]
-
 // 00:15 → 12:00 in 15-min steps
 const HOUR_OPTIONS = []
 for (let h = 0; h <= 12; h++)
@@ -81,10 +76,14 @@ const formatDate = (dateStr) => {
 
 function Hours() {
   const location = useLocation()
-  const [userId, setUserId]       = useState(null)
-  const [userEmail, setUserEmail] = useState(null)
-  const [userRole, setUserRole]   = useState(null)
-  const [projects, setProjects]   = useState([])
+  const [userId, setUserId]             = useState(null)
+  const [loggedInUserId, setLoggedInUserId] = useState(null)
+  const [userEmail, setUserEmail]       = useState(null)
+  const [userRole, setUserRole]         = useState(null)
+  const [projects, setProjects]         = useState([])
+  const [stages, setStages]             = useState([])
+  const [allUsers, setAllUsers]         = useState([])
+  const [viewUserId, setViewUserId]     = useState(null)
 
   const [viewYear, setViewYear]   = useState(new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
@@ -153,11 +152,11 @@ function Hours() {
       if (type === 'arrival') {
         setArrival(time)
         // Grab the new pendingId so subsequent saves update the same record
-        if (userId && selectedDate === todayISO()) {
+        if (loggedInUserId && selectedDate === todayISO()) {
           const { data } = await supabase
             .from('pending_approvals')
             .select('id')
-            .eq('user_id', userId)
+            .eq('user_id', loggedInUserId)
             .eq('date', selectedDate)
             .maybeSingle()
           if (data) setPendingId(data.id)
@@ -181,13 +180,24 @@ function Hours() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     setUserId(session.user.id)
+    setLoggedInUserId(session.user.id)
+    setViewUserId(session.user.id)
     setUserEmail(session.user.email || null)
     const { data: profile } = await supabase
       .from('profiles').select('role').eq('id', session.user.id).single()
     if (profile) setUserRole(profile.role)
-    const { data: projs } = await supabase
-      .from('projects').select('id, name').eq('archived', false).order('name')
+    const [{ data: projs }, { data: stg }] = await Promise.all([
+      supabase.from('projects').select('id, name').eq('archived', false).order('name'),
+      supabase.from('stages').select('id, name').order('order_index'),
+    ])
     if (projs) setProjects(projs)
+    if (stg) setStages(stg.filter(s => s.id !== 9))
+    if (profile?.role === 'admin') {
+      const { data: users } = await supabase
+        .from('profiles').select('id, first_name, last_name')
+        .in('role', ['admin', 'employee']).order('first_name')
+      if (users) setAllUsers(users)
+    }
   }
 
   // ── Calendar data ──
@@ -384,7 +394,7 @@ function Hours() {
         .select('id, arrival_time, departure_time, day_type, status, work_from_home')
         .eq('user_id', userId).eq('date', dateStr).maybeSingle(),
       supabase.from('hour_reports')
-        .select('id, project_id, stage, hours, minutes')
+        .select('id, project_id, stage, stage_id, hours, minutes')
         .eq('user_id', userId).eq('date', dateStr),
     ])
 
@@ -430,14 +440,14 @@ function Hours() {
       setRecords(reps.map(r => ({
         id:          r.id,
         project_id:  r.project_id || '',
-        stage:       r.stage || '',
+        stage_id:    r.stage_id   ?? '',
         hours_hhmm:  toHHMM((r.hours || 0) * 60 + (r.minutes || 0)),
       })))
     }
   }
 
   // ── Record helpers ──
-  const addRecord    = () => setRecords(prev => [...prev, { id: null, project_id: '', stage: '', hours_hhmm: '' }])
+  const addRecord    = () => setRecords(prev => [...prev, { id: null, project_id: '', stage_id: '', hours_hhmm: '' }])
   const updateRecord = (idx, field, val) => setRecords(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r))
   const removeRecord = (idx) => setRecords(prev => prev.filter((_, i) => i !== idx))
 
@@ -581,7 +591,7 @@ function Hours() {
           user_id:    userId,
           date:       selectedDate,
           project_id: r.project_id,
-          stage:      r.stage || null,
+          stage_id:   r.stage_id !== '' ? Number(r.stage_id) : null,
           hours:      Math.floor(mins / 60),
           minutes:    mins % 60,
         }
@@ -750,7 +760,7 @@ function Hours() {
   // ── Admin approval actions ──
   const doApprove = async (rec) => {
     await supabase.from('pending_approvals')
-      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: userId })
+      .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: loggedInUserId })
       .eq('id', rec.id)
     await supabase.from('attendance').upsert(
       {
@@ -811,6 +821,18 @@ function Hours() {
     if (buttonMode === 'submit_approval')
       return 'hours-submit-approval-btn'
     return 'hours-save-btn'
+  }
+
+  // ── Admin: switch viewed user ──
+  const handleViewUserChange = (newUserId) => {
+    setViewUserId(newUserId)
+    setUserId(newUserId)
+    setSelectedDate(todayISO())
+    setArrival(''); setDeparture(''); setOrigArrival(''); setOrigDeparture('')
+    setDayType('work'); setWorkFromHome(false)
+    setRecords([]); setAttendanceId(null); setPendingId(null)
+    setDayStatus(null); setManualEntry(false)
+    setArrivalError(''); setDepartureError('')
   }
 
   // ── Calendar grid ──
@@ -1032,10 +1054,10 @@ function Hours() {
                   <option value="">פרויקט...</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <select className="hours-select hours-select-stage" value={rec.stage}
-                  onChange={e => updateRecord(idx, 'stage', e.target.value)}>
+                <select className="hours-select hours-select-stage" value={rec.stage_id}
+                  onChange={e => updateRecord(idx, 'stage_id', e.target.value)}>
                   <option value="">שלב...</option>
-                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <select className="hours-time-select" value={rec.hours_hhmm}
                   onChange={e => updateRecord(idx, 'hours_hhmm', e.target.value)}>
@@ -1227,6 +1249,21 @@ function Hours() {
           <>
             {/* Admin: LEFT = calendar, RIGHT = tabbed interface */}
             <div className="hours-calendar-panel">
+              {allUsers.length > 0 && (
+                <div className="hours-user-filter">
+                  <select
+                    className="hours-user-select"
+                    value={viewUserId || ''}
+                    onChange={e => handleViewUserChange(e.target.value)}
+                  >
+                    {allUsers.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {[u.first_name, u.last_name].filter(Boolean).join(' ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {calendarContent}
             </div>
 

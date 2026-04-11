@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 76" width="380" height="76">
+  <defs>
+    <linearGradient id="fadeH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#c8bfb0" stop-opacity="0"/>
+      <stop offset="25%"  stop-color="#c8bfb0" stop-opacity="1"/>
+      <stop offset="75%"  stop-color="#c8bfb0" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#c8bfb0" stop-opacity="0"/>
+    </linearGradient>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300&amp;family=Heebo:wght@200');</style>
+  </defs>
+  <text x="190" y="34" font-family="'Rubik',sans-serif" font-weight="300" font-size="30" letter-spacing="2" fill="#1a1a18" text-anchor="middle" direction="rtl">סטודיו בתים</text>
+  <rect x="60" y="44" width="260" height="1" fill="url(#fadeH)"/>
+  <text x="190" y="60" font-family="'Heebo',sans-serif" font-weight="200" font-size="9" letter-spacing="4" fill="#8a8680" text-anchor="middle" direction="ltr">BY EINAV SHIFMAN</text>
+</svg>

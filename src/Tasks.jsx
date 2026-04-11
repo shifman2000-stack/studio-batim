@@ -5,25 +5,15 @@ import { supabase } from './supabaseClient'
 import NewTaskModal from './NewTaskModal'
 import './Tasks.css'
 
-// ── Constants ──
-const STAGES = [
-  'קליטת פרויקט',
-  'סקיצות',
-  'הדמיה',
-  'גרמושקה',
-  'רישוי',
-  'תכניות עבודה',
-  'בניה',
-  'גמר',
-]
-
-const ASSIGNEES = ['עינב', 'עדי', 'ענבר']
-const STATUSES  = ['דחוף', 'פעיל', 'הושלם']
-
+// ── Constants (kept for display fallbacks) ──
 const STATUS_META = {
   'דחוף':  { color: '#E24B4A' },
   'פעיל':  { color: '#F6BF26' },
   'הושלם': { color: '#1D9E75' },
+}
+
+function statusColorByName(name) {
+  return STATUS_META[name]?.color || STATUS_META['פעיל'].color
 }
 
 // ── Icons ──
@@ -85,7 +75,7 @@ function statusIcon(status, size = 18) {
 }
 
 // ── Status popover (icon-only trigger → fixed popover) ──
-function StatusPopover({ status, onSelect }) {
+function StatusPopover({ statusId, statusName, taskStatuses, onSelect }) {
   const [open, setOpen] = useState(false)
   const [pos,  setPos]  = useState({ top: 0, right: 0 })
   const triggerRef = useRef(null)
@@ -114,7 +104,7 @@ function StatusPopover({ status, onSelect }) {
     setOpen(true)
   }
 
-  const cur = STATUS_META[status] ? status : 'פעיל'
+  const curName = statusName || 'פעיל'
 
   return (
     <div className="tasks-status-wrap">
@@ -122,11 +112,11 @@ function StatusPopover({ status, onSelect }) {
         ref={triggerRef}
         type="button"
         className="tasks-status-trigger"
-        style={{ color: STATUS_META[cur].color }}
+        style={{ color: statusColorByName(curName) }}
         onClick={handleOpen}
-        title={cur}
+        title={curName}
       >
-        {statusIcon(cur)}
+        {statusIcon(curName)}
       </button>
       {open && createPortal(
         <div
@@ -134,17 +124,17 @@ function StatusPopover({ status, onSelect }) {
           className="tasks-status-popover"
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
         >
-          {STATUSES.map(opt => (
+          {(taskStatuses || []).map(opt => (
             <button
-              key={opt}
+              key={opt.id}
               type="button"
-              className={'tasks-status-option' + (opt === cur ? ' tasks-status-option--active' : '')}
-              onClick={() => { setOpen(false); onSelect(opt) }}
+              className={'tasks-status-option' + (opt.id === statusId ? ' tasks-status-option--active' : '')}
+              onClick={() => { setOpen(false); onSelect(opt.id, opt.name) }}
             >
-              <span style={{ color: STATUS_META[opt].color, display: 'flex', alignItems: 'center' }}>
-                {statusIcon(opt, 15)}
+              <span style={{ color: statusColorByName(opt.name), display: 'flex', alignItems: 'center' }}>
+                {statusIcon(opt.name, 15)}
               </span>
-              <span>{opt}</span>
+              <span>{opt.name}</span>
             </button>
           ))}
         </div>,
@@ -156,10 +146,12 @@ function StatusPopover({ status, onSelect }) {
 
 // ── Main component ──
 export default function Tasks() {
-  const [tasks,    setTasks]    = useState([])
-  const [projects, setProjects] = useState([])
-  const [users,    setUsers]    = useState([])
-  const [loading,  setLoading]  = useState(true)
+  const [tasks,        setTasks]        = useState([])
+  const [projects,     setProjects]     = useState([])
+  const [users,        setUsers]        = useState([])
+  const [taskStages,   setTaskStages]   = useState([])
+  const [taskStatuses, setTaskStatuses] = useState([])
+  const [loading,      setLoading]      = useState(true)
 
   // Archive view
   const [archiveView, setArchiveView] = useState(false)
@@ -251,7 +243,7 @@ export default function Tasks() {
     setLoading(true)
     const query = supabase
       .from('tasks')
-      .select('*, projects(name), profiles!responsible_id(first_name)')
+      .select('*, projects(name), profiles!responsible_id(first_name, last_name), stages!stage_id(id, name), task_statuses!status_id(id, name, color)')
       .order('created_at', { ascending: false })
 
     const { data: t } = isArchive
@@ -263,18 +255,21 @@ export default function Tasks() {
       ? result.sort((a, b) => new Date(b.archived_at) - new Date(a.archived_at))
       : result
     )
-    console.log('[Tasks] fetched tasks count:', result.length, 'sample:', result[0])
     setLoading(false)
   }, [])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [{ data: p }, { data: u }] = await Promise.all([
+    const [{ data: p }, { data: u }, { data: stg }, { data: sts }] = await Promise.all([
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name'),
+      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('task_statuses').select('id, name, color').order('id'),
     ])
     setProjects(p || [])
     setUsers(u || [])
+    setTaskStages((stg || []).filter(s => s.id !== 9))
+    setTaskStatuses(sts || [])
     await fetchTasks(archiveView)
   }, [fetchTasks, archiveView])
 
@@ -294,7 +289,7 @@ export default function Tasks() {
     setLoading(true)
     const query = supabase
       .from('tasks')
-      .select('*, projects(name), profiles!responsible_id(first_name)')
+      .select('*, projects(name), profiles!responsible_id(first_name, last_name), stages!stage_id(id, name), task_statuses!status_id(id, name, color)')
       .order('created_at', { ascending: false })
     const { data: t } = next
       ? await query.eq('archived', true).order('archived_at', { ascending: false })
@@ -320,14 +315,15 @@ export default function Tasks() {
   const filtered = tasks.filter(t => {
     if (filterAssignee && t.responsible_id !== filterAssignee) return false
     if (filterProject  && String(t.project_id) !== filterProject) return false
-    if (filterStage    && t.stage !== filterStage) return false
-    if (filterStatus   && t.status !== filterStatus) return false
+    if (filterStage    && String(t.stage_id) !== filterStage) return false
+    if (filterStatus   && String(t.status_id) !== filterStatus) return false
     return true
   })
 
   const anyFilter = !!(filterAssignee || filterProject || filterStage || filterStatus)
 
-  const completedCount = tasks.filter(t => t.status === 'הושלם' && !t.archived).length
+  const completedStatusId = taskStatuses.find(s => s.name === 'הושלם')?.id
+  const completedCount = tasks.filter(t => t.status_id === completedStatusId && !t.archived).length
 
   function clearFilters() {
     setFilterAssignee('')
@@ -337,9 +333,13 @@ export default function Tasks() {
   }
 
   // ── Status update from popover ──
-  async function handleStatusChange(taskId, newStatusVal) {
-    const { error } = await supabase.from('tasks').update({ status: newStatusVal }).eq('id', taskId)
-    if (!error) setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatusVal } : t))
+  async function handleStatusChange(taskId, newStatusId, newStatusName) {
+    const { error } = await supabase.from('tasks').update({ status_id: newStatusId }).eq('id', taskId)
+    if (!error) setTasks(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, status_id: newStatusId, task_statuses: { id: newStatusId, name: newStatusName } }
+        : t
+    ))
   }
 
   // ── Inline edit ──
@@ -352,17 +352,29 @@ export default function Tasks() {
     if (!editingCell) return
     const { taskId, field } = editingCell
     const value = editValue === '' ? null : editValue
-    const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
-    if (!error) {
-      if (field === 'responsible_id') {
+
+    if (field === 'stage_id') {
+      const stageId = value ? Number(value) : null
+      const { error } = await supabase.from('tasks').update({ stage_id: stageId }).eq('id', taskId)
+      if (!error) {
+        const stageObj = taskStages.find(s => s.id === stageId)
+        setTasks(prev => prev.map(t => t.id === taskId
+          ? { ...t, stage_id: stageId, stages: stageObj ? { id: stageObj.id, name: stageObj.name } : null }
+          : t
+        ))
+      }
+    } else if (field === 'responsible_id') {
+      const { error } = await supabase.from('tasks').update({ responsible_id: value }).eq('id', taskId)
+      if (!error) {
         const user = users.find(u => u.id === value)
         setTasks(prev => prev.map(t => t.id === taskId
           ? { ...t, responsible_id: value, profiles: user ? { first_name: user.first_name } : null }
           : t
         ))
-      } else {
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
       }
+    } else {
+      const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
+      if (!error) setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
     }
     setEditingCell(null)
     setEditValue('')
@@ -383,23 +395,24 @@ export default function Tasks() {
   // ── Archive all completed ──
   async function doArchiveCompleted() {
     setArchiveConfirm(false)
+    if (!completedStatusId) return
     const { error } = await supabase
       .from('tasks')
       .update({ archived: true, archived_at: new Date().toISOString() })
-      .eq('status', 'הושלם')
+      .eq('status_id', completedStatusId)
       .or('archived.eq.false,archived.is.null')
     if (!error) {
-      setTasks(prev => prev.filter(t => t.status !== 'הושלם'))
+      setTasks(prev => prev.filter(t => t.status_id !== completedStatusId))
     }
   }
 
   // ── Restore task ──
   async function doRestore(id) {
     setRestoreConfirmId(null)
-    const { error } = await supabase
-      .from('tasks')
-      .update({ archived: false, archived_at: null, status: 'פעיל' })
-      .eq('id', id)
+    const activeStatusId = taskStatuses.find(s => s.name === 'פעיל')?.id ?? null
+    const updatePayload = { archived: false, archived_at: null }
+    if (activeStatusId) updatePayload.status_id = activeStatusId
+    const { error } = await supabase.from('tasks').update(updatePayload).eq('id', id)
     if (!error) setTasks(prev => prev.filter(t => t.id !== id))
   }
 
@@ -424,14 +437,14 @@ export default function Tasks() {
     }
     const isEditing = editingCell?.taskId === task.id && editingCell?.field === field
     if (isEditing) {
-      if (field === 'stage') {
+      if (field === 'stage_id') {
         return (
           <td className={className}>
             <select className="tasks-cell-input" value={editValue}
               onChange={e => setEditValue(e.target.value)}
               onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus>
               <option value="">—</option>
-              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              {taskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </td>
         )
@@ -467,8 +480,9 @@ export default function Tasks() {
         </td>
       )
     }
+    const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
     return (
-      <td className={className} onClick={() => startEdit(task.id, field, task[field])}>
+      <td className={className} onClick={() => startEdit(task.id, field, editInitValue)}>
         {children}
       </td>
     )
@@ -495,14 +509,14 @@ export default function Tasks() {
                 <span className="tasks-filter-label">שלב</span>
                 <select className="tasks-filter-select" value={filterStage} onChange={e => setFilterStage(e.target.value)}>
                   <option value="">הכל</option>
-                  {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {taskStages.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                 </select>
               </div>
               <div className="tasks-filter-group">
                 <span className="tasks-filter-label">סטטוס</span>
                 <select className="tasks-filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                   <option value="">הכל</option>
-                  {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {taskStatuses.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                 </select>
               </div>
               <div className="tasks-filter-group">
@@ -576,7 +590,8 @@ export default function Tasks() {
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} style={{ display: 'block' }}><p className="tasks-empty">אין משימות להצגה</p></td></tr>
                 ) : filtered.map((task) => {
-                  const isUrgent = task.status === 'דחוף'
+                  const taskStatusName = task.task_statuses?.name || task.status || 'פעיל'
+                  const isUrgent = taskStatusName === 'דחוף'
                   return (
                     <tr
                       key={task.id}
@@ -586,14 +601,16 @@ export default function Tasks() {
                       <td className="tasks-col-status" onClick={e => e.stopPropagation()}>
                         {archiveView ? (
                           <div className="tasks-status-wrap">
-                            <span style={{ color: STATUS_META[task.status]?.color || STATUS_META['פעיל'].color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {statusIcon(task.status)}
+                            <span style={{ color: statusColorByName(taskStatusName), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {statusIcon(taskStatusName)}
                             </span>
                           </div>
                         ) : (
                           <StatusPopover
-                            status={task.status}
-                            onSelect={val => handleStatusChange(task.id, val)}
+                            statusId={task.status_id}
+                            statusName={taskStatusName}
+                            taskStatuses={taskStatuses}
+                            onSelect={(id, name) => handleStatusChange(task.id, id, name)}
                           />
                         )}
                       </td>
@@ -602,8 +619,8 @@ export default function Tasks() {
                         <span className="tasks-cell-value">{task.projects?.name || task.project_name || ''}</span>
                       </td>
 
-                      <EditCell task={task} field="stage" className="tasks-col-stage">
-                        <span className="tasks-cell-value">{task.stage || ''}</span>
+                      <EditCell task={task} field="stage_id" className="tasks-col-stage">
+                        <span className="tasks-cell-value">{task.stages?.name || task.stage || ''}</span>
                       </EditCell>
 
                       <EditCell task={task} field="description" className="tasks-col-desc">

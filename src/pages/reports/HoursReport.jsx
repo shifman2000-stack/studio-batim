@@ -25,6 +25,8 @@ export default function HoursReport() {
   const [reportYear, setReportYear]   = useState(new Date().getFullYear())
   const [reportData, setReportData]   = useState([])
   const [reportLoading, setReportLoading] = useState(false)
+  const [allUsers, setAllUsers]       = useState([])
+  const [filterUserId, setFilterUserId] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -34,6 +36,10 @@ export default function HoursReport() {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
       if (!profile || profile.role !== 'admin') { navigate('/dashboard'); return }
       setRole('admin')
+      const { data: users } = await supabase
+        .from('profiles').select('id, first_name, last_name')
+        .in('role', ['admin', 'employee']).order('first_name')
+      if (users) setAllUsers(users)
     }
     init()
   }, [])
@@ -97,6 +103,21 @@ export default function HoursReport() {
         >
           {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
+        {allUsers.length > 0 && (
+          <select
+            className="report-project-select"
+            value={filterUserId}
+            onChange={e => setFilterUserId(e.target.value)}
+            style={{ width: 160 }}
+          >
+            <option value="">כל העובדים</option>
+            {allUsers.map(u => (
+              <option key={u.id} value={u.id}>
+                {[u.first_name, u.last_name].filter(Boolean).join(' ')}
+              </option>
+            ))}
+          </select>
+        )}
         <button className="hours-report-fetch-btn" onClick={fetchReportData}>הצג</button>
       </div>
 
@@ -119,16 +140,18 @@ export default function HoursReport() {
               </tr>
             </thead>
             <tbody>
-              {reportData.map(row => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td>{toHHMM(row.totalMins)}</td>
-                  <td>{row.officeDays}</td>
-                  <td>{row.wfhDays}</td>
-                  <td>{row.vacationDays}</td>
-                  <td>{row.sickDays}</td>
-                </tr>
-              ))}
+              {reportData
+                .filter(row => !filterUserId || row.id === filterUserId)
+                .map(row => (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>{toHHMM(row.totalMins)}</td>
+                    <td>{row.officeDays}</td>
+                    <td>{row.wfhDays}</td>
+                    <td>{row.vacationDays}</td>
+                    <td>{row.sickDays}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
           <div className="hours-report-export-row">

@@ -271,6 +271,7 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
     first_name:             row?.first_name             ?? '',
     last_name:              row?.last_name              ?? '',
     phone:                  row?.phone                  ?? '',
+    email:                  row?.email                  ?? '',
     city:                   row?.city                   ?? '',
     project_description:    row?.project_description    ?? '',
     source:                 row?.source                 ?? '',
@@ -372,6 +373,18 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
               dir="ltr"
               value={form.phone}
               onChange={e => set('phone', e.target.value)}
+            />
+          </div>
+
+          <div className="inq-form-row">
+            <input
+              className="inq-form-input"
+              placeholder="מייל"
+              type="email"
+              dir="ltr"
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              style={{ width: '100%' }}
             />
           </div>
 
@@ -571,7 +584,7 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
 export default function Inquiries() {
   const navigate = useNavigate()
   const [checking, setChecking]         = useState(true)
-  const [currentUserName, setCurrentUserName] = useState('')
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [rows, setRows]                 = useState([])
   const [loading, setLoading]           = useState(true)
   const [modalRow, setModalRow]         = useState(undefined) // undefined = closed, null = new, obj = edit
@@ -587,8 +600,7 @@ export default function Inquiries() {
       const { data: profile } = await supabase
         .from('profiles').select('role, first_name, last_name').eq('id', session.user.id).single()
       if (profile?.role !== 'admin') { navigate('/dashboard'); return }
-      const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
-      setCurrentUserName(fullName)
+      setCurrentUserId(session.user.id)
       setChecking(false)
     }
     check()
@@ -646,7 +658,7 @@ export default function Inquiries() {
       .insert([{
         name:          projectName,
         current_stage: 'קליטת פרויקט',
-        responsible:   currentUserName || null,
+        responsible_id: currentUserId || null,
         urgency:       null,
         intake_date:   todayISO(),
         archived:      false,

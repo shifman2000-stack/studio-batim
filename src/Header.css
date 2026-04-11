@@ -128,9 +128,11 @@
 .nav-btn {
   background: none;
   border: none;
-  color: #000;
-  font-size: 15px;
-  font-weight: 400;
+  color: #1a1a18;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.07em;
   text-decoration: none;
   cursor: pointer;
   padding: 4px 0;
@@ -143,6 +145,7 @@
 
 .nav-btn.active {
   font-weight: 700;
+  color: #1a1a18;
   text-decoration: underline;
   text-underline-offset: 4px;
 }

@@ -2,17 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import './NewTaskModal.css'
 
-const TASK_STAGES = ['סקיצות', 'הדמיה', 'הכנת גרמושקה', 'רישוי', 'תוכניות עבודה', 'בניה', 'גמר']
-const TASK_STAGE_COLORS = {
-  'סקיצות':          { bg: '#e8e197', text: '#000' },
-  'הדמיה':           { bg: '#cbc9a2', text: '#000' },
-  'הכנת גרמושקה':    { bg: '#73946e', text: '#fff' },
-  'רישוי':           { bg: '#7bc1b5', text: '#000' },
-  'תוכניות עבודה':   { bg: '#676977', text: '#fff' },
-  'בניה':            { bg: '#89748b', text: '#fff' },
-  'גמר':             { bg: '#87526d', text: '#fff' },
-}
-
 // Props:
 //   project   — kanban project object → insert mode, read-only project
 //   editTask  — existing task object  → edit mode, read-only project
@@ -28,26 +17,43 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
   const [searchOpen,      setSearchOpen]      = useState(false)
   const searchRef = useRef(null)
 
+  // LUT data
+  const [stages,   setStages]   = useState([])
+  const [statuses, setStatuses] = useState([])
+
   // Employees — fetched on mount
   const [employees, setEmployees] = useState([])
 
-  // Task fields — responsible stored as UUID (responsible_id)
-  const [taskStage,          setTaskStage]          = useState(editTask?.stage        || initialProject?.current_stage || '')
-  const [taskResponsibleId,  setTaskResponsibleId]  = useState(editTask?.responsible_id || null)
-  const [taskStatus,         setTaskStatus]         = useState(editTask?.status       || 'פעיל')
-  const [taskDueDate,        setTaskDueDate]        = useState(editTask?.due_date     || '')
-  const [taskDescription,    setTaskDescription]    = useState(editTask?.description  || '')
-  const [taskNotes,          setTaskNotes]          = useState(editTask?.notes        || '')
-  const [saving,             setSaving]             = useState(false)
+  // Task fields
+  const [taskStageId,       setTaskStageId]       = useState(editTask?.stage_id        ?? null)
+  const [taskResponsibleId, setTaskResponsibleId] = useState(editTask?.responsible_id  ?? null)
+  const [taskStatusId,      setTaskStatusId]      = useState(editTask?.status_id       ?? null)
+  const [taskDueDate,       setTaskDueDate]        = useState(editTask?.due_date        || '')
+  const [taskDescription,   setTaskDescription]   = useState(editTask?.description     || '')
+  const [taskNotes,         setTaskNotes]          = useState(editTask?.notes           || '')
+  const [saving,            setSaving]             = useState(false)
 
-  // Fetch employees on mount
+  // Fetch LUTs + employees on mount
   useEffect(() => {
-    supabase
-      .from('profiles')
-      .select('id, first_name, last_name')
-      .in('role', ['admin', 'employee'])
-      .order('first_name')
-      .then(({ data }) => setEmployees(data || []))
+    const load = async () => {
+      const [{ data: stg }, { data: sts }, { data: emp }] = await Promise.all([
+        supabase.from('stages').select('id, name, color').order('order_index'),
+        supabase.from('task_statuses').select('id, name, color').order('id'),
+        supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name'),
+      ])
+      // Exclude קליטת פרויקט (id=1) and השהייה (id=9)
+      setStages((stg || []).filter(s => s.id !== 1 && s.id !== 9))
+      setStatuses(sts || [])
+      setEmployees(emp || [])
+
+      // Set default status to 'פעיל' if not in edit mode
+      if (!isEdit && !taskStatusId) {
+        const activeStatus = (sts || []).find(s => s.name === 'פעיל')
+        if (activeStatus) setTaskStatusId(activeStatus.id)
+      }
+    }
+    load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Autocomplete search with debounce
@@ -82,14 +88,13 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
     setProjectQuery(p.name)
     setProjectResults([])
     setSearchOpen(false)
-    setTaskStage(p.current_stage || '')
   }
 
   function clear() {
     if (isEdit) {
-      setTaskStage(editTask.stage || '')
-      setTaskResponsibleId(editTask.responsible_id || null)
-      setTaskStatus(editTask.status || 'פעיל')
+      setTaskStageId(editTask.stage_id ?? null)
+      setTaskResponsibleId(editTask.responsible_id ?? null)
+      setTaskStatusId(editTask.status_id ?? null)
       setTaskDueDate(editTask.due_date || '')
       setTaskDescription(editTask.description || '')
       setTaskNotes(editTask.notes || '')
@@ -99,9 +104,10 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
         setSelectedProject(null)
         setProjectResults([])
       }
-      setTaskStage(initialProject?.current_stage || '')
+      setTaskStageId(null)
       setTaskResponsibleId(null)
-      setTaskStatus('פעיל')
+      const activeStatus = statuses.find(s => s.name === 'פעיל')
+      setTaskStatusId(activeStatus?.id ?? null)
       setTaskDueDate('')
       setTaskDescription('')
       setTaskNotes('')
@@ -113,9 +119,9 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
 
     if (isEdit) {
       const { error } = await supabase.from('tasks').update({
-        stage:          taskStage          || null,
-        responsible_id: taskResponsibleId  || null,
-        status:         taskStatus,
+        stage_id:       taskStageId        ?? null,
+        responsible_id: taskResponsibleId  ?? null,
+        status_id:      taskStatusId       ?? null,
         due_date:       taskDueDate        || null,
         description:    taskDescription    || null,
         notes:          taskNotes          || null,
@@ -128,9 +134,9 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
       const payload = {
         project_id:     proj.id,
         project_name:   proj.name,
-        stage:          taskStage          || null,
-        responsible_id: taskResponsibleId  || null,
-        status:         taskStatus,
+        stage_id:       taskStageId        ?? null,
+        responsible_id: taskResponsibleId  ?? null,
+        status_id:      taskStatusId       ?? null,
         due_date:       taskDueDate        || null,
         description:    taskDescription    || null,
         notes:          taskNotes          || null,
@@ -150,7 +156,8 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
     : (initialProject?.name || '')
 
   const proj = isReadOnly ? (initialProject || editTask) : selectedProject
-  const statusOptions = ['פעיל', 'דחוף', 'הושלם']
+
+  const completedStatusId = statuses.find(s => s.name === 'הושלם')?.id
 
   return (
     <div className="ktm-overlay" onClick={onClose}>
@@ -191,16 +198,15 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
         <div className="ktm-row">
           <label className="ktm-label">שלב</label>
           <div className="ktm-pills ktm-pills--nowrap">
-            {TASK_STAGES.map(s => {
-              const { bg, text } = TASK_STAGE_COLORS[s]
-              const sel = taskStage === s
+            {stages.map(s => {
+              const sel = taskStageId === s.id
               return (
                 <button
-                  key={s}
+                  key={s.id}
                   className={'ktm-pill ktm-pill--stage' + (sel ? ' ktm-pill--selected' : '')}
-                  style={{ background: bg, color: text, borderColor: sel ? '#000' : 'transparent' }}
-                  onClick={() => setTaskStage(s)}
-                >{s}</button>
+                  style={{ background: s.color || '#e0e0e0', color: '#000', borderColor: sel ? '#000' : 'transparent' }}
+                  onClick={() => setTaskStageId(s.id)}
+                >{s.name}</button>
               )
             })}
           </div>
@@ -226,16 +232,16 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
           <div className="ktm-inline-group">
             <label className="ktm-label">סטטוס</label>
             <div className="ktm-pills">
-              {statusOptions.map(s => {
-                const isHoshlam = s === 'הושלם'
-                const disabled = isHoshlam && !isEdit
+              {statuses.map(s => {
+                const isCompleted = s.id === completedStatusId
+                const disabled = isCompleted && !isEdit
                 return (
                   <button
-                    key={s}
-                    className={'ktm-pill' + (taskStatus === s ? ' ktm-pill--selected' : '') + (disabled ? ' ktm-pill--disabled' : '')}
-                    onClick={() => { if (!disabled) setTaskStatus(s) }}
+                    key={s.id}
+                    className={'ktm-pill' + (taskStatusId === s.id ? ' ktm-pill--selected' : '') + (disabled ? ' ktm-pill--disabled' : '')}
+                    onClick={() => { if (!disabled) setTaskStatusId(s.id) }}
                     disabled={disabled}
-                  >{s}</button>
+                  >{s.name}</button>
                 )
               })}
             </div>

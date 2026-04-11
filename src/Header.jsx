@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import Logo from './components/Logo'
 import './Header.css'
 
 // DEV ONLY - REMOVE BEFORE PRODUCTION
@@ -149,8 +150,8 @@ function Header() {
     <header className="site-header" dir="rtl">
 
       {/* Logo — LEFT */}
-      <NavLink to="/dashboard">
-        <img src="/logo.png" alt="Studio Batim Logo" className="header-logo" />
+      <NavLink to="/dashboard" style={{ textDecoration: 'none' }}>
+        <Logo />
       </NavLink>
 
       {/* Right group: [שלום עינב] [הגעתי] | [nav links] */}
@@ -174,7 +175,7 @@ function Header() {
         </div>
 
         {/* Separator */}
-        <div className="header-sep" />
+        <span style={{ display: 'block', width: '1px', height: '28px', flexShrink: 0, background: 'linear-gradient(to bottom, transparent, #c8bfb0 25%, #c8bfb0 75%, transparent)', margin: '0 16px' }} />
 
         {/* Nav links */}
         <nav className="header-nav">

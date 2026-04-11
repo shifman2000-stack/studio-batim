@@ -4,21 +4,13 @@ import { supabase } from './supabaseClient'
 import NewTaskModal from './NewTaskModal'
 import './ProjectsKanban.css'
 
-const STAGES = [
-  'קליטת פרויקט', 'סקיצות', 'הדמיה', 'גרמושקה', 'רישוי',
-  'תכניות עבודה', 'בניה', 'גמר', 'השהייה',
-]
-
-const STAGE_COLORS = {
-  'קליטת פרויקט':  { bg: '#f0f0f0', text: '#000' },
-  'סקיצות':        { bg: '#e8e197', text: '#000' },
-  'הדמיה':         { bg: '#cbc9a2', text: '#000' },
-  'גרמושקה':       { bg: '#73946e', text: '#fff' },
-  'רישוי':         { bg: '#7bc1b5', text: '#000' },
-  'תכניות עבודה':  { bg: '#676977', text: '#fff' },
-  'בניה':          { bg: '#89748b', text: '#fff' },
-  'גמר':           { bg: '#87526d', text: '#fff' },
-  'השהייה':        { bg: '#bcaaae', text: '#000' },
+function getTextColor(bgHex) {
+  if (!bgHex) return '#1a1a18'
+  const hex = bgHex.replace('#', '')
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#1a1a18' : '#ffffff'
 }
 
 function todayISO() {
@@ -52,6 +44,7 @@ function formatDate(iso) {
 
 function ProjectsKanban() {
   const [projects, setProjects]             = useState([])
+  const [stages, setStages]                 = useState([])
   const [userRole, setUserRole]             = useState(null)
   const [currentUserName, setCurrentUserName] = useState('')
   const [users, setUsers]                   = useState([])
@@ -117,9 +110,13 @@ function ProjectsKanban() {
         setCurrentUserName([profile.first_name, profile.last_name].filter(Boolean).join(' '))
       }
 
+      const { data: stagesData } = await supabase
+        .from('stages').select('*').order('order_index')
+      if (stagesData) setStages(stagesData)
+
       const { data: projectsData } = await supabase
         .from('projects')
-        .select('*, profiles!responsible_id(first_name)')
+        .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
         .eq('archived', false)
         .order('created_at', { ascending: false })
       if (projectsData) {
@@ -167,7 +164,9 @@ function ProjectsKanban() {
 
   const fetchProjects = async () => {
     const { data, error } = await supabase
-      .from('projects').select('*, profiles!responsible_id(first_name)').eq('archived', false).order('created_at', { ascending: false })
+      .from('projects')
+      .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
+      .eq('archived', false).order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
   }
 
@@ -206,7 +205,7 @@ function ProjectsKanban() {
       setArchivedProjects(prev => prev.filter(p => p.id !== projectId))
       const { data: restored } = await supabase
         .from('projects')
-        .select('*, profiles!responsible_id(first_name)')
+        .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
         .eq('id', projectId)
         .single()
       if (restored) setProjects(prev => [restored, ...prev])
@@ -246,8 +245,9 @@ function ProjectsKanban() {
   const handleAddProject = async () => {
     if (!newName.trim()) { setModalError('יש להזין שם פרויקט'); return }
     setAdding(true); setModalError('')
+    const firstStageId = stages.find(s => s.name === 'קליטת פרויקט')?.id ?? stages[0]?.id ?? null
     const { data, error } = await supabase.from('projects')
-      .insert([{ name: newName.trim(), responsible_id: newResponsible || null, current_stage: 'קליטת פרויקט', stage_entered_at: todayISO(), archived: false }])
+      .insert([{ name: newName.trim(), responsible_id: newResponsible || null, current_stage: 'קליטת פרויקט', stage_id: firstStageId, stage_entered_at: todayISO(), archived: false }])
       .select().single()
     setAdding(false)
     if (error) { setModalError(`שגיאה: ${error.message}`); return }
@@ -255,7 +255,7 @@ function ProjectsKanban() {
 
     const { data: fullProject } = await supabase
       .from('projects')
-      .select('*, profiles!responsible_id(first_name)')
+      .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
       .eq('id', data.id)
       .single()
     const projectToAdd = fullProject || data
@@ -359,15 +359,15 @@ function ProjectsKanban() {
     e.dataTransfer.dropEffect = 'move'
   }
 
-  const handleDrop = async (e, stage) => {
+  const handleDrop = async (e, stageObj) => {
     e.preventDefault()
     if (!dragId) return
     const project = projects.find(p => p.id === dragId)
-    if (!project || project.current_stage === stage) { setDragId(null); return }
+    if (!project || project.stage_id === stageObj.id) { setDragId(null); return }
 
-    const today      = todayISO()
-    const enteredAt  = project.stage_entered_at || today
-    const days       = daysInStage(enteredAt)
+    const today     = todayISO()
+    const enteredAt = project.stage_entered_at || today
+    const days      = daysInStage(enteredAt)
 
     await supabase.from('project_stage_history').insert([{
       project_id:    project.id,
@@ -378,11 +378,13 @@ function ProjectsKanban() {
     }])
 
     await supabase.from('projects')
-      .update({ current_stage: stage, stage_entered_at: today })
+      .update({ stage_id: stageObj.id, stage_entered_at: today })
       .eq('id', dragId)
 
     setProjects(prev => prev.map(p =>
-      p.id === dragId ? { ...p, current_stage: stage, stage_entered_at: today } : p
+      p.id === dragId
+        ? { ...p, stage_id: stageObj.id, stages: { id: stageObj.id, name: stageObj.name, color: stageObj.color }, stage_entered_at: today }
+        : p
     ))
     setDragId(null)
   }
@@ -585,18 +587,19 @@ function ProjectsKanban() {
         {/* Board */}
         <div className="kanban-board">
           <div className="kanban-columns-wrap">
-          {STAGES.map(stage => {
-            const { bg, text } = STAGE_COLORS[stage]
-            const cards = projects.filter(p => p.current_stage === stage)
+          {stages.map(stage => {
+            const bg   = stage.color || '#f0f0f0'
+            const text = getTextColor(bg)
+            const cards = projects.filter(p => p.stage_id === stage.id)
             return (
               <div
-                key={stage}
-                className="kanban-column"
+                key={stage.id}
+                className={`kanban-column${stage.name === 'השהייה' ? ' kanban-column--narrow' : ''}`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, stage)}
               >
                 <div className="kanban-col-header" style={{ background: bg, color: text }}>
-                  {stage}
+                  {stage.name}
                   <span className="kanban-col-count">{cards.length}</span>
                 </div>
 

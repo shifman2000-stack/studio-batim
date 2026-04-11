@@ -75,7 +75,7 @@
 /* ── Board ── */
 .kanban-board {
   height: calc(100vh - 150px);
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: scroll;
   padding-bottom: 16px;
   padding-right: 16px;
@@ -88,11 +88,13 @@
   gap: 6px;
   align-items: flex-start;
   direction: rtl;
+  width: 100%;
 }
 
 /* ── Column ── */
 .kanban-column {
-  flex: 0 0 160px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   border-radius: 8px;
@@ -100,15 +102,24 @@
   background: #f7f7f7;
 }
 
+.kanban-column--narrow {
+  flex: 1;
+}
+
 .kanban-col-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
   font-size: 14px;
-  font-weight: 700;
+  color: #1a1a18;
   direction: rtl;
   white-space: nowrap;
+  border-radius: 8px;
+  border: none;
+  outline: none;
 }
 
 .kanban-col-count {
@@ -160,9 +171,10 @@
 }
 
 .kanban-card-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 400;
   font-size: 14px;
-  font-weight: 700;
-  color: #222;
+  color: #1a1a18;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -199,8 +211,10 @@
 }
 
 .kanban-card-responsible {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
   font-size: 13px;
-  color: #777;
+  color: #8a8680;
 }
 
 .kanban-card-urgency {

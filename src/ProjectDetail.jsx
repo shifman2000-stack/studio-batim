@@ -6,6 +6,7 @@ import ProfessionalModal from './components/professionals/ProfessionalModal'
 import DocumentsTab from './components/documents/DocumentsTab'
 import TasksTab from './components/tasks/TasksTab'
 import NewTaskModal from './NewTaskModal'
+import ProjectGantt from './components/ProjectGantt'
 import './ProjectDetail.css'
 
 const STAGE_COLORS = {
@@ -21,15 +22,13 @@ const STAGE_COLORS = {
 }
 
 // ── Tasks tab constants ──
-const PD_STAGES = [
-  'קליטת פרויקט', 'סקיצות', 'הדמיה', 'גרמושקה', 'רישוי',
-  'תכניות עבודה', 'בניה', 'גמר',
-]
-const PD_STATUSES = ['דחוף', 'פעיל', 'הושלם']
 const PD_STATUS_META = {
   'דחוף':  { color: '#E24B4A' },
   'פעיל':  { color: '#F6BF26' },
   'הושלם': { color: '#1D9E75' },
+}
+function pdStatusColorByName(name) {
+  return PD_STATUS_META[name]?.color || PD_STATUS_META['פעיל'].color
 }
 
 const PdIconClock = ({ size = 18 }) => (
@@ -61,7 +60,7 @@ function pdStatusIcon(status, size = 18) {
   return <PdIconClock size={size} />
 }
 
-function PdStatusPopover({ status, onSelect }) {
+function PdStatusPopover({ statusId, statusName, taskStatuses, onSelect }) {
   const [open, setOpen] = useState(false)
   const [pos,  setPos]  = useState({ top: 0, right: 0 })
   const triggerRef = useRef(null)
@@ -90,7 +89,7 @@ function PdStatusPopover({ status, onSelect }) {
     setOpen(true)
   }
 
-  const cur = PD_STATUS_META[status] ? status : 'פעיל'
+  const curName = statusName || 'פעיל'
 
   return (
     <div className="tasks-status-wrap">
@@ -98,11 +97,11 @@ function PdStatusPopover({ status, onSelect }) {
         ref={triggerRef}
         type="button"
         className="tasks-status-trigger"
-        style={{ color: PD_STATUS_META[cur].color }}
+        style={{ color: pdStatusColorByName(curName) }}
         onClick={handleOpen}
-        title={cur}
+        title={curName}
       >
-        {pdStatusIcon(cur)}
+        {pdStatusIcon(curName)}
       </button>
       {open && createPortal(
         <div
@@ -110,17 +109,17 @@ function PdStatusPopover({ status, onSelect }) {
           className="tasks-status-popover"
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
         >
-          {PD_STATUSES.map(opt => (
+          {(taskStatuses || []).map(opt => (
             <button
-              key={opt}
+              key={opt.id}
               type="button"
-              className={'tasks-status-option' + (opt === cur ? ' tasks-status-option--active' : '')}
-              onClick={() => { setOpen(false); onSelect(opt) }}
+              className={'tasks-status-option' + (opt.id === statusId ? ' tasks-status-option--active' : '')}
+              onClick={() => { setOpen(false); onSelect(opt.id, opt.name) }}
             >
-              <span style={{ color: PD_STATUS_META[opt].color, display: 'flex', alignItems: 'center' }}>
-                {pdStatusIcon(opt, 15)}
+              <span style={{ color: pdStatusColorByName(opt.name), display: 'flex', alignItems: 'center' }}>
+                {pdStatusIcon(opt.name, 15)}
               </span>
-              <span>{opt}</span>
+              <span>{opt.name}</span>
             </button>
           ))}
         </div>,
@@ -138,6 +137,7 @@ const TABS = [
   { id: 6, label: 'כתב כמויות', disabled: true },
   { id: 7, label: 'חומרי גמר', disabled: true },
   { id: 4, label: 'שעות', disabled: true },
+  { id: 8, label: 'גאנט' },
 ]
 
 /* ── Professional roles (card 3) ── */
@@ -191,6 +191,7 @@ function ProjectDetail() {
   const fromArchive = location.state?.fromArchive === true
 
   const [project, setProject]       = useState(null)
+  const [userRole, setUserRole]     = useState(null)
   const [activeTab, setActiveTab]   = useState(1)
   const [contacts, setContacts]     = useState([])
   const [clientInfo, setClientInfo] = useState(null)
@@ -206,9 +207,11 @@ function ProjectDetail() {
   const [selectionPopover, setSelectionPopover] = useState(null)
 
   // ── Tasks tab state ──
-  const [pdTasks,    setPdTasks]    = useState([])
-  const [pdUsers,    setPdUsers]    = useState([])
-  const [pdLoading,  setPdLoading]  = useState(false)
+  const [pdTasks,        setPdTasks]        = useState([])
+  const [pdUsers,        setPdUsers]        = useState([])
+  const [pdTaskStages,   setPdTaskStages]   = useState([])
+  const [pdTaskStatuses, setPdTaskStatuses] = useState([])
+  const [pdLoading,      setPdLoading]      = useState(false)
   const [pdFilterAssignee, setPdFilterAssignee] = useState('')
   const [pdFilterStage,    setPdFilterStage]    = useState('')
   const [pdFilterStatus,   setPdFilterStatus]   = useState('')
@@ -225,13 +228,24 @@ function ProjectDetail() {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite')
+        .select('id, name, current_stage, is_favorite, gantt_state')
         .eq('id', id)
         .single()
       if (data) setProject(data)
     }
     fetchProject()
   }, [id])
+
+  /* ── fetch current user role ── */
+  useEffect(() => {
+    const fetchRole = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+      if (profile) setUserRole(profile.role)
+    }
+    fetchRole()
+  }, [])
 
   /* ── fetch tab-1 data ── */
   useEffect(() => {
@@ -275,10 +289,10 @@ function ProjectDetail() {
     if (activeTab !== 5) return
     const load = async () => {
       setPdLoading(true)
-      const [{ data: t }, { data: u }] = await Promise.all([
+      const [{ data: t }, { data: u }, { data: stg }, { data: sts }] = await Promise.all([
         supabase
           .from('tasks')
-          .select('*, profiles!responsible_id(first_name)')
+          .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name), task_statuses!status_id(id, name, color)')
           .eq('project_id', id)
           .or('archived.eq.false,archived.is.null')
           .order('created_at', { ascending: false }),
@@ -287,9 +301,13 @@ function ProjectDetail() {
           .select('id, first_name')
           .in('role', ['admin', 'employee'])
           .order('first_name'),
+        supabase.from('stages').select('id, name').order('order_index'),
+        supabase.from('task_statuses').select('id, name, color').order('id'),
       ])
       setPdTasks(t || [])
       setPdUsers(u || [])
+      setPdTaskStages((stg || []).filter(s => s.id !== 9))
+      setPdTaskStatuses(sts || [])
       setPdLoading(false)
     }
     load()
@@ -377,9 +395,13 @@ function ProjectDetail() {
   }
 
   /* ── Tasks tab handlers ── */
-  async function handlePdStatusChange(taskId, newStatus) {
-    const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId)
-    if (!error) setPdTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+  async function handlePdStatusChange(taskId, newStatusId, newStatusName) {
+    const { error } = await supabase.from('tasks').update({ status_id: newStatusId }).eq('id', taskId)
+    if (!error) setPdTasks(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, status_id: newStatusId, task_statuses: { id: newStatusId, name: newStatusName } }
+        : t
+    ))
   }
 
   function pdStartEdit(taskId, field, current) {
@@ -391,17 +413,29 @@ function ProjectDetail() {
     if (!pdEditingCell) return
     const { taskId, field } = pdEditingCell
     const value = pdEditValue === '' ? null : pdEditValue
-    const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
-    if (!error) {
-      if (field === 'responsible_id') {
+
+    if (field === 'stage_id') {
+      const stageId = value ? Number(value) : null
+      const { error } = await supabase.from('tasks').update({ stage_id: stageId }).eq('id', taskId)
+      if (!error) {
+        const stageObj = pdTaskStages.find(s => s.id === stageId)
+        setPdTasks(prev => prev.map(t => t.id === taskId
+          ? { ...t, stage_id: stageId, stages: stageObj ? { id: stageObj.id, name: stageObj.name } : null }
+          : t
+        ))
+      }
+    } else if (field === 'responsible_id') {
+      const { error } = await supabase.from('tasks').update({ responsible_id: value }).eq('id', taskId)
+      if (!error) {
         const user = pdUsers.find(u => u.id === value)
         setPdTasks(prev => prev.map(t => t.id === taskId
           ? { ...t, responsible_id: value, profiles: user ? { first_name: user.first_name } : null }
           : t
         ))
-      } else {
-        setPdTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
       }
+    } else {
+      const { error } = await supabase.from('tasks').update({ [field]: value }).eq('id', taskId)
+      if (!error) setPdTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
     }
     setPdEditingCell(null)
     setPdEditValue('')
@@ -423,7 +457,7 @@ function ProjectDetail() {
     setTimeout(() => setPdTaskToast(false), 2500)
     supabase
       .from('tasks')
-      .select('*, profiles!responsible_id(first_name)')
+      .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name), task_statuses!status_id(id, name, color)')
       .eq('project_id', id)
       .or('archived.eq.false,archived.is.null')
       .order('created_at', { ascending: false })
@@ -471,8 +505,8 @@ function ProjectDetail() {
 
   const pdFiltered = pdTasks.filter(t => {
     if (pdFilterAssignee && t.responsible_id !== pdFilterAssignee) return false
-    if (pdFilterStage    && t.stage !== pdFilterStage) return false
-    if (pdFilterStatus   && t.status !== pdFilterStatus) return false
+    if (pdFilterStage    && String(t.stage_id) !== pdFilterStage) return false
+    if (pdFilterStatus   && String(t.status_id) !== pdFilterStatus) return false
     return true
   })
 
@@ -482,14 +516,14 @@ function ProjectDetail() {
   function PdEditCell({ task, field, className, children }) {
     const isEditing = pdEditingCell?.taskId === task.id && pdEditingCell?.field === field
     if (isEditing) {
-      if (field === 'stage') {
+      if (field === 'stage_id') {
         return (
           <td className={className}>
             <select className="tasks-cell-input" value={pdEditValue}
               onChange={e => setPdEditValue(e.target.value)}
               onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
               <option value="">—</option>
-              {PD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+              {pdTaskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </td>
         )
@@ -525,8 +559,9 @@ function ProjectDetail() {
         </td>
       )
     }
+    const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
     return (
-      <td className={className} onClick={() => pdStartEdit(task.id, field, task[field])}>
+      <td className={className} onClick={() => pdStartEdit(task.id, field, editInitValue)}>
         {children}
       </td>
     )
@@ -574,7 +609,7 @@ function ProjectDetail() {
           </button>
         ) : (
           <button className="pd-back-btn" onClick={() => navigate('/פרויקטים')}>
-            ← חזרה לפרויקטים
+            → חזרה לפרויקטים
           </button>
         )}
       </div>
@@ -624,14 +659,14 @@ function ProjectDetail() {
                   <span className="tasks-filter-label">שלב</span>
                   <select className="tasks-filter-select" value={pdFilterStage} onChange={e => setPdFilterStage(e.target.value)}>
                     <option value="">הכל</option>
-                    {PD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {pdTaskStages.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                   </select>
                 </div>
                 <div className="tasks-filter-group">
                   <span className="tasks-filter-label">סטטוס</span>
                   <select className="tasks-filter-select" value={pdFilterStatus} onChange={e => setPdFilterStatus(e.target.value)}>
                     <option value="">הכל</option>
-                    {PD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {pdTaskStatuses.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                   </select>
                 </div>
                 <div className="tasks-filter-group tasks-filter-group--reset">
@@ -672,17 +707,20 @@ function ProjectDetail() {
                     ) : pdFiltered.length === 0 ? (
                       <tr><td colSpan={7} style={{ display: 'block' }}><p className="tasks-empty">אין משימות להצגה</p></td></tr>
                     ) : pdFiltered.map(task => {
-                      const isUrgent = task.status === 'דחוף'
+                      const taskStatusName = task.task_statuses?.name || task.status || 'פעיל'
+                      const isUrgent = taskStatusName === 'דחוף'
                       return (
                         <tr key={task.id} className={`tasks-row${isUrgent ? ' tasks-row--urgent' : ''}`}>
                           <td className="tasks-col-status" onClick={e => e.stopPropagation()}>
                             <PdStatusPopover
-                              status={task.status}
-                              onSelect={val => handlePdStatusChange(task.id, val)}
+                              statusId={task.status_id}
+                              statusName={taskStatusName}
+                              taskStatuses={pdTaskStatuses}
+                              onSelect={(id, name) => handlePdStatusChange(task.id, id, name)}
                             />
                           </td>
-                          <PdEditCell task={task} field="stage" className="tasks-col-stage">
-                            <span className="tasks-cell-value">{task.stage || ''}</span>
+                          <PdEditCell task={task} field="stage_id" className="tasks-col-stage">
+                            <span className="tasks-cell-value">{task.stages?.name || task.stage || ''}</span>
                           </PdEditCell>
                           <PdEditCell task={task} field="description" className="tasks-col-desc">
                             <span className="tasks-cell-value">{task.description || ''}</span>
@@ -880,6 +918,19 @@ function ProjectDetail() {
         {/* ── Tab 3 — מעקב שלבי התקדמות ── */}
         {activeTab === 3 && (
           <TasksTab projectId={id} />
+        )}
+
+        {/* ── Tab 8 — גאנט ── */}
+        {activeTab === 8 && (
+          <ProjectGantt
+            project={project}
+            isAdmin={userRole === 'admin'}
+            onStateChange={async (stageId, newStatus) => {
+              const newState = { ...project.gantt_state, [stageId]: newStatus }
+              await supabase.from('projects').update({ gantt_state: newState }).eq('id', project.id)
+              setProject(prev => ({ ...prev, gantt_state: newState }))
+            }}
+          />
         )}
 
       </div>{/* end pd-tab-content */}

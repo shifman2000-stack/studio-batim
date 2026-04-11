@@ -16,6 +16,9 @@ import Inquiries from './pages/Inquiries'
 import ProjectStagesReport from './pages/reports/ProjectStagesReport'
 import HoursReport from './pages/reports/HoursReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
+import AuthCallback from './pages/AuthCallback'
+import ClientPortal from './pages/ClientPortal'
+import NoAccess from './pages/NoAccess'
 
 function Layout() {
   return (
@@ -31,6 +34,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/client" element={<ClientPortal />} />
+        <Route path="/no-access" element={<NoAccess />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

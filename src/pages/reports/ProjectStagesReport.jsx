@@ -13,7 +13,6 @@ function toHHMM(mins) {
   return `${h}:${String(m).padStart(2, '0')}`
 }
 
-const FIXED_STAGES = ['סקיצות', 'הדמיה', 'גרמושקה', 'רישוי', 'תכניות עבודה', 'בניה', 'גמר']
 
 function daysFromDate(dateStr) {
   if (!dateStr) return 0
@@ -26,6 +25,7 @@ function daysFromDate(dateStr) {
 export default function ProjectStagesReport() {
   const [role, setRole]             = useState(null)
   const [projects, setProjects]     = useState([])
+  const [stagesData, setStagesData] = useState([])
   const [employees, setEmployees]   = useState([])
   const [selectedId, setSelectedId] = useState('')
   const [rows, setRows]             = useState([])
@@ -41,12 +41,14 @@ export default function ProjectStagesReport() {
       if (!profile || profile.role !== 'admin') { navigate('/dashboard'); return }
       setRole('admin')
 
-      const [{ data: projs }, { data: emps }] = await Promise.all([
+      const [{ data: projs }, { data: emps }, { data: stg }] = await Promise.all([
         supabase.from('projects').select('id, name').eq('archived', false).order('name'),
         supabase.from('profiles').select('id, first_name, last_name').eq('role', 'employee').order('first_name'),
+        supabase.from('stages').select('id, name, color').order('order_index'),
       ])
       if (projs) setProjects(projs)
       if (emps)  setEmployees(emps)
+      if (stg)   setStagesData(stg)
     }
     init()
   }, [])
@@ -64,67 +66,78 @@ export default function ProjectStagesReport() {
         { data: allHistory },
         { data: allProjects },
       ] = await Promise.all([
-        supabase.from('project_stage_history').select('stage, days_in_stage, entered_at').eq('project_id', selectedId),
+        supabase.from('project_stage_history').select('stage, days_in_stage, entered_at, stages!stage_id(id, name, color)').eq('project_id', selectedId),
         supabase.from('projects').select('current_stage, stage_entered_at').eq('id', selectedId).single(),
-        supabase.from('hour_reports').select('stage, user_id, hours, minutes').eq('project_id', selectedId),
+        supabase.from('hour_reports').select('stage, stage_id, user_id, hours, minutes, stages!stage_id(id, name)').eq('project_id', selectedId),
         // All history across all projects for computing averages
-        supabase.from('project_stage_history').select('stage, days_in_stage'),
+        supabase.from('project_stage_history').select('stage, days_in_stage, stages!stage_id(id, name)'),
         // All active projects for current-stage averages
         supabase.from('projects').select('current_stage, stage_entered_at').eq('archived', false),
       ])
 
-      // ── Build table rows ──────────────────────────────────────────────────
-      const stageMap = {}
+      // ── Build table rows keyed by stage_id ───────────────────────────────
+      const stageMap = {}   // stageId → { days, isCurrent }
       ;(history || []).forEach(h => {
-        if (!stageMap[h.stage]) stageMap[h.stage] = { stage: h.stage, days: h.days_in_stage, isCurrent: false }
+        const sid = h.stages?.id
+        if (!sid) return
+        if (!stageMap[sid]) stageMap[sid] = { days: h.days_in_stage, isCurrent: false }
       })
       if (project?.current_stage) {
-        stageMap[project.current_stage] = {
-          stage:     project.current_stage,
-          days:      daysFromDate(project.stage_entered_at),
-          isCurrent: true,
+        const currentS = stagesData.find(s => s.name === project.current_stage)
+        if (currentS) {
+          stageMap[currentS.id] = {
+            ...(stageMap[currentS.id] || {}),
+            days:      daysFromDate(project.stage_entered_at),
+            isCurrent: true,
+          }
         }
       }
 
-      const minsByStageUser = {}
+      const minsByStageUser = {}   // `${stageId}||${userId}` → mins
       ;(hourReports || []).forEach(r => {
-        const key = `${r.stage}||${r.user_id}`
+        const sid = r.stage_id
+        if (!sid) return
+        const key = `${sid}||${r.user_id}`
         if (!minsByStageUser[key]) minsByStageUser[key] = 0
         minsByStageUser[key] += (r.hours || 0) * 60 + (r.minutes || 0)
       })
 
-      // Build rows in fixed stage order, filling zeros for missing stages
-      const built = FIXED_STAGES.map(stage => {
-        const info      = stageMap[stage]
-        const days      = info?.days ?? 0
-        const isCurrent = info?.isCurrent ?? false
-        const empMins   = employees.map(emp => minsByStageUser[`${stage}||${emp.id}`] || 0)
+      // Build rows by iterating stagesData (ordered by order_index)
+      const built = stagesData.map(s => {
+        const info      = stageMap[s.id] || {}
+        const days      = info.days ?? 0
+        const isCurrent = info.isCurrent ?? false
+        const empMins   = employees.map(emp => minsByStageUser[`${s.id}||${emp.id}`] || 0)
         const totalMins = empMins.reduce((a, b) => a + b, 0)
-        return { stage, days, isCurrent, empMins, totalMins }
+        return { stageId: s.id, stage: s.name, color: s.color || null, days, isCurrent, empMins, totalMins }
       })
       setRows(built)
 
       // ── Build avg days per stage across ALL projects ───────────────────────
-      const stageSums = {}   // stage → { sum, count }
+      const stageSums = {}   // stageId → { sum, count }
       ;(allHistory || []).forEach(h => {
-        if (!stageSums[h.stage]) stageSums[h.stage] = { sum: 0, count: 0 }
-        stageSums[h.stage].sum   += h.days_in_stage || 0
-        stageSums[h.stage].count += 1
+        const sid = h.stages?.id
+        if (!sid) return
+        if (!stageSums[sid]) stageSums[sid] = { sum: 0, count: 0 }
+        stageSums[sid].sum   += h.days_in_stage || 0
+        stageSums[sid].count += 1
       })
       ;(allProjects || []).forEach(p => {
         if (!p.current_stage) return
+        const s = stagesData.find(s => s.name === p.current_stage)
+        if (!s) return
         const days = daysFromDate(p.stage_entered_at)
-        if (!stageSums[p.current_stage]) stageSums[p.current_stage] = { sum: 0, count: 0 }
-        stageSums[p.current_stage].sum   += days
-        stageSums[p.current_stage].count += 1
+        if (!stageSums[s.id]) stageSums[s.id] = { sum: 0, count: 0 }
+        stageSums[s.id].sum   += days
+        stageSums[s.id].count += 1
       })
 
-      // Chart data in fixed stage order, reversed for RTL feel
-      const chart = FIXED_STAGES.map(stage => ({
-        stage,
-        project: stageMap[stage]?.days ?? 0,
-        avg:     stageSums[stage]
-          ? Math.round(stageSums[stage].sum / stageSums[stage].count)
+      // Chart data ordered by stagesData, reversed for RTL feel
+      const chart = stagesData.map(s => ({
+        stage:   s.name,
+        project: stageMap[s.id]?.days ?? 0,
+        avg:     stageSums[s.id]
+          ? Math.round(stageSums[s.id].sum / stageSums[s.id].count)
           : 0,
       }))
       setChartData(chart.slice().reverse())
@@ -133,7 +146,7 @@ export default function ProjectStagesReport() {
     }
 
     fetchReport()
-  }, [selectedId, employees])
+  }, [selectedId, employees, stagesData])
 
   if (role !== 'admin') return null
 
@@ -209,7 +222,14 @@ export default function ProjectStagesReport() {
               <tbody>
                 {rows.map(row => (
                   <tr key={row.stage} className={row.isCurrent ? 'report-row-current' : ''}>
-                    <td>{row.stage}</td>
+                    <td>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {row.color && (
+                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: row.color, flexShrink: 0, display: 'inline-block' }} />
+                        )}
+                        {row.stage}
+                      </span>
+                    </td>
                     <td>{row.days}</td>
                     {row.empMins.map((mins, i) => <td key={i}>{toHHMM(mins)}</td>)}
                     <td>{toHHMM(row.totalMins)}</td>

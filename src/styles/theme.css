@@ -1,0 +1,123 @@
+/* ============================================================
+   Studio Batim — Design Tokens
+   src/styles/theme.css
+   מקור אמת אחד לכל הצבעים, פונטים וטוקנים באפליקציה.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Rubik:wght@300;400&family=Heebo:wght@200;300;400;500&family=Cormorant+Garamond:wght@300;400;500&display=swap');
+
+:root {
+
+  /* ── Backgrounds ── */
+  --bg-page:          #f7f5f2;
+  --bg-surface:       #f7f5f2;
+  --bg-surface-deep:  #eeebe6;
+  --bg-hover:         #e8e3dc;
+
+  /* ── Text ── */
+  --text-primary:     #1a1a18;
+  --text-secondary:   #8a8680;
+  --text-disabled:    #b8b4af;
+  --text-inverse:     #f7f5f2;
+
+  /* ── Accent ── */
+  --sage:             #7a9478;
+  --sage-light:       rgba(122,148,120,0.12);
+  --sage-dark:        #4a6e48;
+  --sand:             #c8bfb0;
+  --sand-light:       rgba(200,191,176,0.25);
+
+  /* ── Borders ── */
+  --border-subtle:    rgba(26,26,24,0.08);
+  --border-default:   rgba(26,26,24,0.13);
+  --border-strong:    rgba(26,26,24,0.22);
+
+  /* ── Nav ── */
+  --nav-bg:           rgba(247,245,242,0.96);
+  --nav-border:       rgba(26,26,24,0.10);
+  --nav-border-w:     1px;
+
+  /* ── Secondary bar ── */
+  --bar2-bg:          #f7f5f2;
+  --bar2-border:      rgba(26,26,24,0.08);
+  --bar2-border-w:    1px;
+
+  /* ── Table ── */
+  --table-head-bg:         #eeebe6;
+  --table-head-border:     #c8bfb0;
+  --table-head-border-w:   1.5px;
+  --table-row-even:        #faf9f7;
+  --table-row-odd:         #f8f6f3;
+  --table-row-hover:       #e8e3dc;
+  --table-divider:         rgba(26,26,24,0.10);
+  --table-divider-w:       0.5px;
+
+  /* ── Inputs ── */
+  --input-bg:              #ffffff;
+  --input-bg-focus:        #ffffff;
+  --input-border:          rgba(26,26,24,0.18);
+  --input-border-focus:    #7a9478;
+  --input-text:            #1a1a18;
+  --input-placeholder:     #b8b4af;
+  --input-autofill-bg:     #f7f5f2;
+
+  /* ── Select ── */
+  --select-bg-closed:      #ffffff;
+  --select-bg-open:        #f7f5f2;
+  --select-border:         rgba(26,26,24,0.18);
+  --select-border-open:    #7a9478;
+
+  /* ── Buttons ── */
+  --btn-primary-bg:        #1a1a18;
+  --btn-primary-text:      #f7f5f2;
+  --btn-primary-hover:     #2e2e2b;
+  --btn-secondary-bg:      transparent;
+  --btn-secondary-text:    #1a1a18;
+  --btn-secondary-border:  rgba(26,26,24,0.22);
+  --btn-secondary-hover:   #eeebe6;
+  --btn-ghost-text:        #8a8680;
+  --btn-ghost-hover:       rgba(26,26,24,0.06);
+  --btn-disabled-bg:       #eeebe6;
+  --btn-disabled-text:     #b8b4af;
+
+  /* ── Tabs ── */
+  --tab-active-text:       #1a1a18;
+  --tab-active-border:     #7a9478;
+  --tab-inactive-text:     #8a8680;
+  --tab-inactive-hover:    #1a1a18;
+
+  /* ── Badges ── */
+  --badge-active-bg:       rgba(122,148,120,0.12);
+  --badge-active-text:     #4a6e48;
+  --badge-pending-bg:      rgba(200,191,176,0.30);
+  --badge-pending-text:    #6b6259;
+  --badge-done-bg:         rgba(26,26,24,0.07);
+  --badge-done-text:       #8a8680;
+  --badge-urgent-bg:       rgba(180,80,60,0.10);
+  --badge-urgent-text:     #8a3020;
+
+  /* ── Icons ── */
+  --icon-primary:          #1a1a18;
+  --icon-secondary:        #8a8680;
+  --icon-accent:           #7a9478;
+  --icon-disabled:         #c8bfb0;
+
+  /* ── Typography ── */
+  --font-display:    'Playfair Display', serif;
+  --font-ui:         'Rubik', sans-serif;
+  --font-body:       'Heebo', sans-serif;
+  --font-login:      'Cormorant Garamond', serif;
+
+  /* ── Spacing ── */
+  --radius-sm:       4px;
+  --radius-md:       6px;
+  --radius-lg:       8px;
+}
+
+/* ── Autofill fix ── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px var(--input-autofill-bg) inset;
+  -webkit-text-fill-color: var(--input-text);
+}

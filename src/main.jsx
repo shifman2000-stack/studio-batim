@@ -19,6 +19,7 @@ import InquiriesReport from './pages/reports/InquiriesReport'
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
 import NoAccess from './pages/NoAccess'
+import InquiryForm from './pages/InquiryForm'
 
 function Layout() {
   return (
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/client" element={<ClientPortal />} />
         <Route path="/no-access" element={<NoAccess />} />
+        <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

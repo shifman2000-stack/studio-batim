@@ -151,6 +151,7 @@ export default function Tasks() {
   const [users,        setUsers]        = useState([])
   const [taskStages,   setTaskStages]   = useState([])
   const [taskStatuses, setTaskStatuses] = useState([])
+  const [descTooltip,  setDescTooltip]  = useState({ visible: false, text: '', x: 0, y: 0 })
   const [loading,      setLoading]      = useState(true)
 
   // Archive view
@@ -624,7 +625,12 @@ export default function Tasks() {
                       </EditCell>
 
                       <EditCell task={task} field="description" className="tasks-col-desc">
-                        <span className="tasks-cell-value">{task.description || ''}</span>
+                        <span
+                          className="tasks-cell-value"
+                          onMouseEnter={e => task.description && setDescTooltip({ visible: true, text: task.description, x: e.clientX, y: e.clientY })}
+                          onMouseMove={e => setDescTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
+                          onMouseLeave={() => setDescTooltip(t => ({ ...t, visible: false }))}
+                        >{task.description || ''}</span>
                       </EditCell>
 
                       <EditCell task={task} field="responsible_id" className="tasks-col-assignee">
@@ -726,6 +732,19 @@ export default function Tasks() {
 
       {taskToast && (
         <div className="ktm-toast">המשימה נשמרה ✓</div>
+      )}
+
+      {descTooltip.visible && createPortal(
+        <div style={{
+          position: 'fixed', top: descTooltip.y + 14, left: descTooltip.x + 14,
+          background: '#1a1a18', color: '#fff', padding: '5px 10px',
+          borderRadius: 4, fontSize: 13, zIndex: 9999, pointerEvents: 'none',
+          maxWidth: 360, whiteSpace: 'pre-wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          fontFamily: 'Heebo, sans-serif', lineHeight: 1.4,
+        }}>
+          {descTooltip.text}
+        </div>,
+        document.body
       )}
     </div>
   )

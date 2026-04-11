@@ -285,9 +285,27 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
     Array.isArray(row?.additional_contacts) ? row.additional_contacts : []
   )
 
+  // contact2 — split contact2_name into first / last on load
+  const [contact2FirstName, setContact2FirstName] = useState(() => {
+    const c2 = row?.contact2_name ?? ''
+    const idx = c2.indexOf(' ')
+    return idx > -1 ? c2.slice(0, idx) : c2
+  })
+  const [contact2LastName, setContact2LastName] = useState(() => {
+    const c2 = row?.contact2_name ?? ''
+    const idx = c2.indexOf(' ')
+    return idx > -1 ? c2.slice(idx + 1) : ''
+  })
+  const [contact2Phone, setContact2Phone] = useState(row?.contact2_phone ?? '')
+  const [contact2Email, setContact2Email] = useState(row?.contact2_email ?? '')
+
   const [saving, setSaving]             = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting]         = useState(false)
+  const [copied, setCopied]             = useState(false)
+
+  // Pre-generate token when NEW modal opens
+  const [formToken] = useState(() => isEdit ? null : crypto.randomUUID())
 
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }))
 
@@ -304,6 +322,11 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
     const payload = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, v === '' ? null : v])
     )
+    // contact2 — combine first + last into single name field
+    payload.contact2_name  = [contact2FirstName.trim(), contact2LastName.trim()].filter(Boolean).join(' ') || null
+    payload.contact2_phone = contact2Phone.trim() || null
+    payload.contact2_email = contact2Email.trim() || null
+
     // Attach additional contacts (filter out fully-empty rows)
     payload.additional_contacts = additionalContacts
       .filter(c => c.first_name.trim() || c.last_name.trim() || c.phone.trim())
@@ -318,6 +341,8 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
       setSaving(false)
       if (!error && data) onSaved(data, false)
     } else {
+      payload.form_token = formToken
+      payload.questionnaire_status = 'נשלח'
       const { data, error } = await supabase
         .from('inquiries').insert([payload]).select().single()
       setSaving(false)
@@ -384,6 +409,41 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
               dir="ltr"
               value={form.email}
               onChange={e => set('email', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          {/* Contact 2 */}
+          <div className="inq-form-row">
+            <label className="inq-form-label">איש קשר נוסף</label>
+            <div className="inq-additional-contact-row inq-main-contact-row">
+              <input
+                className="inq-form-input"
+                placeholder="שם פרטי"
+                value={contact2FirstName}
+                onChange={e => setContact2FirstName(e.target.value)}
+              />
+              <input
+                className="inq-form-input"
+                placeholder="שם משפחה"
+                value={contact2LastName}
+                onChange={e => setContact2LastName(e.target.value)}
+              />
+              <input
+                className="inq-form-input"
+                placeholder="טלפון"
+                dir="ltr"
+                value={contact2Phone}
+                onChange={e => setContact2Phone(e.target.value)}
+              />
+            </div>
+            <input
+              className="inq-form-input"
+              placeholder="אימייל"
+              type="email"
+              dir="ltr"
+              value={contact2Email}
+              onChange={e => setContact2Email(e.target.value)}
               style={{ width: '100%' }}
             />
           </div>
@@ -457,8 +517,8 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
             </select>
           </div>
 
-          {/* WhatsApp button (placeholder) */}
-          <div>
+          {/* WhatsApp button (placeholder) — hidden until implemented */}
+          {/* <div>
             <button className="inq-whatsapp-btn" disabled type="button">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -467,69 +527,87 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
               שלח וואטסאפ
               <span className="inq-whatsapp-dev">בפיתוח</span>
             </button>
-          </div>
+          </div> */}
 
-          {/* ── Edit-only: action fields ── */}
+          {/* ── Edit-only: טופס פניה status (read-only) ── */}
           {isEdit && (
             <>
-              <div className="inq-modal-section-title">מעקב</div>
-
-              {/* שאלון היכרות */}
+              {/* טופס פניה — read-only display */}
               <div className="inq-form-row">
-                <label className="inq-form-label">שאלון היכרות</label>
-                <div className="inq-modal-status-options">
-                  {STATUS_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      className={'inq-modal-status-btn' + (form.questionnaire_status === opt ? ' inq-modal-status-btn--active' : '')}
-                      style={form.questionnaire_status === opt ? { color: STATUS_META[opt].color, borderColor: STATUS_META[opt].color } : {}}
-                      onClick={() => set('questionnaire_status', opt)}
+                <label className="inq-form-label">טופס פניה</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}>
+                  {form.questionnaire_status === 'התקבל' && row?.form_token ? (
+                    <a
+                      href={`${import.meta.env.VITE_APP_URL}/inquiry-form/${row.form_token}?preview=true`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'flex', alignItems: 'center' }}
+                      title="פתח טופס"
                     >
-                      {statusIcon(opt, 14)}
-                      {opt}
-                    </button>
-                  ))}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7a9478"
+                        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                      </svg>
+                    </a>
+                  ) : (
+                    <span style={{ display: 'flex', alignItems: 'center' }}>
+                      {statusIcon(form.questionnaire_status ?? 'טרם נשלח', 18)}
+                    </span>
+                  )}
+                  {form.questionnaire_status === 'התקבל' && row?.form_submitted_at && (() => {
+                    const d = new Date(row.form_submitted_at)
+                    const fmt = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`
+                    return (
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
+                        {fmt}
+                      </span>
+                    )
+                  })()}
                 </div>
-              </div>
-
-              {/* פגישת היכרות */}
-              <div className="inq-form-row">
-                <label className="inq-form-label">פגישת היכרות</label>
-                <input type="date" className="inq-form-input"
-                  value={form.meeting_date}
-                  onChange={e => set('meeting_date', e.target.value)} />
-              </div>
-
-              {/* הצעת מחיר */}
-              <div className="inq-form-row">
-                <label className="inq-form-label">הצעת מחיר</label>
-                <div className="inq-modal-status-options">
-                  {STATUS_OPTIONS.map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      className={'inq-modal-status-btn' + (form.proposal_status === opt ? ' inq-modal-status-btn--active' : '')}
-                      style={form.proposal_status === opt ? { color: STATUS_META[opt].color, borderColor: STATUS_META[opt].color } : {}}
-                      onClick={() => set('proposal_status', opt)}
-                    >
-                      {statusIcon(opt, 14)}
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* הערות */}
-              <div className="inq-form-row">
-                <label className="inq-form-label">הערות</label>
-                <textarea className="inq-form-input inq-form-textarea"
-                  placeholder="הערות נוספות..."
-                  value={form.notes}
-                  onChange={e => set('notes', e.target.value)} />
               </div>
             </>
           )}
+
+          {/* ── הערות פנימיות (always visible) ── */}
+          <div className="inq-form-row">
+            <label className="inq-form-label">הערות פנימיות</label>
+            <textarea className="inq-form-input inq-form-textarea"
+              placeholder="הערות פנימיות..."
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)} />
+          </div>
+
+          {/* ── קישור לטופס — only for NEW inquiry ── */}
+          {!isEdit && formToken && (
+            <div className="inq-form-row">
+              <div className="inq-modal-section-title">קישור לטופס הלקוח</div>
+              <div className="inq-form-link-row">
+                <input
+                  className="inq-form-input inq-form-link-input"
+                  type="text"
+                  readOnly
+                  value={`${import.meta.env.VITE_APP_URL}/inquiry-form/${formToken}`}
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  className="inq-form-copy-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${import.meta.env.VITE_APP_URL}/inquiry-form/${formToken}`)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                >
+                  {copied ? '✓ הועתק' : 'העתק'}
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Footer */}
@@ -616,7 +694,7 @@ export default function Inquiries() {
     const { data } = await supabase
       .from('inquiries')
       .select('*')
-      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
     if (data) setRows(data)
     setLoading(false)
   }
@@ -629,7 +707,7 @@ export default function Inquiries() {
 
   /* ── Modal callbacks ── */
   const handleSaved = (row, isNew) => {
-    if (isNew) setRows(prev => [row, ...prev])
+    if (isNew) fetchAll()
     else       setRows(prev => prev.map(r => r.id === row.id ? row : r))
     setModalRow(undefined)
   }
@@ -770,7 +848,7 @@ export default function Inquiries() {
                 <th className="inq-col-name">שם</th>
                 <th className="inq-col-phone">טלפון</th>
                 <th className="inq-col-date">תאריך פניה</th>
-                <th className="inq-col-action">שאלון היכרות</th>
+                <th className="inq-col-action">טופס פניה</th>
                 <th className="inq-col-action">פגישת היכרות</th>
                 <th className="inq-col-action">הצעת מחיר</th>
                 <th className="inq-col-convert">הפוך לפרויקט</th>
@@ -793,12 +871,30 @@ export default function Inquiries() {
                   {/* תאריך פניה */}
                   <td className="inq-col-date">{formatDate(row.date)}</td>
 
-                  {/* שאלון היכרות */}
+                  {/* טופס פניה — read-only; document icon + link when התקבל */}
                   <td className="inq-col-action" onClick={e => e.stopPropagation()}>
-                    <StatusPopover
-                      status={row.questionnaire_status ?? 'טרם נשלח'}
-                      onChange={val => patchRow(row.id, { questionnaire_status: val })}
-                    />
+                    {(row.questionnaire_status ?? 'טרם נשלח') === 'התקבל' && row.form_token ? (
+                      <a
+                        href={`${import.meta.env.VITE_APP_URL}/inquiry-form/${row.form_token}?preview=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        title="פתח טופס הלקוח"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7a9478"
+                          strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                          <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                      </a>
+                    ) : (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px' }}>
+                        {statusIcon(row.questionnaire_status ?? 'טרם נשלח')}
+                      </span>
+                    )}
                   </td>
 
                   {/* פגישת היכרות */}

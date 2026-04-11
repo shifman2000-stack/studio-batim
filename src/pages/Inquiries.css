@@ -321,7 +321,7 @@
 
 /* ── Modal box ── */
 .inq-modal {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   width: 100%;
@@ -339,14 +339,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 18px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .inq-modal-title {
   font-size: 17px;
-  font-weight: 700;
-  color: #1a1a2e;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-body);
 }
 
 .inq-modal-close {
@@ -375,13 +376,13 @@
 
 /* ── Section divider in modal ── */
 .inq-modal-section-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #888;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  letter-spacing: 0.06em;
   padding-top: 6px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-subtle);
   margin-top: 2px;
 }
 
@@ -400,40 +401,40 @@
 
 .inq-form-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #555;
+  font-weight: 300;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
 }
 
 .inq-form-input {
   padding: 9px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
-  background: #fff;
-  font-family: inherit;
-  color: #1a1a2e;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  background: var(--input-bg);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  transition: border-color 0.15s;
   width: 100%;
   box-sizing: border-box;
   direction: rtl;
 }
 
 .inq-form-input:focus {
-  border-color: #4F86C6;
-  box-shadow: 0 0 0 3px rgba(79,134,198,0.12);
+  border-color: var(--input-border-focus);
 }
 
 .inq-form-select {
   padding: 9px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   font-size: 14px;
   outline: none;
-  background: #fff;
-  font-family: inherit;
-  color: #1a1a2e;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  background: var(--input-bg);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  transition: border-color 0.15s;
   width: 100%;
   box-sizing: border-box;
   direction: rtl;
@@ -442,8 +443,7 @@
 }
 
 .inq-form-select:focus {
-  border-color: #4F86C6;
-  box-shadow: 0 0 0 3px rgba(79,134,198,0.12);
+  border-color: var(--input-border-focus);
 }
 
 .inq-form-textarea {
@@ -583,7 +583,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 14px 24px 18px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
@@ -594,20 +594,20 @@
 }
 
 .inq-modal-save {
-  background: #2D3748;
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   border: none;
   border-radius: 8px;
   padding: 9px 24px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font-body);
   transition: background 0.15s;
 }
 
 .inq-modal-save:hover:not(:disabled) {
-  background: #1a2535;
+  background: var(--btn-primary-hover);
 }
 
 .inq-modal-save:disabled {
@@ -616,19 +616,19 @@
 }
 
 .inq-modal-cancel {
-  background: none;
-  border: 1px solid #d1d5db;
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
   border-radius: 8px;
   padding: 9px 20px;
   font-size: 14px;
-  color: #555;
+  color: var(--btn-secondary-text);
   cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s;
+  font-family: var(--font-body);
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .inq-modal-cancel:hover {
-  border-color: #aaa;
+  background: var(--btn-secondary-hover);
 }
 
 /* ── Convert button in modal footer ── */
@@ -704,4 +704,48 @@
   font-family: inherit;
   color: #666;
   cursor: pointer;
+}
+
+/* ── Form link row (שלח טופס ללקוח) ── */
+.inq-form-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inq-form-link-input {
+  flex: 1;
+  font-size: 12px !important;
+  color: var(--text-secondary) !important;
+  background: var(--bg-surface-deep) !important;
+  cursor: default;
+  direction: ltr;
+}
+
+.inq-form-copy-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 400;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.inq-form-copy-btn:hover {
+  background: var(--btn-primary-hover);
+}
+
+/* ── Form submitted confirmation ── */
+.inq-form-submitted-text {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: #1D9E75;
+  font-weight: 400;
 }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300&family=Heebo:wght@200;300;400;500&display=swap');
+@import './styles/theme.css';
 
 *, *::before, *::after {
   box-sizing: border-box;

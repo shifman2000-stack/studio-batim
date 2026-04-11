@@ -212,6 +212,7 @@ function ProjectDetail() {
   const [pdTaskStages,   setPdTaskStages]   = useState([])
   const [pdTaskStatuses, setPdTaskStatuses] = useState([])
   const [pdLoading,      setPdLoading]      = useState(false)
+  const [pdDescTooltip,  setPdDescTooltip]  = useState({ visible: false, text: '', x: 0, y: 0 })
   const [pdFilterAssignee, setPdFilterAssignee] = useState('')
   const [pdFilterStage,    setPdFilterStage]    = useState('')
   const [pdFilterStatus,   setPdFilterStatus]   = useState('')
@@ -723,7 +724,12 @@ function ProjectDetail() {
                             <span className="tasks-cell-value">{task.stages?.name || task.stage || ''}</span>
                           </PdEditCell>
                           <PdEditCell task={task} field="description" className="tasks-col-desc">
-                            <span className="tasks-cell-value">{task.description || ''}</span>
+                            <span
+                              className="tasks-cell-value"
+                              onMouseEnter={e => task.description && setPdDescTooltip({ visible: true, text: task.description, x: e.clientX, y: e.clientY })}
+                              onMouseMove={e => setPdDescTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
+                              onMouseLeave={() => setPdDescTooltip(t => ({ ...t, visible: false }))}
+                            >{task.description || ''}</span>
                           </PdEditCell>
                           <PdEditCell task={task} field="responsible_id" className="tasks-col-assignee">
                             <span className="tasks-cell-value">{task.profiles?.first_name || ''}</span>
@@ -977,6 +983,19 @@ function ProjectDetail() {
 
       {pdTaskToast && (
         <div className="ktm-toast">המשימה נשמרה ✓</div>
+      )}
+
+      {pdDescTooltip.visible && createPortal(
+        <div style={{
+          position: 'fixed', top: pdDescTooltip.y + 14, left: pdDescTooltip.x + 14,
+          background: '#1a1a18', color: '#fff', padding: '5px 10px',
+          borderRadius: 4, fontSize: 13, zIndex: 9999, pointerEvents: 'none',
+          maxWidth: 360, whiteSpace: 'pre-wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          fontFamily: 'Heebo, sans-serif', lineHeight: 1.4,
+        }}>
+          {pdDescTooltip.text}
+        </div>,
+        document.body
       )}
 
     </div>

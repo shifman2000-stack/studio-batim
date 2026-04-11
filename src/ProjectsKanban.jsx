@@ -138,14 +138,14 @@ function ProjectsKanban() {
 
       const { data: tasksData } = await supabase
         .from('tasks')
-        .select('project_id, status')
-        .neq('status', 'הושלם')
+        .select('project_id, status_id')
+        .neq('status_id', 3)
       if (tasksData) {
         const grouped = {}
         tasksData.forEach(t => {
           if (!t.project_id) return
           if (!grouped[t.project_id]) grouped[t.project_id] = []
-          grouped[t.project_id].push(t.status)
+          grouped[t.project_id].push(t.status_id)
         })
         setTasksByProject(grouped)
       }
@@ -412,13 +412,13 @@ function ProjectsKanban() {
   const handleTaskSaved = async () => {
     setTaskToast(true)
     setTimeout(() => setTaskToast(false), 2500)
-    const { data: tasksData } = await supabase.from('tasks').select('project_id, status').neq('status', 'הושלם')
+    const { data: tasksData } = await supabase.from('tasks').select('project_id, status_id').neq('status_id', 3)
     if (tasksData) {
       const grouped = {}
       tasksData.forEach(t => {
         if (!t.project_id) return
         if (!grouped[t.project_id]) grouped[t.project_id] = []
-        grouped[t.project_id].push(t.status)
+        grouped[t.project_id].push(t.status_id)
       })
       setTasksByProject(grouped)
     }
@@ -427,8 +427,8 @@ function ProjectsKanban() {
   const isVisible = (project) => {
     if (filterResponsible && project.responsible_id !== filterResponsible) return false
     if (filterFavorite && !project.is_favorite) return false
-    if (filterUrgentTask && !tasksByProject[project.id]?.some(s => s === 'דחוף')) return false
-    if (filterActiveTask && !tasksByProject[project.id]?.some(s => s === 'פעיל')) return false
+    if (filterUrgentTask && !tasksByProject[project.id]?.some(s => s === 2)) return false
+    if (filterActiveTask && !tasksByProject[project.id]?.some(s => s === 1)) return false
     return true
   }
 
@@ -638,7 +638,7 @@ function ProjectsKanban() {
                               <span
                                 key={i}
                                 className="kanban-task-dot"
-                                style={{ background: s === 'דחוף' ? '#E24B4A' : '#2D3748' }}
+                                style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
                               />
                             ))}
                             {overflow && <span className="kanban-task-overflow">5+</span>}

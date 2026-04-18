@@ -119,6 +119,7 @@ function Hours() {
   const [reportMonth, setReportMonth]     = useState(new Date().getMonth())
   const [reportData, setReportData]       = useState([])
   const [reportLoading, setReportLoading] = useState(false)
+  const [reportUserId, setReportUserId]   = useState('')  // '' = all employees
 
   useEffect(() => { init() }, [])
   useEffect(() => {
@@ -1177,6 +1178,20 @@ function Hours() {
   const reportsContent = (
     <div className="hours-reports-tab">
       <div className="hours-reports-controls">
+        {allUsers.length > 0 && (
+          <select
+            className="hours-user-select"
+            value={reportUserId}
+            onChange={e => setReportUserId(e.target.value)}
+          >
+            <option value="">הכל</option>
+            {allUsers.map(u => (
+              <option key={u.id} value={u.id}>
+                {[u.first_name, u.last_name].filter(Boolean).join(' ')}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           className="hours-select hours-reports-select"
           value={reportMonth}
@@ -1212,7 +1227,7 @@ function Hours() {
                 </tr>
               </thead>
               <tbody>
-                {reportData.map(row => (
+                {reportData.filter(row => !reportUserId || row.id === reportUserId).map(row => (
                   <tr key={row.id}>
                     <td>{row.name}</td>
                     <td>{toHHMM(row.totalMins)}</td>
@@ -1249,21 +1264,6 @@ function Hours() {
           <>
             {/* Admin: LEFT = calendar, RIGHT = tabbed interface */}
             <div className="hours-calendar-panel">
-              {allUsers.length > 0 && (
-                <div className="hours-user-filter">
-                  <select
-                    className="hours-user-select"
-                    value={viewUserId || ''}
-                    onChange={e => handleViewUserChange(e.target.value)}
-                  >
-                    {allUsers.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {[u.first_name, u.last_name].filter(Boolean).join(' ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
               {calendarContent}
             </div>
 

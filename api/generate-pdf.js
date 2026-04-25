@@ -41,12 +41,16 @@ export default async function handler(req, res) {
       { waitUntil: 'networkidle0' }
     )
 
-    const pdfBuffer = await page.pdf({ format: 'A4' })
+    // puppeteer-core ≥24 returns Uint8Array, not Buffer.
+    // res.send(Uint8Array) on Vercel/Express JSON-serialises it {"0":37,"1":80,...}
+    // Buffer.from() converts it to a true Node.js Buffer so the bytes are sent raw.
+    const pdfBytes  = await page.pdf({ format: 'A4' })
+    const pdfBuffer = Buffer.from(pdfBytes)
 
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', 'attachment; filename="test.pdf"')
     res.setHeader('Content-Length', pdfBuffer.length)
-    return res.status(200).send(pdfBuffer)
+    return res.status(200).end(pdfBuffer)
   } catch (err) {
     console.error('generate-pdf error:', err)
     return res.status(500).json({ error: 'PDF generation failed', detail: err.message })

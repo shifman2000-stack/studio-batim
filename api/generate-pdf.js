@@ -41,6 +41,10 @@ export default async function handler(req, res) {
     // Navigate to the clean print route (all 4 A4 pages, no UI chrome)
     await page.goto(printUrl, { waitUntil: 'networkidle0', timeout: 30000 })
 
+    // Switch to print media so @page rules and break-after:page take effect.
+    // Without this, Chromium renders in screen media and ignores all paged-media CSS.
+    await page.emulateMediaType('print')
+
     // Wait for web fonts (critical for Hebrew — Heebo, Playfair Display)
     await page.evaluateHandle('document.fonts.ready')
     // Small extra buffer for slow font CDNs

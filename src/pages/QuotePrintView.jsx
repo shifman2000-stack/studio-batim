@@ -66,13 +66,15 @@ export default function QuotePrintView() {
   if (!data || !inquiry) return null
 
   return (
-    <>
-      {/*
-        index.css sets body/html to height:100% + overflow:hidden and #root to
-        display:flex + overflow:hidden — this clips pages 2-4 out of view.
-        Override all of it here so all 4 A4 pages stack and scroll freely.
-      */}
+    /*
+      .print-mode is the scope anchor for all A4/page-break rules below.
+      It exists ONLY in this route — QuotePreview rendered inside the
+      QuoteBuilder modal has no .print-mode ancestor, so none of the
+      page-break CSS leaks into the modal view.
+    */
+    <div className="print-mode">
       <style>{`
+        /* ── Override index.css body/html/root so all 4 pages stack freely ── */
         html {
           height: auto !important;
         }
@@ -93,10 +95,39 @@ export default function QuotePrintView() {
           min-height: 0 !important;
           flex: none !important;
         }
-        /* Breathing room between pages */
-        .qp-pages {
-          padding: 36px 0;
+
+        /* ── A4 page rules (always-on, NOT @media print) ──────────────────
+           Puppeteer renders in screen media by default, so @media print
+           rules in QuotePreview.css never fire.  These rules live outside
+           any media query so they apply whenever this route is loaded.
+           Scoped to .print-mode so they NEVER affect the QuoteBuilder modal.
+        ────────────────────────────────────────────────────────────────── */
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+
+        .print-mode .qp-pages {
+          padding: 0;
           background: white;
+        }
+
+        .print-mode .qp-pages .page {
+          width: 210mm;
+          height: 297mm;
+          margin: 0;
+          box-shadow: none;
+          border-radius: 0;
+          overflow: hidden;
+          page-break-after: always;
+          break-after: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+
+        .print-mode .qp-pages .page:last-child {
+          page-break-after: auto;
+          break-after: auto;
         }
       `}</style>
 
@@ -113,6 +144,6 @@ export default function QuotePrintView() {
         data={data}
         isReadOnly={true}
       />
-    </>
+    </div>
   )
 }

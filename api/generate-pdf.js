@@ -47,15 +47,18 @@ export default async function handler(req, res) {
     await new Promise(r => setTimeout(r, 500))
 
     // Generate PDF
-    // - printBackground: true  → preserves background colours / cream pages
-    // - margin: 0              → no Puppeteer-added margin; our pages have internal padding
-    // - preferCSSPageSize: false → use 'format' A4, not @page CSS size
-    // - page breaks are driven by the @media print rules in QuotePreview.css
+    // - printBackground: true   → preserves background colours / cream pages
+    // - margin: 0               → no Puppeteer-added margin; our pages have internal padding
+    // - preferCSSPageSize: true → honour the @page { size: A4 portrait } rule injected
+    //                             by QuotePrintView; combined with break-after:page on each
+    //                             .page element this produces exactly 4 A4 pages
+    // - page breaks are driven by .print-mode .qp-pages .page { break-after: page }
+    //   (always-on, not @media print — Puppeteer renders in screen media)
     const pdfBytes = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      preferCSSPageSize: false,
+      preferCSSPageSize: true,
     })
 
     // puppeteer-core ≥24 returns Uint8Array — convert to Buffer so Express/Vercel

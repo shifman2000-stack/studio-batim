@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import QuoteBuilder from '../components/QuoteBuilder'
 import './Inquiries.css'
 
 /* ─────────── Status config ─────────── */
@@ -74,6 +75,63 @@ function IconCheckCircle({ size = 18, color = '#1D9E75' }) {
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
       <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
+  )
+}
+
+/* ─────────── Quote status icon button ─────────── */
+function QuoteIcon({ quote, onClick }) {
+  // No quote yet → plus button
+  if (!quote) {
+    return (
+      <button className="inq-status-trigger" onClick={onClick} title="צור הצעת מחיר">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="#8a8680" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+    )
+  }
+
+  const { status } = quote
+
+  if (status === 'draft') {
+    // Yellow clock
+    return (
+      <button className="inq-status-trigger" onClick={onClick} title="טיוטה — פתח עורך">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="#F6BF26" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      </button>
+    )
+  }
+
+  if (status === 'sent') {
+    // Green document
+    return (
+      <button className="inq-status-trigger" onClick={onClick} title="נשלח — פתח עורך">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="#1D9E75" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </button>
+    )
+  }
+
+  // signed → green checkmark
+  return (
+    <button className="inq-status-trigger" onClick={onClick} title="נחתם — פתח עורך">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+        stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    </button>
   )
 }
 
@@ -669,6 +727,8 @@ export default function Inquiries() {
   const [confirmId, setConfirmId]       = useState(null)      // row id pending inline delete
   const [convertModalRow, setConvertModalRow] = useState(null) // row pending conversion
   const [converting, setConverting]     = useState(false)
+  const [quotes, setQuotes]             = useState({})        // { [inquiry_id]: quote_object }
+  const [quoteBuilderRow, setQuoteBuilderRow] = useState(null)
 
   /* ── Admin guard ── */
   useEffect(() => {
@@ -691,12 +751,25 @@ export default function Inquiries() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('inquiries')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (data) setRows(data)
+    const [{ data: inquiriesData }, { data: quotesData }] = await Promise.all([
+      supabase.from('inquiries').select('*').order('created_at', { ascending: false }),
+      supabase.from('quotes').select('id, inquiry_id, status, updated_at'),
+    ])
+    if (inquiriesData) setRows(inquiriesData)
+    if (quotesData) {
+      const qMap = {}
+      quotesData.forEach(q => { qMap[q.inquiry_id] = q })
+      setQuotes(qMap)
+    }
     setLoading(false)
+  }
+
+  /* ── Quote updated callback ── */
+  const handleQuoteUpdated = (inquiryId, update) => {
+    setQuotes(prev => ({
+      ...prev,
+      [inquiryId]: { ...(prev[inquiryId] ?? {}), ...update },
+    }))
   }
 
   /* ── Inline patch (status / meeting_date) ── */
@@ -909,9 +982,9 @@ export default function Inquiries() {
 
                   {/* הצעת מחיר */}
                   <td className="inq-col-action" onClick={e => e.stopPropagation()}>
-                    <StatusPopover
-                      status={row.proposal_status ?? 'טרם נשלח'}
-                      onChange={val => patchRow(row.id, { proposal_status: val })}
+                    <QuoteIcon
+                      quote={quotes[row.id] ?? null}
+                      onClick={() => setQuoteBuilderRow(row)}
                     />
                   </td>
 
@@ -969,6 +1042,15 @@ export default function Inquiries() {
           onConfirm={handleConvert}
           onCancel={() => setConvertModalRow(null)}
           converting={converting}
+        />
+      )}
+
+      {/* ── Quote Builder (full-screen) ── */}
+      {quoteBuilderRow && (
+        <QuoteBuilder
+          inquiry={quoteBuilderRow}
+          onClose={() => setQuoteBuilderRow(null)}
+          onQuoteUpdated={handleQuoteUpdated}
         />
       )}
     </div>

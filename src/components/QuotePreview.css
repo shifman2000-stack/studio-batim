@@ -1,0 +1,575 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400&family=Rubik:wght@300&family=Heebo:wght@200;300;400;500&display=swap');
+
+/* ── CSS VARIABLES ── */
+:root {
+  --cream: #f7f5f2;
+  --charcoal: #1a1a18;
+  --warm-gray: #8a8680;
+  --sand: #c8bfb0;
+  --border: rgba(26,26,24,0.10);
+  --border-strong: rgba(26,26,24,0.22);
+}
+
+/* ── A4 PAGE ── */
+.qp-pages .page {
+  width: 794px;
+  height: 1123px;
+  margin: 0 auto 36px;
+  background: var(--cream);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+  padding: 48px 60px 60px;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Heebo', sans-serif;
+  color: var(--charcoal);
+  direction: rtl;
+}
+
+/* ── HEADER ── */
+.qp-pages .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .logo { display: flex; align-items: center; }
+.qp-pages .logo-main {
+  font-family: 'Rubik', sans-serif;
+  font-weight: 300;
+  font-size: 19px;
+  letter-spacing: 0.05em;
+  color: var(--charcoal);
+}
+.qp-pages .logo-vline {
+  width: 1px; height: 18px; margin: 0 12px;
+  background: linear-gradient(to bottom, transparent, var(--sand) 25%, var(--sand) 75%, transparent);
+}
+.qp-pages .logo-sub {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 200;
+  font-size: 7.5px;
+  letter-spacing: 0.28em;
+  color: var(--warm-gray);
+  direction: ltr;
+}
+.qp-pages .meta-date {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--charcoal);
+  letter-spacing: 0.04em;
+}
+
+/* ── HERO ── */
+.qp-pages .hero { margin-bottom: 32px; }
+.qp-pages .hero-with-line { padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.qp-pages .hero-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.2;
+  color: var(--charcoal);
+}
+
+/* ── EYEBROW ── */
+.qp-pages .eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ── PARTIES ── */
+.qp-pages .parties-clients {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .party-planner {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .party-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--charcoal);
+  margin-bottom: 6px;
+}
+.qp-pages .party-detail {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--charcoal);
+  line-height: 1.9;
+}
+.qp-pages .party-detail .label { color: var(--warm-gray); }
+.qp-pages .party-client-spacer { padding-top: 20px; }
+
+/* ── INFO ROW ── */
+.qp-pages .info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .info-label {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  min-width: 110px;
+}
+.qp-pages .info-value {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--charcoal);
+  flex: 1;
+}
+
+/* ── SCOPE ── */
+.qp-pages .scope { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.qp-pages .scope-list { list-style: none; padding: 0; margin-top: 10px; }
+.qp-pages .scope-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  font-weight: 300;
+  color: var(--charcoal);
+  line-height: 1.7;
+}
+.qp-pages .scope-num {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--warm-gray);
+  min-width: 22px;
+  flex-shrink: 0;
+}
+
+/* ── FEE ── */
+.qp-pages .fee {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .fee-label {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+}
+.qp-pages .fee-amount {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--charcoal);
+  line-height: 1;
+}
+.qp-pages .fee-vat {
+  font-size: 10px;
+  font-weight: 300;
+  color: var(--warm-gray);
+  letter-spacing: 0.04em;
+  margin-right: 8px;
+}
+
+/* ── PAYMENT TABLE ── */
+.qp-pages .pay-heading {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.qp-pages table.pay {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+.qp-pages table.pay th {
+  text-align: right;
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--warm-gray);
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border-strong);
+  text-transform: uppercase;
+}
+.qp-pages table.pay td {
+  padding: 8px 6px;
+  border-bottom: 0.5px solid var(--border);
+  font-weight: 300;
+  line-height: 1.45;
+  color: var(--charcoal);
+  vertical-align: top;
+}
+.qp-pages table.pay tr:last-child td { border-bottom: none; }
+.qp-pages table.pay .col-num {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--warm-gray);
+  width: 30px;
+}
+.qp-pages table.pay .col-pct {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--charcoal);
+  text-align: left;
+  width: 46px;
+}
+.qp-pages table.pay th.col-pct { font-weight: 500; text-align: left; }
+.qp-pages table.pay td.col-span { color: var(--warm-gray); }
+.qp-pages .table-note {
+  font-size: 9.5px;
+  font-weight: 300;
+  color: var(--warm-gray);
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+}
+
+/* ── STAGE SECTION ── */
+.qp-pages .stage {
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .stage.stage-last { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.qp-pages .stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.qp-pages .stage-num {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--warm-gray);
+  min-width: 28px;
+}
+.qp-pages .stage-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 22px;
+  color: var(--charcoal);
+}
+.qp-pages .stage-body {
+  padding-right: 42px;
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--charcoal);
+  line-height: 1.65;
+}
+.qp-pages .stage-lead {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--charcoal);
+  margin-bottom: 10px;
+  line-height: 1.65;
+}
+.qp-pages .substage { margin-bottom: 9px; }
+.qp-pages .substage:last-child { margin-bottom: 0; }
+.qp-pages .substage-title {
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  font-weight: 500;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.qp-pages .substage-list { list-style: none; padding: 0; }
+.qp-pages .substage-list li {
+  padding: 2px 14px 2px 0;
+  position: relative;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.qp-pages .substage-list li::before {
+  content: '·';
+  position: absolute;
+  right: 0;
+  color: var(--warm-gray);
+  font-weight: 700;
+}
+.qp-pages .stage-body p { margin-bottom: 7px; }
+.qp-pages .stage-body p:last-child { margin-bottom: 0; }
+.qp-pages .stage-body ul.two-col {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  column-count: 2;
+  column-gap: 24px;
+}
+.qp-pages .stage-body ul.two-col li {
+  padding: 2px 14px 2px 0;
+  font-size: 11px;
+  position: relative;
+  break-inside: avoid;
+}
+.qp-pages .stage-body ul.two-col li::before {
+  content: '·';
+  position: absolute;
+  right: 0;
+  color: var(--warm-gray);
+  font-weight: 700;
+}
+
+/* ── TERMS ── */
+.qp-pages .terms-group {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.qp-pages .terms-group:last-of-type { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.qp-pages .terms-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--charcoal);
+  margin-bottom: 7px;
+}
+.qp-pages .terms-list { list-style: none; padding: 0; }
+.qp-pages .terms-list li {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--charcoal);
+  line-height: 1.65;
+}
+.qp-pages .terms-num {
+  color: var(--warm-gray);
+  min-width: 20px;
+  font-size: 10.5px;
+  padding-top: 1px;
+}
+
+/* ── VALIDITY ── */
+.qp-pages .validity {
+  background: rgba(26,26,24,0.03);
+  padding: 9px 16px;
+  margin: 12px 0 14px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--charcoal);
+  letter-spacing: 0.02em;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── SIGNATURES ── */
+.qp-pages .sig-heading {
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.qp-pages .sig-intro {
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--charcoal);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+.qp-pages .sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 10px;
+}
+.qp-pages .sig-box { padding-top: 2px; }
+.qp-pages .sig-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 0 3px;
+  border-bottom: 0.5px solid var(--border-strong);
+}
+.qp-pages .sig-row-label {
+  font-size: 9.5px;
+  color: var(--warm-gray);
+  letter-spacing: 0.1em;
+  min-width: 45px;
+}
+
+/* ── CLOSING ── */
+.qp-pages .closing {
+  text-align: center;
+  padding: 14px 0 0;
+  margin-top: 14px;
+}
+.qp-pages .closing-text {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--charcoal);
+  margin-bottom: 3px;
+}
+.qp-pages .closing-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--charcoal);
+  margin-bottom: 2px;
+}
+.qp-pages .closing-studio {
+  font-size: 10px;
+  color: var(--warm-gray);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ── PAGE FOOT ── */
+.qp-pages .page-foot {
+  position: absolute;
+  bottom: 20px;
+  left: 60px;
+  right: 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  color: var(--warm-gray);
+  text-transform: uppercase;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TRANSPARENT INPUT / TEXTAREA FIELDS
+═══════════════════════════════════════════════════════ */
+.qp-field,
+.qp-field-area {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed transparent;
+  outline: none;
+  /* inherit every font property individually — font shorthand resets line-height */
+  font-family:    inherit;
+  font-size:      inherit;
+  font-weight:    inherit;
+  font-style:     inherit;
+  line-height:    inherit;
+  letter-spacing: inherit;
+  color:          inherit;
+  direction:      inherit;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: border-bottom-color 0.15s;
+  vertical-align: baseline;
+}
+
+.qp-field:hover,
+.qp-field:focus,
+.qp-field-area:hover,
+.qp-field-area:focus {
+  border-bottom-color: rgba(26, 26, 24, 0.2);
+}
+
+.qp-field-area {
+  display: block;
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════
+   EDIT CONTROLS (hidden in print)
+═══════════════════════════════════════════════════════ */
+
+/* × button per scope/payment row */
+.qp-row-remove {
+  background: none;
+  border: none;
+  color: var(--warm-gray);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 3px;
+  opacity: 0.4;
+  flex-shrink: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.qp-row-remove:hover { opacity: 1; color: #e24b4a; }
+
+/* + add row button */
+.qp-row-add {
+  background: none;
+  border: 1px dashed var(--sand);
+  color: var(--warm-gray);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  padding: 4px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  letter-spacing: 0.05em;
+  display: inline-block;
+  transition: background 0.15s;
+}
+.qp-row-add:hover { background: rgba(200,191,176,0.15); }
+
+/* × button to hide client2 column */
+.qp-col-hide-btn {
+  position: absolute;
+  top: 20px;      /* align with eyebrow baseline */
+  left: 0;
+  background: none;
+  border: none;
+  color: var(--warm-gray);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s, color 0.15s;
+}
+.qp-col-hide-btn:hover { opacity: 1; color: #e24b4a; }
+
+/* ═══════════════════════════════════════════════════════
+   PRINT
+═══════════════════════════════════════════════════════ */
+@media print {
+  .qp-no-print { display: none !important; }
+
+  .qp-field,
+  .qp-field-area {
+    border-bottom-color: transparent !important;
+  }
+
+  .qp-pages .page {
+    box-shadow: none;
+    margin: 0 auto;
+    page-break-after: always;
+    overflow: visible;
+  }
+  .qp-pages .page:last-child { page-break-after: auto; }
+}

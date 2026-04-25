@@ -1,0 +1,159 @@
+/* ── FULL-SCREEN OVERLAY ── */
+.qb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: #2a2925;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── ACTION BAR ── */
+.qb-bar {
+  flex-shrink: 0;
+  height: 54px;
+  background: #1a1a18;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  direction: rtl;
+  gap: 12px;
+  border-bottom: 1px solid rgba(247,245,242,0.06);
+}
+
+.qb-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.qb-bar-title {
+  color: #f7f5f2;
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Heebo', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.qb-status-badge {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.qb-status-draft  { background: rgba(246,191,38,0.15);  color: #F6BF26; border: 1px solid rgba(246,191,38,0.3);  }
+.qb-status-sent   { background: rgba(29,158,117,0.15);  color: #1D9E75; border: 1px solid rgba(29,158,117,0.3);  }
+.qb-status-signed { background: rgba(29,158,117,0.22);  color: #1D9E75; border: 1px solid rgba(29,158,117,0.4);  }
+
+/* ── BUTTONS ── */
+.qb-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qb-action-msg {
+  font-size: 12px;
+  color: #c8bfb0;
+  font-family: 'Heebo', sans-serif;
+  margin-left: 4px;
+}
+
+.qb-btn {
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 300;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.qb-btn-ghost {
+  background: rgba(247,245,242,0.07);
+  color: #f7f5f2;
+  border-color: rgba(247,245,242,0.16);
+}
+.qb-btn-ghost:hover:not(:disabled) {
+  background: rgba(247,245,242,0.14);
+}
+.qb-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qb-btn-send {
+  background: rgba(29,158,117,0.15);
+  color: #1D9E75;
+  border-color: rgba(29,158,117,0.35);
+}
+.qb-btn-send:hover:not(:disabled) {
+  background: rgba(29,158,117,0.25);
+}
+.qb-btn-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qb-btn-close {
+  background: transparent;
+  color: #8a8680;
+  border-color: rgba(138,134,128,0.28);
+}
+.qb-btn-close:hover {
+  background: rgba(226,75,74,0.10);
+  color: #e24b4a;
+  border-color: rgba(226,75,74,0.28);
+}
+
+/* ── SCROLLABLE BODY ── */
+.qb-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 44px 20px;
+}
+
+/* ── LOADING ── */
+.qb-loading {
+  color: #c8bfb0;
+  font-family: 'Heebo', sans-serif;
+  font-size: 16px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+/* ── PRINT: show only the A4 page ── */
+@media print {
+  .qb-bar    { display: none !important; }
+  .qb-body   { padding: 0; overflow: visible; }
+  .qb-overlay { position: static; background: white; display: block; }
+
+  /* Hide everything, then reveal only the page */
+  * { visibility: hidden !important; }
+  [data-qb-page],
+  [data-qb-page] * { visibility: visible !important; }
+  [data-qb-page] {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide edit-only controls even inside the page */
+  .qp-no-print { display: none !important; }
+  .qp-input    { border-bottom-color: transparent !important; }
+
+  @page { size: A4; margin: 0; }
+}

@@ -7,9 +7,10 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
   const [quoteId,     setQuoteId]     = useState(null)
   const [quoteStatus, setQuoteStatus] = useState('draft')
   const [data,        setData]        = useState(null)
-  const [loading,     setLoading]     = useState(true)
-  const [saving,      setSaving]      = useState(false)
-  const [actionMsg,   setActionMsg]   = useState('')
+  const [loading,        setLoading]        = useState(true)
+  const [saving,         setSaving]         = useState(false)
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false)
+  const [actionMsg,      setActionMsg]      = useState('')
 
   // Always-current reference to data, updated synchronously on every field change.
   // Prevents stale-closure bugs where an input's onChange and the save button
@@ -62,45 +63,50 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
     setTimeout(() => setActionMsg(''), 2500)
   }
 
-  /* ── Save draft ── */
-  const handleSaveDraft = async () => {
-    // Use ref so we always get the latest edits, even if an onChange fired in the
-    // same tick as this handler and the React state hasn't flushed yet.
+  /* ── Core save helper — returns the quoteId (existing or newly created).
+        Throws on error so callers can handle it differently.
+        Does NOT touch saving/isPdfGenerating state — callers manage that. ── */
+  const doSave = async () => {
     const toSave = dataRef.current ?? data
+    if (!toSave) throw new Error('no data to save')
     console.log('saving data:', toSave)
-    if (!toSave) return
+
+    if (quoteId) {
+      // Row already exists — update it
+      const { data: saved, error } = await supabase
+        .from('quotes')
+        .update({ draft_content: toSave, updated_at: new Date().toISOString() })
+        .eq('id', quoteId)
+        .select()
+        .single()
+      console.log('save result (update):', saved, error)
+      if (error) throw error
+      return quoteId
+    } else {
+      // First save — create the row now
+      const { data: created, error } = await supabase
+        .from('quotes')
+        .insert([{
+          inquiry_id:    inquiry.id,
+          quote_number:  1,
+          status:        'draft',
+          draft_content: toSave,
+        }])
+        .select()
+        .single()
+      console.log('save result (insert):', created, error)
+      if (error) throw error
+      setQuoteId(created.id)
+      onQuoteUpdated?.(inquiry.id, { id: created.id, status: 'draft' })
+      return created.id
+    }
+  }
+
+  /* ── Save draft (button handler) ── */
+  const handleSaveDraft = async () => {
     setSaving(true)
     try {
-      if (quoteId) {
-        // Row already exists — update it
-        const { data: saved, error } = await supabase
-          .from('quotes')
-          .update({ draft_content: toSave, updated_at: new Date().toISOString() })
-          .eq('id', quoteId)
-          .select()
-          .single()
-        console.log('save result (update):', saved, error)
-        if (error) throw error
-      } else {
-        // First explicit save — create the row now
-        const { data: created, error } = await supabase
-          .from('quotes')
-          .insert([{
-            inquiry_id:   inquiry.id,
-            quote_number: 1,
-            status:       'draft',
-            draft_content: toSave,
-          }])
-          .select()
-          .single()
-        console.log('save result (insert):', created, error)
-        if (!error && created) {
-          setQuoteId(created.id)
-          onQuoteUpdated?.(inquiry.id, { id: created.id, status: 'draft' })
-        } else if (error) {
-          throw error
-        }
-      }
+      await doSave()
       flash('נשמר ✓')
     } catch (err) {
       console.error('save error:', err)
@@ -186,67 +192,58 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
     w.document.close()
   }
 
-  /* ── Export PDF — html2canvas → jsPDF (WeasyPrint-equivalent for browser) ── */
-  const handleExportPDF = async () => {
-    const pages = Array.from(document.querySelectorAll('.page'))
-    if (!pages.length) return
-    setSaving(true)
-    flash('מייצא PDF…')
+  /* ── Generate PDF via server-side Puppeteer ── */
+  const handleGeneratePDF = async () => {
+    setIsPdfGenerating(true)
+    flash('מייצר PDF…')
     try {
-      // Dynamic imports — keep jspdf/html2canvas out of the main bundle
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import('jspdf'),
-        import('html2canvas'),
-      ])
-
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pdfW = pdf.internal.pageSize.getWidth()   // 210 mm
-      const pdfH = pdf.internal.pageSize.getHeight()  // 297 mm
-
-      // Hide edit controls before capture
-      const noprint = document.querySelectorAll('.page .qp-no-print, .page button')
-      noprint.forEach(el => el.style.visibility = 'hidden')
-
-      // Fix input rendering
-      const inputs = document.querySelectorAll('.page input, .page textarea')
-      inputs.forEach(el => {
-        el.style.border = 'none'
-        el.style.outline = 'none'
-      })
-
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await html2canvas(pages[i], {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#f7f5f2',
-          onclone: (clonedDoc) => {
-            clonedDoc.querySelectorAll('button, .qp-no-print').forEach(el => el.remove())
-          },
-        })
-        const imgData = canvas.toDataURL('image/jpeg', 0.95)
-        if (i > 0) pdf.addPage()
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH)
+      // Step 1 — Save draft first so Puppeteer renders the latest content
+      let savedId
+      try {
+        savedId = await doSave()
+      } catch (err) {
+        console.error('save error before PDF:', err)
+        flash('שגיאה בשמירת טיוטה. נסי שוב.')
+        return
       }
 
-      const safeName = [inquiry.first_name, inquiry.last_name]
-        .filter(Boolean).join('-') || 'ללקוח'
-      pdf.save(`הצעת-מחיר-${safeName}.pdf`)
+      if (!savedId) {
+        flash('שגיאה: לא ניתן לקבל מזהה הצעה')
+        return
+      }
 
-      // Restore everything
-      noprint.forEach(el => el.style.visibility = '')
-      inputs.forEach(el => {
-        el.style.border = ''
-        el.style.outline = ''
+      // Step 2 — Call the Puppeteer serverless function
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId: savedId }),
       })
 
-      flash('PDF נוצר ✓')
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}))
+        console.error('PDF API error:', errBody)
+        flash('שגיאה בייצור PDF. נסי שוב.')
+        return
+      }
+
+      // Step 3 — Trigger browser download with a Hebrew filename
+      const blob       = await response.blob()
+      const familyName = inquiry.last_name || ''
+      const url        = window.URL.createObjectURL(blob)
+      const a          = document.createElement('a')
+      a.href           = url
+      a.download       = `הצעת מחיר - משפחת ${familyName}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      flash('PDF הורד ✓')
     } catch (err) {
-      console.error('PDF export error:', err)
-      flash('שגיאה ביצוא PDF')
+      console.error('PDF generation error:', err)
+      flash('שגיאה בייצור PDF. נסי שוב.')
     } finally {
-      setSaving(false)
+      setIsPdfGenerating(false)
     }
   }
 
@@ -303,10 +300,10 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
 
           <button
             className="qb-btn qb-btn-ghost qp-no-print"
-            onClick={handleExportPDF}
-            disabled={saving}
+            onClick={handleGeneratePDF}
+            disabled={saving || isPdfGenerating}
           >
-            שמירה כ־PDF
+            {isPdfGenerating ? 'מייצר PDF...' : 'שמירה כ־PDF'}
           </button>
 
           <button

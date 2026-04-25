@@ -20,6 +20,7 @@ import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
+import QuotePrintView from './pages/QuotePrintView'
 
 function Layout() {
   return (
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/client" element={<ClientPortal />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
+        <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

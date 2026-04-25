@@ -74,60 +74,54 @@ export default function QuotePrintView() {
     */
     <div className="print-mode">
       <style>{`
-        /* ── Override index.css body/html/root so all 4 pages stack freely ── */
-        html {
-          height: auto !important;
-        }
-        body {
-          height: auto !important;
-          min-height: 0 !important;
-          overflow: visible !important;
-          display: block !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: white !important;
-          direction: rtl !important;
-        }
-        #root {
-          display: block !important;
-          overflow: visible !important;
-          height: auto !important;
-          min-height: 0 !important;
-          flex: none !important;
-        }
-
-        /* ── A4 page rules (always-on, NOT @media print) ──────────────────
-           Puppeteer renders in screen media by default, so @media print
-           rules in QuotePreview.css never fire.  These rules live outside
-           any media query so they apply whenever this route is loaded.
-           Scoped to .print-mode so they NEVER affect the QuoteBuilder modal.
-        ────────────────────────────────────────────────────────────────── */
+        /* Force A4 paged layout for Puppeteer */
         @page {
           size: A4 portrait;
           margin: 0;
         }
 
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: white !important;
+        }
+
+        /* Neutralize the QuoteBuilder.css print rule that pins data-qb-page to fixed */
+        .print-mode [data-qb-page],
         .print-mode .qp-pages {
-          padding: 0;
-          background: white;
+          position: static !important;
+          top: auto !important;
+          left: auto !important;
+          right: auto !important;
+          width: auto !important;
+          height: auto !important;
+          overflow: visible !important;
+          display: block !important;
+          transform: none !important;
         }
 
+        /* Each .page is a full A4 sheet, breaks after itself */
         .print-mode .qp-pages .page {
-          width: 210mm;
-          height: 297mm;
-          margin: 0;
-          box-shadow: none;
-          border-radius: 0;
-          overflow: hidden;
-          page-break-after: always;
-          break-after: page;
-          page-break-inside: avoid;
-          break-inside: avoid;
+          width: 210mm !important;
+          height: 297mm !important;
+          min-height: 297mm !important;
+          max-height: 297mm !important;
+          margin: 0 !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          overflow: hidden !important;
+          position: relative !important;
+          break-after: page !important;
+          page-break-after: always !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          box-sizing: border-box !important;
         }
 
+        /* Last page does not need a break after */
         .print-mode .qp-pages .page:last-child {
-          page-break-after: auto;
-          break-after: auto;
+          break-after: auto !important;
+          page-break-after: auto !important;
         }
       `}</style>
 

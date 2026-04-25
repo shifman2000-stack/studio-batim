@@ -154,15 +154,7 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
             background: transparent !important;
             pointer-events: none;
           }
-          #pdf-btn {
-            position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-            background: #1a1a18; color: #f7f5f2;
-            border: none; padding: 10px 28px;
-            font-family: Heebo, sans-serif; font-size: 14px;
-            cursor: pointer; z-index: 9999; border-radius: 4px;
-          }
           @media print {
-            #pdf-btn { display: none !important; }
             body {
               display: block !important;
               margin: 0 !important;
@@ -187,7 +179,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
         </style>
       </head>
       <body>
-        <button id="pdf-btn" onclick="window.print()">שמירה כ־PDF</button>
         ${clone.outerHTML}
       </body>
       </html>

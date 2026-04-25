@@ -558,18 +558,69 @@
    PRINT
 ═══════════════════════════════════════════════════════ */
 @media print {
-  .qp-no-print { display: none !important; }
+  /* ── Page setup ── */
+  @page { size: A4 portrait; margin: 0; }
 
-  .qp-field,
-  .qp-field-area {
-    border-bottom-color: transparent !important;
+  /* ── Hide all UI chrome ── */
+  .qb-bar,
+  .qb-bar-actions,
+  .qb-status-badge,
+  #pdf-btn,
+  .qp-no-print,
+  .qp-row-remove,
+  .qp-row-add,
+  .qp-col-hide-btn { display: none !important; }
+
+  /* ── Body ── */
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    direction: rtl !important;
+    overflow: visible !important;
   }
 
+  /* ── Override the position:fixed rule written by QuoteBuilder.css
+        which pins the entire .qp-pages block to the viewport and
+        prevents pages 2-4 from ever being printed ── */
+  [data-qb-page] {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* ── Page wrapper ── */
+  .qp-pages {
+    display: block !important;
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* ── Each A4 page ── */
   .qp-pages .page {
-    box-shadow: none;
-    margin: 0 auto;
+    width: 210mm !important;
+    height: 297mm !important;
+    padding: 48px 60px 60px !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    direction: rtl !important;
+    background: white !important;
+    position: relative !important;
     page-break-after: always;
-    overflow: visible;
+    break-after: page;
   }
-  .qp-pages .page:last-child { page-break-after: auto; }
+
+  .qp-pages .page:last-child {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* ── Input / textarea — no visible borders ── */
+  .qp-field,
+  .qp-field-area { border-bottom-color: transparent !important; }
 }

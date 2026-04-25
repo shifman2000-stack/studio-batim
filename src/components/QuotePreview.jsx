@@ -289,8 +289,102 @@ export default function QuotePreview({
   const updateTerm = (i, val) =>
     patch('terms', data.terms.map((t, j) => j === i ? val : t))
 
+  /* ── PDF export via hidden iframe ── */
+  const pagesRef = useRef(null)
+
+  const handlePrint = async () => {
+    const container = pagesRef.current
+    if (!container) return
+
+    // STEP A — Sync live DOM properties → attributes so cloneNode picks them up.
+    // cloneNode(true) copies the DOM tree but NOT .value / .checked properties —
+    // only the original HTML attributes. We bridge that gap here.
+    container.querySelectorAll('input').forEach(el => {
+      el.setAttribute('value', el.value)
+    })
+    container.querySelectorAll('textarea').forEach(el => {
+      el.textContent = el.value
+    })
+    container.querySelectorAll('[contenteditable]').forEach(el => {
+      // innerHTML already reflects user edits; nothing extra needed
+    })
+
+    // STEP B — Create a hidden iframe isolated from the main document's CSS cascade
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText =
+      'position:fixed;right:-10000px;top:0;width:210mm;height:297mm;border:none;visibility:hidden;'
+    document.body.appendChild(iframe)
+
+    try {
+      const iDoc = iframe.contentDocument
+
+      // STEP C — Build a complete HTML document inside the iframe.
+      // Copy every <link rel="stylesheet"> from parent head (Google Fonts, external CSS)
+      const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+        .map(l => l.outerHTML).join('\n')
+
+      // Copy every <style> from parent head (Vite-injected QuotePreview.css, global resets, etc.)
+      const styleTags = Array.from(document.querySelectorAll('style'))
+        .map(s => `<style>${s.innerHTML}</style>`).join('\n')
+
+      // Clone the live page wrapper; strip all edit-only controls
+      const clone = container.cloneNode(true)
+      clone.querySelectorAll('.qp-no-print, button').forEach(el => el.remove())
+
+      iDoc.open()
+      iDoc.write(`<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+${linkTags}
+${styleTags}
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  html, body { margin: 0; padding: 0; background: white; direction: rtl; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .qp-pages > * {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  .qp-pages > *:last-child { page-break-after: auto; break-after: auto; }
+  .qb-bar, .qb-bar-actions, .qb-status-badge, #pdf-btn,
+  .qp-row-remove, .qp-row-add, .qp-col-hide-btn { display: none !important; }
+  .qp-field, .qp-field-area { border-bottom-color: transparent !important; }
+</style>
+</head>
+<body>
+</body>
+</html>`)
+      iDoc.close()
+      iDoc.body.appendChild(clone)
+
+      // STEP D — Wait for all resources (fonts, images) to be ready before printing.
+      // Printing too early produces blank text because web fonts haven't loaded yet.
+      await new Promise(resolve => {
+        if (iframe.contentDocument.readyState === 'complete') resolve()
+        else iframe.contentWindow.addEventListener('load', resolve, { once: true })
+      })
+      await iframe.contentDocument.fonts.ready
+      // Extra guard for slow font CDNs
+      await new Promise(r => setTimeout(r, 200))
+
+      // STEP E — Trigger the browser's native print dialog
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    } finally {
+      // STEP F — Always remove the iframe; give the print dialog time to open first
+      setTimeout(() => iframe.remove(), 1000)
+    }
+  }
+
   return (
-    <div data-qb-page className="qp-pages">
+    <div data-qb-page className="qp-pages" ref={pagesRef}>
 
       {/* ════════════════════════════════════════════════
            PAGE 1 — הצעת מחיר + לוח תשלומים

@@ -103,9 +103,6 @@ export default function QuotePrintView() {
         /* Each .page is a full A4 sheet, breaks after itself */
         .print-mode .qp-pages .page {
           width: 210mm !important;
-          height: 297mm !important;
-          min-height: 297mm !important;
-          max-height: 297mm !important;
           margin: 0 !important;
           box-shadow: none !important;
           border-radius: 0 !important;

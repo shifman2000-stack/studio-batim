@@ -80,6 +80,22 @@ export default function QuotePrintView() {
           margin: 0;
         }
 
+        /* Liberate html / body / #root so all 4 pages can flow.
+           index.css locks these to height:100% + overflow:hidden, which clips
+           the document to one viewport and prevents Puppeteer from seeing pages 2-4.
+           This <style> tag is inside QuotePrintView JSX — it mounts and unmounts
+           with the route, so the rest of the app is never affected. */
+        html, body, #root {
+          height: auto !important;
+          min-height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+
+        body, #root {
+          display: block !important;
+        }
+
         html, body {
           margin: 0 !important;
           padding: 0 !important;

@@ -80,6 +80,12 @@ function IconCheckCircle({ size = 18, color = '#1D9E75' }) {
 
 /* ─────────── Quote status icon button ─────────── */
 function QuoteIcon({ quote, onClick }) {
+  const formatHebrewDate = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`
+  }
+
   // No quote yet → plus button
   if (!quote) {
     return (
@@ -111,7 +117,7 @@ function QuoteIcon({ quote, onClick }) {
   if (status === 'sent') {
     // Green document
     return (
-      <button className="inq-status-trigger" onClick={onClick} title="נשלח — פתח עורך">
+      <button className="inq-status-trigger" onClick={onClick} title={quote.sent_at ? `נשלח בתאריך ${formatHebrewDate(quote.sent_at)}` : 'נשלח — פתח עורך'}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
           stroke="#1D9E75" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -639,32 +645,35 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
               onChange={e => set('notes', e.target.value)} />
           </div>
 
-          {/* ── קישור לטופס — only for NEW inquiry ── */}
-          {!isEdit && formToken && (
-            <div className="inq-form-row">
-              <div className="inq-modal-section-title">קישור לטופס הלקוח</div>
-              <div className="inq-form-link-row">
-                <input
-                  className="inq-form-input inq-form-link-input"
-                  type="text"
-                  readOnly
-                  value={`${import.meta.env.VITE_APP_URL}/inquiry-form/${formToken}`}
-                  dir="ltr"
-                />
-                <button
-                  type="button"
-                  className="inq-form-copy-btn"
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${import.meta.env.VITE_APP_URL}/inquiry-form/${formToken}`)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 2000)
-                  }}
-                >
-                  {copied ? '✓ הועתק' : 'העתק'}
-                </button>
+          {/* ── קישור לטופס — new inquiry uses generated formToken; edit uses row.form_token ── */}
+          {(() => {
+            const displayToken = isEdit ? row?.form_token : formToken
+            return displayToken ? (
+              <div className="inq-form-row">
+                <div className="inq-modal-section-title">קישור לטופס הלקוח</div>
+                <div className="inq-form-link-row">
+                  <input
+                    className="inq-form-input inq-form-link-input"
+                    type="text"
+                    readOnly
+                    value={`${import.meta.env.VITE_APP_URL}/inquiry-form/${displayToken}`}
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    className="inq-form-copy-btn"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${import.meta.env.VITE_APP_URL}/inquiry-form/${displayToken}`)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                  >
+                    {copied ? '✓ הועתק' : 'העתק'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            ) : null
+          })()}
 
         </div>
 
@@ -751,14 +760,33 @@ export default function Inquiries() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [{ data: inquiriesData }, { data: quotesData }] = await Promise.all([
+    const [{ data: inquiriesData }, { data: quotesData }, { data: versionsData }] = await Promise.all([
       supabase.from('inquiries').select('*').order('created_at', { ascending: false }),
       supabase.from('quotes').select('id, inquiry_id, status, updated_at'),
+      supabase.from('quote_versions')
+        .select('quote_id, sent_at, version_number')
+        .not('form_token', 'is', null)
+        .order('version_number', { ascending: false }),
     ])
     if (inquiriesData) setRows(inquiriesData)
     if (quotesData) {
       const qMap = {}
       quotesData.forEach(q => { qMap[q.inquiry_id] = q })
+
+      // Attach the latest sent_at (versions already sorted desc by version_number,
+      // so first occurrence per quote_id is the most recent)
+      if (versionsData) {
+        const seen = new Set()
+        versionsData.forEach(v => {
+          if (seen.has(v.quote_id)) return
+          seen.add(v.quote_id)
+          const inquiryId = Object.keys(qMap).find(iid => qMap[iid].id === v.quote_id)
+          if (inquiryId) {
+            qMap[inquiryId] = { ...qMap[inquiryId], sent_at: v.sent_at }
+          }
+        })
+      }
+
       setQuotes(qMap)
     }
     setLoading(false)

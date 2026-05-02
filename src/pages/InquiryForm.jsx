@@ -131,15 +131,12 @@ export default function InquiryForm() {
         // Not authenticated — fall through to normal logic
       }
 
-      // Normal (public) flow
-      const { data, error } = await supabase
-        .from('inquiries')
-        .select('id, form_submitted_at')
-        .eq('form_token', token)
-        .single()
+      // Normal (public) flow — uses RPC so anon role needs no direct table access
+      const { data, error } = await supabase.rpc('get_inquiry_status_by_token', { p_token: token })
+      const row = Array.isArray(data) && data.length > 0 ? data[0] : null
 
-      if (error || !data) { setStatus('not_found'); return }
-      if (data.form_submitted_at) { setStatus('already_submitted'); return }
+      if (error || !row) { setStatus('not_found'); return }
+      if (row.form_submitted_at) { setStatus('already_submitted'); return }
       setStatus('form')
     }
     fetchInquiry()
@@ -202,27 +199,25 @@ export default function InquiryForm() {
     const contact2FullName = [contact2FirstName.trim(), contact2LastName.trim()]
       .filter(Boolean).join(' ') || null
 
-    const { error } = await supabase
-      .from('inquiries')
-      .update({
-        first_name:           firstName.trim()      || null,
-        last_name:            lastName.trim()       || null,
-        phone:                phone.trim()          || null,
-        email:                email.trim()          || null,
-        contact2_name:        contact2FullName,
-        contact2_phone:       contact2Phone.trim()  || null,
-        contact2_email:       contact2Email.trim()  || null,
-        project_type:         finalProjectTypes.length ? finalProjectTypes : null,
-        city:                 city.trim()           || null,
-        plot_size:            plotSize.trim()       || null,
-        house_size:           houseSize.trim()      || null,
-        floors:               floors.trim()         || null,
-        inclusions:           finalInclusions.length ? finalInclusions : null,
-        extra_notes:          extraNotes.trim()     || null,
-        form_submitted_at:    new Date().toISOString(),
-        questionnaire_status: 'התקבל',
-      })
-      .eq('form_token', token)
+    // Uses RPC so anon role needs no direct UPDATE access on inquiries.
+    // The function sets form_submitted_at and questionnaire_status internally.
+    const { error } = await supabase.rpc('submit_inquiry_by_token', {
+      p_token:          token,
+      p_first_name:     firstName.trim()      || null,
+      p_last_name:      lastName.trim()       || null,
+      p_phone:          phone.trim()          || null,
+      p_email:          email.trim()          || null,
+      p_contact2_name:  contact2FullName,
+      p_contact2_phone: contact2Phone.trim()  || null,
+      p_contact2_email: contact2Email.trim()  || null,
+      p_project_type:   finalProjectTypes.length ? finalProjectTypes : null,
+      p_city:           city.trim()           || null,
+      p_plot_size:      plotSize.trim()       || null,
+      p_house_size:     houseSize.trim()      || null,
+      p_floors:         floors.trim()         || null,
+      p_inclusions:     finalInclusions.length ? finalInclusions : null,
+      p_extra_notes:    extraNotes.trim()     || null,
+    })
 
     setSubmitting(false)
 

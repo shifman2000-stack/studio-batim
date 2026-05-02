@@ -100,6 +100,11 @@ export default function QuotePublic() {
         setNotFound(true)
       } else {
         setVersion(ver)
+        // If already signed, jump straight to the thank-you page
+        if (ver.is_signed) {
+          setSubmitted(true)
+          setSignedFileUrl(ver.signed_file_url || '')
+        }
         // Pre-fill today's date into empty sig date fields
         const today = new Date().toISOString().slice(0, 10)
         const enriched = {

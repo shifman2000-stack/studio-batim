@@ -21,6 +21,8 @@ import ClientPortal from './pages/ClientPortal'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import QuotePrintView from './pages/QuotePrintView'
+import QuotePrintSigned from './pages/QuotePrintSigned'
+import QuotePublic from './pages/QuotePublic'
 
 function Layout() {
   return (
@@ -41,6 +43,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
+        <Route path="/quote-print-signed/:token" element={<QuotePrintSigned />} />
+        <Route path="/quote/:token" element={<QuotePublic />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

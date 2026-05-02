@@ -1,5 +1,35 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './QuotePreview.css'
+import SignatureCanvas from './SignatureCanvas'
+import { PenLine, Pencil } from 'lucide-react'
+
+// Inject a one-time <style> for the client2-name placeholder color.
+// React doesn't support ::placeholder via inline styles, so we do it once at
+// module load time instead of coupling it to the CSS file.
+if (typeof document !== 'undefined' && !document.getElementById('quote-preview-placeholder-style')) {
+  const styleEl = document.createElement('style')
+  styleEl.id = 'quote-preview-placeholder-style'
+  styleEl.textContent = `.qp-placeholder-light::placeholder { color: rgba(26,26,24,0.35); font-style: italic; font-weight: 300; }`
+  document.head.appendChild(styleEl)
+}
+
+if (typeof document !== 'undefined' && !document.getElementById('quote-preview-date-style')) {
+  const styleEl = document.createElement('style')
+  styleEl.id = 'quote-preview-date-style'
+  styleEl.textContent = `
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      opacity: 0.4;
+      cursor: pointer;
+    }
+    input[type="date"]:hover::-webkit-calendar-picker-indicator {
+      opacity: 0.8;
+    }
+    input[type="date"]:focus {
+      border-bottom-color: #7a9478 !important;
+    }
+  `
+  document.head.appendChild(styleEl)
+}
 
 /* ═══════════════════════════════════════════════════════
    DEFAULT DATA
@@ -150,8 +180,8 @@ export function buildInitialData(inquiry = {}) {
     ],
 
     validity:      'הסכם זה מהווה הצעת מחיר התקפה ל-60 יום מהתאריך הנקוב בה.',
-    sig1:          { name: '', date: '' },
-    sig2:          { name: '', date: '' },
+    sig1:          { name: '', date: '', signature: '' },
+    sig2:          { name: '', date: '', signature: '' },
     closingName:   'עינב שיפמן',
     closingStudio: 'סטודיו בתים',
   }
@@ -160,9 +190,9 @@ export function buildInitialData(inquiry = {}) {
 /* ═══════════════════════════════════════════════════════
    FIELD — transparent single-line input
 ═══════════════════════════════════════════════════════ */
-function Field({ value, onChange, isReadOnly, className = '', style, dir }) {
+function Field({ value, onChange, isReadOnly, className = '', style, dir, placeholder }) {
   if (isReadOnly) {
-    return <span dir={dir} className={className} style={style}>{value}</span>
+    return <span dir={dir} className={className} style={style}>{value || ''}</span>
   }
   return (
     <input
@@ -171,6 +201,45 @@ function Field({ value, onChange, isReadOnly, className = '', style, dir }) {
       style={style}
       dir={dir}
       value={value ?? ''}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+    />
+  )
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATE FIELD — native date picker; reads/writes YYYY-MM-DD
+   Read-only display: converts to D/M/YYYY (matches RTL convention)
+═══════════════════════════════════════════════════════ */
+function DateField({ value, onChange, isReadOnly, className = '', style }) {
+  const formatForDisplay = (iso) => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-')
+    if (!y || !m || !d) return iso
+    return `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`
+  }
+  if (isReadOnly) {
+    return <span className={className} style={style}>{formatForDisplay(value)}</span>
+  }
+  return (
+    <input
+      type="date"
+      className={className}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        borderBottom: '1px solid rgba(26,26,24,0.22)',
+        padding: '2px 0',
+        fontFamily: "'Heebo', sans-serif",
+        fontSize: 'inherit',
+        color: '#1a1a18',
+        outline: 'none',
+        cursor: 'pointer',
+        direction: 'ltr',
+        minWidth: '7em',
+        ...style,
+      }}
+      value={value || ''}
       onChange={e => onChange(e.target.value)}
     />
   )
@@ -249,11 +318,13 @@ function SubstageList({ items, onUpdate, isReadOnly }) {
 /* ═══════════════════════════════════════════════════════
    MAIN COMPONENT
    Props:
-     inquiry    – inquiry row (for auto-fill via buildInitialData)
-     content    – saved draft_content object
-     data       – alias for content (backward compat with QuoteBuilder)
-     onChange   – called with the full updated data object
-     isReadOnly – disables all editing
+     inquiry        – inquiry row (for auto-fill via buildInitialData)
+     content        – saved draft_content object
+     data           – alias for content (backward compat with QuoteBuilder)
+     onChange       – called with the full updated data object
+     isReadOnly     – disables all editing when true
+     editableFields – list of dot-paths that remain editable even when
+                      isReadOnly=true (e.g. ['client1.name', 'sig1.date'])
 ═══════════════════════════════════════════════════════ */
 export default function QuotePreview({
   inquiry = {},
@@ -261,14 +332,33 @@ export default function QuotePreview({
   data: legacyData,   // QuoteBuilder passes data={...}
   onChange,
   isReadOnly = false,
+  editableFields = [],
 }) {
   const data = content ?? legacyData ?? buildInitialData(inquiry)
   const ro   = isReadOnly
 
+  // Returns true when this field path should be interactive.
+  // In full edit mode (!isReadOnly) everything is editable.
+  // In read-only mode, only paths listed in editableFields are interactive.
+  // Use '_locked' as the path for fields that are always locked in read-only.
+  const canEdit = (path) => !isReadOnly || editableFields.includes(path)
+
+  // Which sig box is currently open for drawing: 'sig1' | 'sig2' | null
+  const [signingFor, setSigningFor] = useState(null)
+
   const patch = (key, val) => onChange?.({ ...data, [key]: val })
 
-  const patchClient = (which, field, val) =>
-    onChange?.({ ...data, [which]: { ...data[which], [field]: val } })
+  // patchClient: update a client sub-field.
+  // Auto-fills the matching sig name when in read-only (client signing) mode
+  // and the client is filling in their name.
+  const patchClient = (which, field, val) => {
+    const updated = { ...data, [which]: { ...data[which], [field]: val } }
+    if (isReadOnly && field === 'name') {
+      const sigKey = which === 'client1' ? 'sig1' : 'sig2'
+      updated[sigKey] = { ...data[sigKey], name: val }
+    }
+    onChange?.(updated)
+  }
 
   // scope helpers
   const updateScope = (i, val) =>
@@ -297,8 +387,6 @@ export default function QuotePreview({
     if (!container) return
 
     // STEP A — Sync live DOM properties → attributes so cloneNode picks them up.
-    // cloneNode(true) copies the DOM tree but NOT .value / .checked properties —
-    // only the original HTML attributes. We bridge that gap here.
     container.querySelectorAll('input').forEach(el => {
       el.setAttribute('value', el.value)
     })
@@ -318,16 +406,12 @@ export default function QuotePreview({
     try {
       const iDoc = iframe.contentDocument
 
-      // STEP C — Build a complete HTML document inside the iframe.
-      // Copy every <link rel="stylesheet"> from parent head (Google Fonts, external CSS)
       const linkTags = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
         .map(l => l.outerHTML).join('\n')
 
-      // Copy every <style> from parent head (Vite-injected QuotePreview.css, global resets, etc.)
       const styleTags = Array.from(document.querySelectorAll('style'))
         .map(s => `<style>${s.innerHTML}</style>`).join('\n')
 
-      // Clone the live page wrapper; strip all edit-only controls
       const clone = container.cloneNode(true)
       clone.querySelectorAll('.qp-no-print, button').forEach(el => el.remove())
 
@@ -364,27 +448,23 @@ ${styleTags}
       iDoc.close()
       iDoc.body.appendChild(clone)
 
-      // STEP D — Wait for all resources (fonts, images) to be ready before printing.
-      // Printing too early produces blank text because web fonts haven't loaded yet.
       await new Promise(resolve => {
         if (iframe.contentDocument.readyState === 'complete') resolve()
         else iframe.contentWindow.addEventListener('load', resolve, { once: true })
       })
       await iframe.contentDocument.fonts.ready
-      // Extra guard for slow font CDNs
       await new Promise(r => setTimeout(r, 200))
 
-      // STEP E — Trigger the browser's native print dialog
       iframe.contentWindow.focus()
       iframe.contentWindow.print()
     } finally {
-      // STEP F — Always remove the iframe; give the print dialog time to open first
       setTimeout(() => iframe.remove(), 1000)
     }
   }
 
   return (
-    <div data-qb-page className="qp-pages" ref={pagesRef}>
+    <>
+      <div data-qb-page className="qp-pages" ref={pagesRef}>
 
       {/* ════════════════════════════════════════════════
            PAGE 1 — הצעת מחיר + לוח תשלומים
@@ -394,7 +474,7 @@ ${styleTags}
         <PageHeader
           dateValue={data.date}
           onDateChange={val => patch('date', val)}
-          isReadOnly={ro}
+          isReadOnly={!canEdit('date')}
         />
 
         {/* Hero title */}
@@ -406,7 +486,7 @@ ${styleTags}
             <Field
               value={data.clientLastName}
               onChange={val => patch('clientLastName', val)}
-              isReadOnly={ro}
+              isReadOnly={!canEdit('clientLastName')}
               style={{ minWidth: '3em', width: `${Math.max(3, (data.clientLastName?.length ?? 0) + 1)}ch` }}
             />
           </h1>
@@ -421,17 +501,17 @@ ${styleTags}
           <div>
             <div className="eyebrow">המזמין</div>
             <div className="party-name">
-              <Field value={data.client1.name} onChange={val => patchClient('client1', 'name', val)} isReadOnly={ro} style={{ width: '100%' }} />
+              <Field value={data.client1.name} onChange={val => patchClient('client1', 'name', val)} isReadOnly={!canEdit('client1.name')} style={{ width: '100%' }} />
             </div>
             <div className="party-detail">
               <span className="label">ת.ז.</span>{' '}
-              <Field value={data.client1.id}    onChange={val => patchClient('client1', 'id',    val)} isReadOnly={ro} style={{ width: '8em' }} />
+              <Field value={data.client1.id}    onChange={val => patchClient('client1', 'id',    val)} isReadOnly={!canEdit('client1.id')}    style={{ width: '8em' }} />
               <br />
               <span className="label">טלפון</span>{' '}
-              <Field value={data.client1.phone} onChange={val => patchClient('client1', 'phone', val)} isReadOnly={ro} dir="ltr" style={{ width: '9em' }} />
+              <Field value={data.client1.phone} onChange={val => patchClient('client1', 'phone', val)} isReadOnly={!canEdit('client1.phone')} dir="ltr" style={{ width: '9em' }} />
               <br />
               <span className="label">דוא״ל</span>{' '}
-              <Field value={data.client1.email} onChange={val => patchClient('client1', 'email', val)} isReadOnly={ro} dir="ltr" style={{ width: '13em' }} />
+              <Field value={data.client1.email} onChange={val => patchClient('client1', 'email', val)} isReadOnly={!canEdit('client1.email')} dir="ltr" style={{ width: '13em' }} />
             </div>
           </div>
 
@@ -446,17 +526,17 @@ ${styleTags}
                 >×</button>
               )}
               <div className="party-name">
-                <Field value={data.client2.name} onChange={val => patchClient('client2', 'name', val)} isReadOnly={ro} style={{ width: '100%' }} />
+                <Field value={data.client2.name} onChange={val => patchClient('client2', 'name', val)} isReadOnly={!canEdit('client2.name')} placeholder="שם 2" className="qp-placeholder-light" style={{ width: '100%' }} />
               </div>
               <div className="party-detail">
                 <span className="label">ת.ז.</span>{' '}
-                <Field value={data.client2.id}    onChange={val => patchClient('client2', 'id',    val)} isReadOnly={ro} style={{ width: '8em' }} />
+                <Field value={data.client2.id}    onChange={val => patchClient('client2', 'id',    val)} isReadOnly={!canEdit('client2.id')}    style={{ width: '8em' }} />
                 <br />
                 <span className="label">טלפון</span>{' '}
-                <Field value={data.client2.phone} onChange={val => patchClient('client2', 'phone', val)} isReadOnly={ro} dir="ltr" style={{ width: '9em' }} />
+                <Field value={data.client2.phone} onChange={val => patchClient('client2', 'phone', val)} isReadOnly={!canEdit('client2.phone')} dir="ltr" style={{ width: '9em' }} />
                 <br />
                 <span className="label">דוא״ל</span>{' '}
-                <Field value={data.client2.email} onChange={val => patchClient('client2', 'email', val)} isReadOnly={ro} dir="ltr" style={{ width: '13em' }} />
+                <Field value={data.client2.email} onChange={val => patchClient('client2', 'email', val)} isReadOnly={!canEdit('client2.email')} dir="ltr" style={{ width: '13em' }} />
               </div>
             </div>
           )}
@@ -487,7 +567,7 @@ ${styleTags}
         <div className="info-row">
           <div className="info-label">כתובת הנכס</div>
           <div className="info-value">
-            <Field value={data.property} onChange={val => patch('property', val)} isReadOnly={ro} style={{ width: '100%' }} />
+            <Field value={data.property} onChange={val => patch('property', val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%' }} />
           </div>
         </div>
 
@@ -501,7 +581,7 @@ ${styleTags}
                 <Field
                   value={item.text}
                   onChange={val => updateScope(i, val)}
-                  isReadOnly={ro}
+                  isReadOnly={!canEdit('_locked')}
                   style={{ flex: 1, minWidth: 0 }}
                 />
                 {!ro && (
@@ -523,7 +603,7 @@ ${styleTags}
               <Field
                 value={data.feeAmount}
                 onChange={val => patch('feeAmount', val)}
-                isReadOnly={ro}
+                isReadOnly={!canEdit('_locked')}
                 dir="ltr"
                 style={{ minWidth: '4em', width: `${Math.max(4, (data.feeAmount?.length ?? 0) + 1)}ch` }}
               />
@@ -559,10 +639,10 @@ ${styleTags}
               {data.paymentRows.map((p, i) => (
                 <tr key={i}>
                   <td className="col-num">{i + 1}</td>
-                  <td><Field value={p.milestone} onChange={val => updatePayment(i, 'milestone', val)} isReadOnly={ro} style={{ width: '100%' }} /></td>
-                  <td><Field value={p.scope}     onChange={val => updatePayment(i, 'scope',     val)} isReadOnly={ro} style={{ width: '100%' }} /></td>
-                  <td className="col-span"><Field value={p.duration} onChange={val => updatePayment(i, 'duration', val)} isReadOnly={ro} style={{ width: '100%' }} /></td>
-                  <td className="col-pct"><Field  value={p.pct}      onChange={val => updatePayment(i, 'pct',      val)} isReadOnly={ro} dir="ltr" style={{ width: '100%' }} /></td>
+                  <td><Field value={p.milestone} onChange={val => updatePayment(i, 'milestone', val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%' }} /></td>
+                  <td><Field value={p.scope}     onChange={val => updatePayment(i, 'scope',     val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%' }} /></td>
+                  <td className="col-span"><Field value={p.duration} onChange={val => updatePayment(i, 'duration', val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%' }} /></td>
+                  <td className="col-pct"><Field  value={p.pct}      onChange={val => updatePayment(i, 'pct',      val)} isReadOnly={!canEdit('_locked')} dir="ltr" style={{ width: '100%' }} /></td>
                   {!ro && (
                     <td className="qp-no-print">
                       <button className="qp-row-remove" onClick={() => removePayment(i)} title="הסר">×</button>
@@ -589,7 +669,7 @@ ${styleTags}
       ════════════════════════════════════════════════ */}
       <div className="page">
 
-        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={ro} />
+        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={!canEdit('_locked')} />
 
         <div className="hero hero-with-line" style={{ marginBottom: 20, paddingBottom: 14 }}>
           <div className="eyebrow">תהליך העבודה</div>
@@ -604,23 +684,23 @@ ${styleTags}
           </div>
           <div className="stage-body">
             <p className="stage-lead">
-              <Area value={data.s01_lead} onChange={val => patch('s01_lead', val)} isReadOnly={ro} />
+              <Area value={data.s01_lead} onChange={val => patch('s01_lead', val)} isReadOnly={!canEdit('_locked')} />
             </p>
             <div className="substage">
               <div className="substage-title">פרוגרמה</div>
-              <SubstageList items={data.s01_prog}    onUpdate={patchList('s01_prog')}    isReadOnly={ro} />
+              <SubstageList items={data.s01_prog}    onUpdate={patchList('s01_prog')}    isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">מדידה</div>
-              <SubstageList items={data.s01_measure} onUpdate={patchList('s01_measure')} isReadOnly={ro} />
+              <SubstageList items={data.s01_measure} onUpdate={patchList('s01_measure')} isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">חלופות תכנון</div>
-              <SubstageList items={data.s01_alts}    onUpdate={patchList('s01_alts')}    isReadOnly={ro} />
+              <SubstageList items={data.s01_alts}    onUpdate={patchList('s01_alts')}    isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">הדמיה</div>
-              <SubstageList items={data.s01_render}  onUpdate={patchList('s01_render')}  isReadOnly={ro} />
+              <SubstageList items={data.s01_render}  onUpdate={patchList('s01_render')}  isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
         </div>
@@ -634,15 +714,15 @@ ${styleTags}
           <div className="stage-body">
             <div className="substage">
               <div className="substage-title">תפקיד המתכנן</div>
-              <SubstageList items={data.s02_planner}     onUpdate={patchList('s02_planner')}     isReadOnly={ro} />
+              <SubstageList items={data.s02_planner}     onUpdate={patchList('s02_planner')}     isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">אחריות המזמין</div>
-              <SubstageList items={data.s02_client}      onUpdate={patchList('s02_client')}      isReadOnly={ro} />
+              <SubstageList items={data.s02_client}      onUpdate={patchList('s02_client')}      isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">פיקוח וחתימות</div>
-              <SubstageList items={data.s02_supervision} onUpdate={patchList('s02_supervision')} isReadOnly={ro} />
+              <SubstageList items={data.s02_supervision} onUpdate={patchList('s02_supervision')} isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
         </div>
@@ -658,7 +738,7 @@ ${styleTags}
       ════════════════════════════════════════════════ */}
       <div className="page">
 
-        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={ro} />
+        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={!canEdit('_locked')} />
 
         {/* STAGE 03 — תוכניות עבודה */}
         <div className="stage">
@@ -668,7 +748,7 @@ ${styleTags}
           </div>
           <div className="stage-body">
             <p>
-              <Area value={data.s03_lead} onChange={val => patch('s03_lead', val)} isReadOnly={ro} />
+              <Area value={data.s03_lead} onChange={val => patch('s03_lead', val)} isReadOnly={!canEdit('_locked')} />
             </p>
             <ul className="two-col">
               {data.s03_twoCol.map((item, i) => (
@@ -676,17 +756,17 @@ ${styleTags}
                   <Field
                     value={item}
                     onChange={val => patch('s03_twoCol', data.s03_twoCol.map((t, j) => j === i ? val : t))}
-                    isReadOnly={ro}
+                    isReadOnly={!canEdit('_locked')}
                     style={{ width: '100%' }}
                   />
                 </li>
               ))}
             </ul>
             <p>
-              <Area value={data.s03_closing}  onChange={val => patch('s03_closing',  val)} isReadOnly={ro} />
+              <Area value={data.s03_closing}  onChange={val => patch('s03_closing',  val)} isReadOnly={!canEdit('_locked')} />
             </p>
             <p>
-              <Area value={data.s03_meetings} onChange={val => patch('s03_meetings', val)} isReadOnly={ro} />
+              <Area value={data.s03_meetings} onChange={val => patch('s03_meetings', val)} isReadOnly={!canEdit('_locked')} />
             </p>
           </div>
         </div>
@@ -700,19 +780,19 @@ ${styleTags}
           <div className="stage-body">
             <div className="substage">
               <div className="substage-title">פיקוח עליון</div>
-              <SubstageList items={data.s04_supervision}   onUpdate={patchList('s04_supervision')}   isReadOnly={ro} />
+              <SubstageList items={data.s04_supervision}   onUpdate={patchList('s04_supervision')}   isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">ביקורים נוספים בשטח</div>
-              <SubstageList items={data.s04_extraVisits}   onUpdate={patchList('s04_extraVisits')}   isReadOnly={ro} />
+              <SubstageList items={data.s04_extraVisits}   onUpdate={patchList('s04_extraVisits')}   isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">ייעוץ ובחירות גמר</div>
-              <SubstageList items={data.s04_finishConsult} onUpdate={patchList('s04_finishConsult')} isReadOnly={ro} />
+              <SubstageList items={data.s04_finishConsult} onUpdate={patchList('s04_finishConsult')} isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
               <div className="substage-title">הוראות ואחריות</div>
-              <SubstageList items={data.s04_instructions}  onUpdate={patchList('s04_instructions')}  isReadOnly={ro} />
+              <SubstageList items={data.s04_instructions}  onUpdate={patchList('s04_instructions')}  isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
         </div>
@@ -728,7 +808,7 @@ ${styleTags}
       ════════════════════════════════════════════════ */}
       <div className="page">
 
-        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={ro} />
+        <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={!canEdit('_locked')} />
 
         <div className="hero hero-with-line" style={{ marginBottom: 20, paddingBottom: 14 }}>
           <div className="eyebrow">הערות ותנאים</div>
@@ -753,7 +833,7 @@ ${styleTags}
                       <Area
                         value={text}
                         onChange={val => updateTerm(idx, val)}
-                        isReadOnly={ro}
+                        isReadOnly={!canEdit('_locked')}
                       />
                     </span>
                   </li>
@@ -768,7 +848,7 @@ ${styleTags}
           <Area
             value={data.validity}
             onChange={val => patch('validity', val)}
-            isReadOnly={ro}
+            isReadOnly={!canEdit('_locked')}
             style={{ textAlign: 'center' }}
           />
         </div>
@@ -785,14 +865,57 @@ ${styleTags}
               <div key={key} className="sig-box">
                 <div className="sig-row">
                   <span className="sig-row-label">שם:</span>
-                  <Field value={val.name} onChange={v => patch(key, { ...val, name: v })} isReadOnly={ro} style={{ flex: 1 }} />
+                  <Field value={val.name} onChange={v => patch(key, { ...val, name: v })} isReadOnly={!canEdit(`${key}.name`)} style={{ flex: 1 }} />
                 </div>
-                <div className="sig-row">
-                  <span className="sig-row-label">חתימה:</span>
+                <div className="sig-row" style={{ alignItems: 'center' }}>
+                  {canEdit(`${key}.signature`) ? (
+                    val.signature ? (
+                      /* ── Signature drawn — show image + Pencil edit icon ── */
+                      <>
+                        <span className="sig-row-label">חתימה:</span>
+                        <div style={{
+                          flex: 1,
+                          borderBottom: '1px solid rgba(26,26,24,0.4)',
+                          height: 36,
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}>
+                          <img
+                            src={val.signature}
+                            alt="חתימה"
+                            style={{ maxHeight: 36, objectFit: 'contain', display: 'block' }}
+                          />
+                        </div>
+                        <Pencil
+                          size={14}
+                          color="#8a8680"
+                          style={{ opacity: 0.7, cursor: 'pointer', flexShrink: 0, marginRight: 6 }}
+                          onClick={() => setSigningFor(key)}
+                        />
+                      </>
+                    ) : (
+                      /* ── No signature yet — full row is the click target ── */
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 6, cursor: 'pointer' }}
+                        onClick={() => setSigningFor(key)}
+                      >
+                        <span className="sig-row-label">חתימה:</span>
+                        <div style={{
+                          flex: 1,
+                          borderBottom: '1px solid rgba(26,26,24,0.4)',
+                          height: 36,
+                        }} />
+                        <PenLine size={16} color="#8a8680" style={{ flexShrink: 0 }} />
+                      </div>
+                    )
+                  ) : (
+                    /* ── Admin / draft mode — static label only ── */
+                    <span className="sig-row-label">חתימה:</span>
+                  )}
                 </div>
                 <div className="sig-row">
                   <span className="sig-row-label">תאריך:</span>
-                  <Field value={val.date} onChange={v => patch(key, { ...val, date: v })} isReadOnly={ro} style={{ flex: 1 }} />
+                  <DateField value={val.date} onChange={v => patch(key, { ...val, date: v })} isReadOnly={!canEdit(`${key}.date`)} style={{ flex: 1 }} />
                 </div>
               </div>
             ))}
@@ -803,10 +926,10 @@ ${styleTags}
         <div className="closing">
           <div className="closing-text">בברכה,</div>
           <div className="closing-name">
-            <Field value={data.closingName}   onChange={val => patch('closingName',   val)} isReadOnly={ro} style={{ width: '100%', textAlign: 'center' }} />
+            <Field value={data.closingName}   onChange={val => patch('closingName',   val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%', textAlign: 'center' }} />
           </div>
           <div className="closing-studio">
-            <Field value={data.closingStudio} onChange={val => patch('closingStudio', val)} isReadOnly={ro} style={{ width: '100%', textAlign: 'center' }} />
+            <Field value={data.closingStudio} onChange={val => patch('closingStudio', val)} isReadOnly={!canEdit('_locked')} style={{ width: '100%', textAlign: 'center' }} />
           </div>
         </div>
 
@@ -817,5 +940,17 @@ ${styleTags}
       </div>
 
     </div>
+
+    {/* Signature capture modal — rendered outside page flow so it overlays everything */}
+    {signingFor && (
+      <SignatureCanvas
+        onSave={(dataUrl) => {
+          patch(signingFor, { ...data[signingFor], signature: dataUrl })
+          setSigningFor(null)
+        }}
+        onCancel={() => setSigningFor(null)}
+      />
+    )}
+    </>
   )
 }

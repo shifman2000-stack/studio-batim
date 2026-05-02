@@ -129,16 +129,21 @@ export default async function handler(req, res) {
     const pdfBuffer = Buffer.from(pdfBytes)
 
     // ── 6. Upload to Supabase Storage ─────────────────────────────────────
-    const today    = new Date().toISOString().slice(0, 10)
-    const filename = `הצעת מחיר - משפחת ${lastName} - ${today}.pdf`
-    const filePath = `signed/${version.id}/${filename}`
+    // Use a safe ASCII path — Supabase rejects non-ASCII characters in keys.
+    // The Hebrew download name is delivered via RFC 5987 contentDisposition
+    // so the browser still saves the file with the correct Hebrew filename.
+    const today        = new Date().toISOString().slice(0, 10)
+    const downloadName = `הצעת מחיר - משפחת ${lastName} - ${today}.pdf`
+    const encodedName  = encodeURIComponent(downloadName)
+    const filePath     = `signed/${version.id}.pdf`
 
     const { error: uploadError } = await supabase
       .storage
       .from('quotes-files')
       .upload(filePath, pdfBuffer, {
-        contentType: 'application/pdf',
-        upsert:      true,   // allow retry after a failed previous attempt
+        contentType:        'application/pdf',
+        upsert:             true,   // allow retry after a failed previous attempt
+        contentDisposition: `attachment; filename*=UTF-8''${encodedName}`,
       })
 
     if (uploadError) {

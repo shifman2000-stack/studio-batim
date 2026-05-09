@@ -15,6 +15,12 @@ function toHHMM(mins) {
   return `${h}:${String(m).padStart(2, '0')}`
 }
 
+function toMins(hhmm) {
+  if (!hhmm) return 0
+  const [h, m] = hhmm.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
 function isoDate(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
@@ -53,7 +59,7 @@ export default function HoursReport() {
     const [{ data: employees }, { data: attData }, { data: repData }] = await Promise.all([
       supabase.from('profiles').select('id, first_name, last_name, role')
         .eq('role', 'employee').order('first_name'),
-      supabase.from('attendance').select('user_id, day_type, work_from_home')
+      supabase.from('attendance').select('user_id, day_type, work_from_home, arrival_time, departure_time')
         .gte('date', first).lte('date', last),
       supabase.from('hour_reports').select('user_id, hours, minutes')
         .gte('date', first).lte('date', last),
@@ -63,10 +69,15 @@ export default function HoursReport() {
     const rows = employees.map(emp => {
       const empAtt = attData ? attData.filter(a => a.user_id === emp.id) : []
       const empRep = repData ? repData.filter(r => r.user_id === emp.id) : []
+      const empAttMins = empAtt
+        .filter(a => a.day_type === 'work' && a.arrival_time && a.departure_time)
+        .reduce((s, a) =>
+          s + toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5)), 0)
+      const empRepMins = empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0)
       return {
         id:           emp.id,
         name:         `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || '-',
-        totalMins:    empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0),
+        totalMins:    empAttMins > 0 ? empAttMins : empRepMins,
         officeDays:   empAtt.filter(a => a.day_type === 'work' && !a.work_from_home).length,
         wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
         vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,

@@ -173,8 +173,29 @@ function App() {
     setMode('login')
   }
 
+  // ── FORGOT PASSWORD ──
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+    setErrorMsg('')
+    setSuccessMsg('')
+    setLoading(true)
+
+    const { error } = await supabase.auth.resetPasswordForEmail(loginEmail, {
+      redirectTo: window.location.origin + '/reset-password',
+    })
+
+    setLoading(false)
+
+    if (error) {
+      setErrorMsg('שגיאה בשליחת הקישור. בדקי שהאימייל נכון ונסי שוב.')
+    } else {
+      setSuccessMsg('קישור לאיפוס סיסמה נשלח לאימייל שלך')
+    }
+  }
+
   const switchToRegister = () => { setErrorMsg(''); setSuccessMsg(''); setMode('register') }
   const switchToLogin    = () => { setErrorMsg(''); setSuccessMsg(''); setMode('login') }
+  const switchToForgot   = () => { setErrorMsg(''); setSuccessMsg(''); setMode('forgot') }
 
   return (
     <div className="login-page">
@@ -204,6 +225,13 @@ function App() {
               />
             </div>
 
+            <p style={{ margin: '0 0 4px', textAlign: 'left' }}>
+              <button type="button" className="auth-link" onClick={switchToForgot}
+                style={{ fontSize: 12 }}>
+                שכחתי סיסמה
+              </button>
+            </p>
+
             {errorMsg && <p className="auth-error">{errorMsg}</p>}
             {successMsg && <p className="auth-success">{successMsg}</p>}
 
@@ -222,6 +250,46 @@ function App() {
               משתמש חדש?{' '}
               <button type="button" className="auth-link" onClick={switchToRegister}>
                 הרשמה
+              </button>
+            </p>
+          </form>
+        )}
+
+        {/* ── FORGOT PASSWORD FORM ── */}
+        {mode === 'forgot' && (
+          <form onSubmit={handleForgotPassword}>
+            <p style={{
+              fontFamily: "'Heebo', sans-serif",
+              fontWeight: 300,
+              fontSize: 14,
+              color: '#4a4a48',
+              lineHeight: 1.7,
+              margin: '0 0 20px',
+            }}>
+              הזיני את כתובת האימייל שלך ונשלח לך קישור לאיפוס הסיסמה.
+            </p>
+
+            <div className="field-group">
+              <label>אימייל</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+
+            {errorMsg && <p className="auth-error">{errorMsg}</p>}
+            {successMsg && <p className="auth-success">{successMsg}</p>}
+
+            <button type="submit" className="login-btn" disabled={loading || !!successMsg}>
+              {loading ? 'שולח...' : 'שלח קישור לאיפוס'}
+            </button>
+
+            <p className="auth-switch">
+              <button type="button" className="auth-link" onClick={switchToLogin}>
+                חזרה לכניסה
               </button>
             </p>
           </form>

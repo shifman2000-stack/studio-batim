@@ -28,6 +28,16 @@ function Header() {
   const [role, setRole]             = useState(null)
   const navigate = useNavigate()
 
+  // Departure summary modal (all environments)
+  const [departureModalOpen,  setDepartureModalOpen]  = useState(false)
+  const [departureModalTimes, setDepartureModalTimes] = useState({ arrival: '', departure: '' })
+
+  // DEV ONLY ────────────────────────────────────────────────────────────────
+  const [devArrivalModalOpen, setDevArrivalModalOpen] = useState(false)
+  const [devArrivalTime,      setDevArrivalTime]      = useState('09:00')
+  const [devClearConfirmOpen, setDevClearConfirmOpen] = useState(false)
+  // ─────────────────────────────────────────────────────────────────────────
+
   // DEV ONLY - REMOVE BEFORE PRODUCTION
   const handleDevSwitch = async (email, password) => {
     const today = todayStr()
@@ -53,6 +63,59 @@ function Header() {
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', uid).single()
     window.location.href = profile?.role === 'employee' ? '/tasks' : '/פרויקטים'
   }
+
+  // Departure summary modal — dismiss and navigate ────────────────────────
+  const handleDepartureModalConfirm = () => {
+    setDepartureModalOpen(false)
+    setArrived(false)
+    navigate('/hours', { state: { openTab: 'entry' } })
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // DEV ONLY — confirm custom arrival time and save as if הגעתי was clicked ──
+  const handleDevArrivalConfirm = async () => {
+    const hhmm = devArrivalTime
+    setDevArrivalModalOpen(false)
+    if (!userId || !hhmm) return
+
+    const { data: existing } = await supabase
+      .from('pending_approvals')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('date', todayStr())
+      .maybeSingle()
+
+    if (existing) {
+      await supabase.from('pending_approvals')
+        .update({ arrival_time: hhmm, day_type: 'work', status: 'pending' })
+        .eq('id', existing.id)
+    } else {
+      await supabase.from('pending_approvals')
+        .insert([{ user_id: userId, date: todayStr(), arrival_time: hhmm, day_type: 'work', status: 'pending', work_from_home: false }])
+    }
+
+    localStorage.setItem('arrival_time_today', hhmm)
+    setArrived(true)
+    window.dispatchEvent(new CustomEvent('hours-attendance-updated', {
+      detail: { type: 'arrival', time: hhmm },
+    }))
+  }
+
+  // DEV ONLY — wipe all today's attendance data for the active user ─────────
+  const handleDevClearToday = async () => {
+    const today = todayStr()
+    await Promise.all([
+      supabase.from('attendance')       .delete().eq('user_id', userId).eq('date', today),
+      supabase.from('pending_approvals').delete().eq('user_id', userId).eq('date', today),
+      supabase.from('hour_reports')     .delete().eq('user_id', userId).eq('date', today),
+    ])
+    localStorage.removeItem('arrival_time_today')
+    localStorage.removeItem('departure_time_today')
+    setArrived(false)
+    setDevClearConfirmOpen(false)
+    window.location.reload()
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const init = async (session) => {
@@ -89,6 +152,13 @@ function Header() {
     const hhmm = nowHHMM()
 
     if (!arrived) {
+      // DEV ONLY: open the custom-time modal instead of using real clock ────
+      if (import.meta.env.DEV) {
+        setDevArrivalTime('09:00')
+        setDevArrivalModalOpen(true)
+        return
+      }
+      // ─────────────────────────────────────────────────────────────────────
       // הגעתי — insert or update pending_approvals with arrival_time
       const { data: existing } = await supabase
         .from('pending_approvals')
@@ -125,8 +195,10 @@ function Header() {
         detail: { type: 'departure', time: hhmm },
       }))
 
-      // Navigate to hours page and open the entry tab
-      navigate('/hours', { state: { openTab: 'entry' } })
+      // Show departure summary modal; navigation happens in handleDepartureModalConfirm
+      const arrivalTime = localStorage.getItem('arrival_time_today') || ''
+      setDepartureModalTimes({ arrival: arrivalTime, departure: hhmm })
+      setDepartureModalOpen(true)
     }
   }
 
@@ -145,6 +217,15 @@ function Header() {
             {u.label}
           </button>
         ))}
+        {/* DEV ONLY — clear today's attendance */}
+        <span style={{ width: 1, height: 14, background: '#ca8a04', display: 'inline-block', margin: '0 4px', flexShrink: 0 }} />
+        <button
+          className="dev-switcher-btn"
+          style={{ background: '#b45309', color: '#fff' }}
+          onClick={() => setDevClearConfirmOpen(true)}
+        >
+          נקה נוכחות היום
+        </button>
       </div>
     )}
     <header className="site-header" dir="rtl">
@@ -201,6 +282,149 @@ function Header() {
 
       </div>
     </header>
+
+    {/* Departure summary modal (all environments) ──────────────────────── */}
+    {departureModalOpen && (
+      <div style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          background: '#f7f5f2',
+          border: '1px solid rgba(26,26,24,0.10)',
+          borderRadius: 6,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
+          padding: '40px 44px',
+          maxWidth: 420,
+          width: '90vw',
+          fontFamily: "'Heebo', sans-serif",
+          direction: 'rtl',
+        }}>
+          <p style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 24, fontWeight: 400, color: '#1a1a18',
+            margin: '0 0 14px',
+          }}>
+            {firstName ? `הי ${firstName},` : 'הי,'}
+          </p>
+          <p style={{
+            fontWeight: 300, fontSize: 14, color: '#4a4a48',
+            lineHeight: 1.8, margin: '0 0 36px',
+          }}>
+            שעות הנוכחות שנרשמו לך היום הן{' '}
+            מ-{departureModalTimes.arrival || '—'} עד {departureModalTimes.departure || '—'}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <button
+              className="header-departure-confirm-btn"
+              onClick={handleDepartureModalConfirm}
+            >
+              אישור
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* DEV ONLY — custom arrival time modal ───────────────────────────── */}
+    {import.meta.env.DEV && devArrivalModalOpen && (
+      <div style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          background: '#f7f5f2', border: '1px solid rgba(26,26,24,0.13)',
+          padding: '28px 32px', maxWidth: 360, width: '90vw',
+          fontFamily: "'Heebo', sans-serif", direction: 'rtl',
+        }}>
+          <p style={{ fontWeight: 400, fontSize: 14, color: '#1a1a18', margin: '0 0 4px' }}>
+            DEV — בחר שעת הגעה
+          </p>
+          <p style={{ fontWeight: 300, fontSize: 12, color: '#8a8680', margin: '0 0 20px' }}>
+            הזמן שיוזן יישמר כשעת הגעה במקום השעה הנוכחית
+          </p>
+          <input
+            type="time"
+            value={devArrivalTime}
+            onChange={e => setDevArrivalTime(e.target.value)}
+            style={{
+              border: 'none', borderBottom: '1px solid rgba(26,26,24,0.3)',
+              background: 'transparent', padding: '4px 2px',
+              fontFamily: "'Heebo', sans-serif", fontSize: 22,
+              color: '#1a1a18', direction: 'ltr', outline: 'none',
+              marginBottom: 24, display: 'block',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-start' }}>
+            <button
+              onClick={() => setDevArrivalModalOpen(false)}
+              style={{
+                background: 'transparent', color: '#1a1a18',
+                border: '1px solid rgba(26,26,24,0.22)',
+                padding: '8px 20px', fontFamily: "'Heebo', sans-serif",
+                fontWeight: 300, fontSize: 12, letterSpacing: '0.1em',
+                borderRadius: 0, cursor: 'pointer',
+              }}
+            >ביטול</button>
+            <button
+              onClick={handleDevArrivalConfirm}
+              style={{
+                background: '#1a1a18', color: '#f7f5f2',
+                border: '1px solid #1a1a18',
+                padding: '8px 20px', fontFamily: "'Heebo', sans-serif",
+                fontWeight: 300, fontSize: 12, letterSpacing: '0.1em',
+                borderRadius: 0, cursor: 'pointer',
+              }}
+            >אישור</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* DEV ONLY — clear today confirmation modal ──────────────────────── */}
+    {import.meta.env.DEV && devClearConfirmOpen && (
+      <div style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+        zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          background: '#f7f5f2', border: '1px solid rgba(26,26,24,0.13)',
+          padding: '28px 32px', maxWidth: 400, width: '90vw',
+          fontFamily: "'Heebo', sans-serif", direction: 'rtl',
+        }}>
+          <p style={{ fontWeight: 400, fontSize: 14, color: '#1a1a18', margin: '0 0 12px' }}>
+            למחוק את כל הנוכחות של היום עבור המשתמש הפעיל?
+          </p>
+          <p style={{ fontWeight: 300, fontSize: 12, color: '#8a8680', margin: '0 0 24px', lineHeight: 1.6 }}>
+            ימחקו שורות מ-attendance, hour_reports ו-pending_approvals לתאריך היום. הדף יירענן לאחר המחיקה.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-start' }}>
+            <button
+              onClick={() => setDevClearConfirmOpen(false)}
+              style={{
+                background: 'transparent', color: '#1a1a18',
+                border: '1px solid rgba(26,26,24,0.22)',
+                padding: '8px 20px', fontFamily: "'Heebo', sans-serif",
+                fontWeight: 300, fontSize: 12, letterSpacing: '0.1em',
+                borderRadius: 0, cursor: 'pointer',
+              }}
+            >ביטול</button>
+            <button
+              onClick={handleDevClearToday}
+              style={{
+                background: '#1a1a18', color: '#f7f5f2',
+                border: '1px solid #1a1a18',
+                padding: '8px 20px', fontFamily: "'Heebo', sans-serif",
+                fontWeight: 300, fontSize: 12, letterSpacing: '0.1em',
+                borderRadius: 0, cursor: 'pointer',
+              }}
+            >אישור</button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* ──────────────────────────────────────────────────────────────────── */}
+
     </div>
   )
 }

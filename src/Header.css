@@ -32,6 +32,24 @@
   color: #fff;
 }
 
+/* ── Departure summary modal — confirm button ── */
+.header-departure-confirm-btn {
+  background: #1a1a18;
+  color: #f7f5f2;
+  border: none;
+  padding: 10px 36px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.header-departure-confirm-btn:hover {
+  background: #7a9478;
+}
+
 /* ── Shared Site Header ── */
 .site-header {
   display: flex;

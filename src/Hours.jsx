@@ -74,6 +74,11 @@ const formatDate = (dateStr) => {
   })
 }
 
+// ── Virtual "general" option for project / stage dropdowns ──
+// Selecting this saves NULL to hour_reports.project_id / stage_id.
+const GENERAL_VALUE = '__general__'
+const GENERAL_LABEL = 'כללי'
+
 function Hours() {
   const location = useLocation()
   const [userId, setUserId]             = useState(null)
@@ -271,7 +276,7 @@ function Hours() {
     // Step 1: fetch all pending records
     const { data, error } = await supabase
       .from('pending_approvals')
-      .select('id, date, day_type, arrival_time, departure_time, status, user_id, work_from_home')
+      .select('id, date, day_type, arrival_time, departure_time, status, user_id, work_from_home, project_breakdown')
       .eq('status', 'pending')
       .eq('day_type', 'work')
       .not('arrival_time', 'is', null)
@@ -299,7 +304,7 @@ function Hours() {
     const last = isoDate(viewYear, viewMonth, lastDay)
 
     const [{ data: attData }, { data: repData }, { data: pendData }] = await Promise.all([
-      supabase.from('attendance').select('day_type, work_from_home')
+      supabase.from('attendance').select('day_type, work_from_home, arrival_time, departure_time')
         .eq('user_id', userId).gte('date', first).lte('date', last),
       supabase.from('hour_reports').select('hours, minutes')
         .eq('user_id', userId).gte('date', first).lte('date', last),
@@ -311,10 +316,19 @@ function Hours() {
     const sickDays     = attData ? attData.filter(a => a.day_type === 'sick').length     : 0
     const vacationDays = attData ? attData.filter(a => a.day_type === 'vacation').length : 0
 
-    // Approved hours — from hour_reports only
-    const totalMins = repData
+    // Approved hours — prefer attendance diff (actual time at work) over project sum.
+    // Admins don't write attendance records, so fall back to hour_reports for their case.
+    const attendanceMins = attData
+      ? attData
+          .filter(a => a.day_type === 'work' && a.arrival_time && a.departure_time)
+          .reduce((s, a) =>
+            s + toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5)), 0)
+      : 0
+    const reportMins = repData
       ? repData.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0)
       : 0
+    // Use attendance diff if available, otherwise fall back to project sum (admin case)
+    const totalMins = attendanceMins > 0 ? attendanceMins : reportMins
 
     // Pending / rejected hours — from pending_approvals
     let pendingMins = 0, rejectedMins = 0
@@ -345,7 +359,7 @@ function Hours() {
     const [{ data: employees }, { data: attData }, { data: repData }] = await Promise.all([
       supabase.from('profiles').select('id, first_name, last_name, role')
         .eq('role', 'employee').order('first_name'),
-      supabase.from('attendance').select('user_id, day_type, work_from_home')
+      supabase.from('attendance').select('user_id, day_type, work_from_home, arrival_time, departure_time')
         .gte('date', first).lte('date', last),
       supabase.from('hour_reports').select('user_id, hours, minutes')
         .gte('date', first).lte('date', last),
@@ -355,10 +369,16 @@ function Hours() {
     const rows = employees.map(emp => {
       const empAtt = attData ? attData.filter(a => a.user_id === emp.id) : []
       const empRep = repData ? repData.filter(r => r.user_id === emp.id) : []
+      // Prefer attendance diff (actual time at work); fall back to project sum for admin users
+      const empAttMins = empAtt
+        .filter(a => a.day_type === 'work' && a.arrival_time && a.departure_time)
+        .reduce((s, a) =>
+          s + toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5)), 0)
+      const empRepMins = empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0)
       return {
         id:           emp.id,
         name:         `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || '-',
-        totalMins:    empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0),
+        totalMins:    empAttMins > 0 ? empAttMins : empRepMins,
         officeDays:   empAtt.filter(a => a.day_type === 'work' && !a.work_from_home).length,
         wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
         vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,
@@ -440,8 +460,9 @@ function Hours() {
     if (reps?.length > 0) {
       setRecords(reps.map(r => ({
         id:          r.id,
-        project_id:  r.project_id || '',
-        stage_id:    r.stage_id   ?? '',
+        // NULL in DB → GENERAL_VALUE so the "כללי" option is pre-selected
+        project_id:  r.project_id == null ? GENERAL_VALUE : r.project_id,
+        stage_id:    r.stage_id   == null ? GENERAL_VALUE : r.stage_id,
         hours_hhmm:  toHHMM((r.hours || 0) * 60 + (r.minutes || 0)),
       })))
     }
@@ -563,14 +584,20 @@ function Hours() {
         { onConflict: 'user_id,date' }
       )
       .select().single()
-    console.log('save error:', directError)
+    console.log('attendance result:', { data: upserted, error: directError })
     if (upserted) setAttendanceId(upserted.id)
-    await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
+    const { error: deleteError } = await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
+    console.log('hour_reports delete result:', { error: deleteError })
     const inserts = buildHourReportInserts()
-    if (inserts.length > 0) await supabase.from('hour_reports').insert(inserts)
+    console.log('hour_reports rows to insert:', inserts)
+    const { data: insertData, error: insertError } = inserts.length > 0
+      ? await supabase.from('hour_reports').insert(inserts).select()
+      : { data: null, error: null }
+    console.log('hour_reports insert result:', { data: insertData, error: insertError })
     // Clean up draft from pending_approvals if it exists
     if (pendingId) {
-      await supabase.from('pending_approvals').delete().eq('id', pendingId).eq('user_id', userId)
+      const { error: pendingDeleteError } = await supabase.from('pending_approvals').delete().eq('id', pendingId).eq('user_id', userId)
+      console.log('pending_approvals delete result:', { error: pendingDeleteError })
       setPendingId(null)
     }
     setDayStatus('approved')
@@ -585,14 +612,18 @@ function Hours() {
 
   const buildHourReportInserts = () =>
     records
+      // GENERAL_VALUE ('__general__') is truthy, so it passes the project_id check just like a real id.
+      // Empty string (nothing selected) is falsy and is correctly excluded.
       .filter(r => r.project_id && r.hours_hhmm)
       .map(r => {
         const mins = toMins(r.hours_hhmm)
         return {
           user_id:    userId,
           date:       selectedDate,
-          project_id: r.project_id,
-          stage_id:   r.stage_id !== '' ? Number(r.stage_id) : null,
+          // GENERAL_VALUE → NULL in DB; real UUID stays as-is
+          project_id: r.project_id === GENERAL_VALUE ? null : (r.project_id || null),
+          // GENERAL_VALUE → NULL; '' → NULL; real id (number) → Number
+          stage_id:   r.stage_id === GENERAL_VALUE ? null : (r.stage_id !== '' ? Number(r.stage_id) : null),
           hours:      Math.floor(mins / 60),
           minutes:    mins % 60,
         }
@@ -630,14 +661,30 @@ function Hours() {
     setSaving(true)
     console.log('saving work_from_home:', workFromHome)
 
+    const breakdownRows = dayType === 'work'
+      ? records
+          .filter(r => r.project_id && r.hours_hhmm)
+          .map(r => {
+            const mins = toMins(r.hours_hhmm)
+            return {
+              // GENERAL_VALUE → NULL in JSONB; doApprove will insert NULL as-is (no re-conversion needed)
+              project_id: r.project_id === GENERAL_VALUE ? null : (r.project_id || null),
+              stage_id:   r.stage_id   === GENERAL_VALUE ? null : (r.stage_id !== '' ? Number(r.stage_id) : null),
+              hours:      Math.floor(mins / 60),
+              minutes:    mins % 60,
+            }
+          })
+      : []
+
     const payload = {
-      user_id:        userId,
-      date:           selectedDate,
-      day_type:       dayType,
-      arrival_time:   dayType === 'work' ? (arrival   || null) : null,
-      departure_time: dayType === 'work' ? (departure || null) : null,
-      work_from_home: dayType === 'work' ? workFromHome : false,
-      status:         'pending',
+      user_id:           userId,
+      date:              selectedDate,
+      day_type:          dayType,
+      arrival_time:      dayType === 'work' ? (arrival   || null) : null,
+      departure_time:    dayType === 'work' ? (departure || null) : null,
+      work_from_home:    dayType === 'work' ? workFromHome : false,
+      status:            'pending',
+      project_breakdown: breakdownRows.length > 0 ? breakdownRows : null,
     }
 
     // Step 2: update or insert into pending_approvals (upsert by user_id + date)
@@ -760,10 +807,10 @@ function Hours() {
 
   // ── Admin approval actions ──
   const doApprove = async (rec) => {
-    await supabase.from('pending_approvals')
+    const { error: pendingError } = await supabase.from('pending_approvals')
       .update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: loggedInUserId })
       .eq('id', rec.id)
-    await supabase.from('attendance').upsert(
+    const { error: upsertError } = await supabase.from('attendance').upsert(
       {
         user_id:        rec.user_id,
         date:           rec.date,
@@ -774,6 +821,27 @@ function Hours() {
       },
       { onConflict: 'user_id,date' }
     )
+
+    // Create hour_reports from project_breakdown if attendance upsert succeeded
+    if (!upsertError && rec.project_breakdown && rec.project_breakdown.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('hour_reports')
+        .delete()
+        .eq('user_id', rec.user_id)
+        .eq('date', rec.date)
+
+      const hrInserts = rec.project_breakdown.map(b => ({
+        user_id:    rec.user_id,
+        date:       rec.date,
+        project_id: b.project_id,
+        stage_id:   b.stage_id,
+        hours:      b.hours,
+        minutes:    b.minutes,
+      }))
+      const { error: insertError } = await supabase
+        .from('hour_reports')
+        .insert(hrInserts)
+    }
   }
 
   const handleApproveRecord = async (rec) => {
@@ -907,7 +975,7 @@ function Hours() {
                 <>
                   <span className="cal-status-approved">✓</span>
                   {(mins > 0 || attMins > 0) && (
-                    <span className="cal-day-hours">{toHHMM(mins > 0 ? mins : attMins)}</span>
+                    <span className="cal-day-hours">{toHHMM(attMins > 0 ? attMins : mins)}</span>
                   )}
                 </>
               )}
@@ -1053,11 +1121,13 @@ function Hours() {
                 <select className="hours-select" value={rec.project_id}
                   onChange={e => updateRecord(idx, 'project_id', e.target.value)}>
                   <option value="">פרויקט...</option>
+                  <option value={GENERAL_VALUE}>{GENERAL_LABEL}</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 <select className="hours-select hours-select-stage" value={rec.stage_id}
                   onChange={e => updateRecord(idx, 'stage_id', e.target.value)}>
                   <option value="">שלב...</option>
+                  <option value={GENERAL_VALUE}>{GENERAL_LABEL}</option>
                   {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
                 <select className="hours-time-select" value={rec.hours_hhmm}

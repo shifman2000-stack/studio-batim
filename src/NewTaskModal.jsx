@@ -6,14 +6,15 @@ import './NewTaskModal.css'
 //   project   — kanban project object → insert mode, read-only project
 //   editTask  — existing task object  → edit mode, read-only project
 //   (neither) — Tasks page new task  → insert mode, autocomplete project
-export default function NewTaskModal({ project: initialProject, editTask, onClose, onSaved }) {
+export default function NewTaskModal({ project: initialProject, editTask, onClose, onSaved, defaultProject }) {
   const isEdit     = !!editTask
   const isReadOnly = !!initialProject || isEdit
 
   // Autocomplete state (only when not read-only)
-  const [projectQuery,    setProjectQuery]    = useState('')
+  // defaultProject pre-fills both fields when the caller passes a project hint
+  const [projectQuery,    setProjectQuery]    = useState(defaultProject?.name || '')
   const [projectResults,  setProjectResults]  = useState([])
-  const [selectedProject, setSelectedProject] = useState(null)
+  const [selectedProject, setSelectedProject] = useState(defaultProject || null)
   const [searchOpen,      setSearchOpen]      = useState(false)
   const searchRef = useRef(null)
 

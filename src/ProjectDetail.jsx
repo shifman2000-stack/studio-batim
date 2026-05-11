@@ -129,6 +129,65 @@ function PdStatusPopover({ statusId, statusName, taskStatuses, onSelect }) {
   )
 }
 
+// ── Tasks tab inline edit cell ──
+// At module scope to prevent cursor-jump bug (inner function definition
+// caused remount + autoFocus on every keystroke).
+function PdEditCell({ task, field, className, children,
+  pdEditingCell, pdEditValue, setPdEditValue,
+  pdSaveEdit, pdHandleEditKey, pdTaskStages, pdUsers, pdStartEdit }) {
+  const isEditing = pdEditingCell?.taskId === task.id && pdEditingCell?.field === field
+  if (isEditing) {
+    if (field === 'stage_id') {
+      return (
+        <td className={className}>
+          <select className="tasks-cell-input" value={pdEditValue}
+            onChange={e => setPdEditValue(e.target.value)}
+            onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
+            <option value="">—</option>
+            {pdTaskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </td>
+      )
+    }
+    if (field === 'responsible_id') {
+      return (
+        <td className={className}>
+          <select className="tasks-cell-input" value={pdEditValue}
+            onChange={e => setPdEditValue(e.target.value)}
+            onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
+            <option value="">—</option>
+            {pdUsers.map(u => (
+              <option key={u.id} value={u.id}>{u.first_name}</option>
+            ))}
+          </select>
+        </td>
+      )
+    }
+    if (field === 'due_date') {
+      return (
+        <td className={className}>
+          <input type="date" className="tasks-cell-input" value={pdEditValue || ''}
+            onChange={e => setPdEditValue(e.target.value)}
+            onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
+        </td>
+      )
+    }
+    return (
+      <td className={className}>
+        <input className="tasks-cell-input" value={pdEditValue}
+          onChange={e => setPdEditValue(e.target.value)}
+          onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
+      </td>
+    )
+  }
+  const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
+  return (
+    <td className={className} onClick={() => pdStartEdit(task.id, field, editInitValue)}>
+      {children}
+    </td>
+  )
+}
+
 const TABS = [
   { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
@@ -513,59 +572,10 @@ function ProjectDetail() {
 
   const pdAnyFilter = !!(pdFilterAssignee || pdFilterStage || pdFilterStatus)
 
-  // ── Tasks tab inline edit cell ──
-  function PdEditCell({ task, field, className, children }) {
-    const isEditing = pdEditingCell?.taskId === task.id && pdEditingCell?.field === field
-    if (isEditing) {
-      if (field === 'stage_id') {
-        return (
-          <td className={className}>
-            <select className="tasks-cell-input" value={pdEditValue}
-              onChange={e => setPdEditValue(e.target.value)}
-              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
-              <option value="">—</option>
-              {pdTaskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </td>
-        )
-      }
-      if (field === 'responsible_id') {
-        return (
-          <td className={className}>
-            <select className="tasks-cell-input" value={pdEditValue}
-              onChange={e => setPdEditValue(e.target.value)}
-              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus>
-              <option value="">—</option>
-              {pdUsers.map(u => (
-                <option key={u.id} value={u.id}>{u.first_name}</option>
-              ))}
-            </select>
-          </td>
-        )
-      }
-      if (field === 'due_date') {
-        return (
-          <td className={className}>
-            <input type="date" className="tasks-cell-input" value={pdEditValue || ''}
-              onChange={e => setPdEditValue(e.target.value)}
-              onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
-          </td>
-        )
-      }
-      return (
-        <td className={className}>
-          <input className="tasks-cell-input" value={pdEditValue}
-            onChange={e => setPdEditValue(e.target.value)}
-            onBlur={pdSaveEdit} onKeyDown={pdHandleEditKey} autoFocus />
-        </td>
-      )
-    }
-    const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
-    return (
-      <td className={className} onClick={() => pdStartEdit(task.id, field, editInitValue)}>
-        {children}
-      </td>
-    )
+  // Props forwarded to the module-scope PdEditCell component
+  const pdEditCellProps = {
+    pdEditingCell, pdEditValue, setPdEditValue,
+    pdSaveEdit, pdHandleEditKey, pdTaskStages, pdUsers, pdStartEdit,
   }
 
   return (
@@ -720,19 +730,19 @@ function ProjectDetail() {
                               onSelect={(id, name) => handlePdStatusChange(task.id, id, name)}
                             />
                           </td>
-                          <PdEditCell task={task} field="stage_id" className="tasks-col-stage">
+                          <PdEditCell {...pdEditCellProps} task={task} field="stage_id" className="tasks-col-stage">
                             <span className="tasks-cell-value">{task.stages?.name || task.stage || ''}</span>
                           </PdEditCell>
-                          <PdEditCell task={task} field="description" className="tasks-col-desc">
+                          <PdEditCell {...pdEditCellProps} task={task} field="description" className="tasks-col-desc">
                             <span className="tasks-cell-value">{task.description || ''}</span>
                           </PdEditCell>
-                          <PdEditCell task={task} field="responsible_id" className="tasks-col-assignee">
+                          <PdEditCell {...pdEditCellProps} task={task} field="responsible_id" className="tasks-col-assignee">
                             <span className="tasks-cell-value">{task.profiles?.first_name || ''}</span>
                           </PdEditCell>
-                          <PdEditCell task={task} field="due_date" className="tasks-col-date">
+                          <PdEditCell {...pdEditCellProps} task={task} field="due_date" className="tasks-col-date">
                             <span className="tasks-cell-value">{pdFormatDate(task.due_date)}</span>
                           </PdEditCell>
-                          <PdEditCell task={task} field="notes" className="tasks-col-notes">
+                          <PdEditCell {...pdEditCellProps} task={task} field="notes" className="tasks-col-notes">
                             <span className="tasks-cell-value">{task.notes || ''}</span>
                           </PdEditCell>
                           <td className="tasks-col-delete" onClick={e => e.stopPropagation()}>

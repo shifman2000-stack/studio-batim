@@ -144,6 +144,69 @@ function StatusPopover({ statusId, statusName, taskStatuses, onSelect }) {
   )
 }
 
+// ── Editable cell renderer ──
+// At module scope so React sees the same component type across re-renders.
+// Previously nested inside Tasks(), which created a new function reference on every
+// render → remount + autoFocus on every keystroke → cursor always jumped to end.
+function EditCell({ task, field, className, children,
+  archiveView, editingCell, editValue, setEditValue,
+  saveEdit, handleEditKey, taskStages, users, startEdit }) {
+  if (archiveView) {
+    return <td className={className}>{children}</td>
+  }
+  const isEditing = editingCell?.taskId === task.id && editingCell?.field === field
+  if (isEditing) {
+    if (field === 'stage_id') {
+      return (
+        <td className={className}>
+          <select className="tasks-cell-input" value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus>
+            <option value="">—</option>
+            {taskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </td>
+      )
+    }
+    if (field === 'responsible_id') {
+      return (
+        <td className={className}>
+          <select className="tasks-cell-input" value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus>
+            <option value="">—</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.first_name}</option>
+            ))}
+          </select>
+        </td>
+      )
+    }
+    if (field === 'due_date') {
+      return (
+        <td className={className}>
+          <input type="date" className="tasks-cell-input" value={editValue || ''}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus />
+        </td>
+      )
+    }
+    return (
+      <td className={className}>
+        <input className="tasks-cell-input" value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus />
+      </td>
+    )
+  }
+  const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
+  return (
+    <td className={className} onClick={() => startEdit(task.id, field, editInitValue)}>
+      {children}
+    </td>
+  )
+}
+
 // ── Main component ──
 export default function Tasks() {
   const [tasks,        setTasks]        = useState([])
@@ -151,7 +214,6 @@ export default function Tasks() {
   const [users,        setUsers]        = useState([])
   const [taskStages,   setTaskStages]   = useState([])
   const [taskStatuses, setTaskStatuses] = useState([])
-  const [descTooltip,  setDescTooltip]  = useState({ visible: false, text: '', x: 0, y: 0 })
   const [loading,      setLoading]      = useState(true)
 
   // Archive view
@@ -431,62 +493,10 @@ export default function Tasks() {
     return `${day}/${m}/${y}`
   }
 
-  // ── Editable cell renderer ──
-  function EditCell({ task, field, className, children }) {
-    if (archiveView) {
-      return <td className={className}>{children}</td>
-    }
-    const isEditing = editingCell?.taskId === task.id && editingCell?.field === field
-    if (isEditing) {
-      if (field === 'stage_id') {
-        return (
-          <td className={className}>
-            <select className="tasks-cell-input" value={editValue}
-              onChange={e => setEditValue(e.target.value)}
-              onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus>
-              <option value="">—</option>
-              {taskStages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </td>
-        )
-      }
-      if (field === 'responsible_id') {
-        return (
-          <td className={className}>
-            <select className="tasks-cell-input" value={editValue}
-              onChange={e => setEditValue(e.target.value)}
-              onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus>
-              <option value="">—</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.first_name}</option>
-              ))}
-            </select>
-          </td>
-        )
-      }
-      if (field === 'due_date') {
-        return (
-          <td className={className}>
-            <input type="date" className="tasks-cell-input" value={editValue || ''}
-              onChange={e => setEditValue(e.target.value)}
-              onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus />
-          </td>
-        )
-      }
-      return (
-        <td className={className}>
-          <input className="tasks-cell-input" value={editValue}
-            onChange={e => setEditValue(e.target.value)}
-            onBlur={saveEdit} onKeyDown={handleEditKey} autoFocus />
-        </td>
-      )
-    }
-    const editInitValue = field === 'stage_id' ? (task.stage_id ?? '') : (task[field] ?? '')
-    return (
-      <td className={className} onClick={() => startEdit(task.id, field, editInitValue)}>
-        {children}
-      </td>
-    )
+  // Props forwarded to the module-scope EditCell component
+  const editCellProps = {
+    archiveView, editingCell, editValue, setEditValue,
+    saveEdit, handleEditKey, taskStages, users, startEdit,
   }
 
   return (
@@ -620,28 +630,25 @@ export default function Tasks() {
                         <span className="tasks-cell-value">{task.projects?.name || task.project_name || ''}</span>
                       </td>
 
-                      <EditCell task={task} field="stage_id" className="tasks-col-stage">
+                      <EditCell {...editCellProps} task={task} field="stage_id" className="tasks-col-stage">
                         <span className="tasks-cell-value">{task.stages?.name || task.stage || ''}</span>
                       </EditCell>
 
-                      <EditCell task={task} field="description" className="tasks-col-desc">
+                      <EditCell {...editCellProps} task={task} field="description" className="tasks-col-desc">
                         <span
                           className="tasks-cell-value"
-                          onMouseEnter={e => task.description && setDescTooltip({ visible: true, text: task.description, x: e.clientX, y: e.clientY })}
-                          onMouseMove={e => setDescTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }))}
-                          onMouseLeave={() => setDescTooltip(t => ({ ...t, visible: false }))}
                         >{task.description || ''}</span>
                       </EditCell>
 
-                      <EditCell task={task} field="responsible_id" className="tasks-col-assignee">
+                      <EditCell {...editCellProps} task={task} field="responsible_id" className="tasks-col-assignee">
                         <span className="tasks-cell-value">{task.profiles?.first_name || ''}</span>
                       </EditCell>
 
-                      <EditCell task={task} field="due_date" className="tasks-col-date">
+                      <EditCell {...editCellProps} task={task} field="due_date" className="tasks-col-date">
                         <span className="tasks-cell-value">{formatDate(task.due_date)}</span>
                       </EditCell>
 
-                      <EditCell task={task} field="notes" className="tasks-col-notes">
+                      <EditCell {...editCellProps} task={task} field="notes" className="tasks-col-notes">
                         <span className="tasks-cell-value">{task.notes || ''}</span>
                       </EditCell>
 
@@ -727,6 +734,7 @@ export default function Tasks() {
         <NewTaskModal
           onClose={() => setShowNewTask(false)}
           onSaved={handleTaskSaved}
+          defaultProject={filterProject ? (projects.find(p => String(p.id) === filterProject) || null) : null}
         />
       )}
 
@@ -734,18 +742,6 @@ export default function Tasks() {
         <div className="ktm-toast">המשימה נשמרה ✓</div>
       )}
 
-      {descTooltip.visible && createPortal(
-        <div style={{
-          position: 'fixed', top: descTooltip.y + 14, left: descTooltip.x + 14,
-          background: '#1a1a18', color: '#fff', padding: '5px 10px',
-          borderRadius: 4, fontSize: 13, zIndex: 9999, pointerEvents: 'none',
-          maxWidth: 360, whiteSpace: 'pre-wrap', boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-          fontFamily: 'Heebo, sans-serif', lineHeight: 1.4,
-        }}>
-          {descTooltip.text}
-        </div>,
-        document.body
-      )}
     </div>
   )
 }

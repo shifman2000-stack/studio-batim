@@ -13,7 +13,6 @@ export default async function handler(req, res) {
 
   // Vercel auto-parses JSON bodies; guard against string-encoded bodies just in case
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
-  console.log('[generate-pdf] start, body:', req.body)
   const { quoteId } = body || {}
 
   if (!quoteId) {
@@ -26,8 +25,6 @@ export default async function handler(req, res) {
   const host     = req.headers.host
   const printUrl = `${protocol}://${host}/quote-print/${quoteId}`
 
-  console.log('[generate-pdf] navigating to:', printUrl)
-
   let browser = null
   try {
     browser = await puppeteer.launch({
@@ -39,17 +36,8 @@ export default async function handler(req, res) {
 
     const page = await browser.newPage()
 
-    page.on('console', msg => console.log('[puppeteer console]', msg.type(), msg.text()))
-    page.on('pageerror', err => console.log('[puppeteer pageerror]', err.message))
-    page.on('requestfailed', req => console.log('[puppeteer requestfailed]', req.url(), req.failure()?.errorText))
-
     // Navigate to the clean print route (all 4 A4 pages, no UI chrome)
-    console.log('[generate-pdf] navigating to:', printUrl)
     await page.goto(printUrl, { waitUntil: 'networkidle0', timeout: 30000 })
-
-    const html = await page.content()
-    console.log('[generate-pdf] page html length:', html.length)
-    console.log('[generate-pdf] page html first 500 chars:', html.substring(0, 500))
 
     // Switch to print media so @page rules and break-after:page take effect.
     // Without this, Chromium renders in screen media and ignores all paged-media CSS.

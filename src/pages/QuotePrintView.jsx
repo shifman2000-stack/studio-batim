@@ -18,11 +18,9 @@ export default function QuotePrintView() {
     const load = async () => {
       // Single RPC call — SECURITY DEFINER, EXECUTE granted to anon.
       // Bypasses RLS on quotes + inquiries so Puppeteer (unauthenticated) can render the PDF.
-      console.log('[QuotePrintView] fetching quote', quoteId)
       const { data: rpcData, error } = await supabase
         .rpc('get_quote_for_print', { p_quote_id: quoteId })
 
-      console.log('[QuotePrintView] rpc result:', { data: rpcData, error })
       const row = Array.isArray(rpcData) ? rpcData[0] : rpcData
 
       if (error || !row) {
@@ -32,8 +30,6 @@ export default function QuotePrintView() {
 
       const quote = row.quote
       const inq   = row.inquiry
-
-      console.log('[QuotePrintView] rendering with quote:', !!quote, 'inquiry:', !!inq)
 
       if (!quote || !inq) {
         setError('הצעת מחיר לא נמצאה')

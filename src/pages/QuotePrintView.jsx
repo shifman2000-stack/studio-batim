@@ -16,31 +16,31 @@ export default function QuotePrintView() {
 
   useEffect(() => {
     const load = async () => {
-      // 1. Fetch the quote row by id
-      const { data: quote, error: qErr } = await supabase
-        .from('quotes')
-        .select('*')
-        .eq('id', quoteId)
-        .single()
+      // Single RPC call — SECURITY DEFINER, EXECUTE granted to anon.
+      // Bypasses RLS on quotes + inquiries so Puppeteer (unauthenticated) can render the PDF.
+      console.log('[QuotePrintView] fetching quote', quoteId)
+      const { data: rpcData, error } = await supabase
+        .rpc('get_quote_for_print', { p_quote_id: quoteId })
 
-      if (qErr || !quote) {
-        setError(qErr?.message ?? 'הצעת מחיר לא נמצאה')
+      console.log('[QuotePrintView] rpc result:', { data: rpcData, error })
+      const row = Array.isArray(rpcData) ? rpcData[0] : rpcData
+
+      if (error || !row) {
+        setError(error?.message ?? 'הצעת מחיר לא נמצאה')
         return
       }
 
-      // 2. Fetch the related inquiry (needed for buildInitialData defaults)
-      const { data: inq, error: iErr } = await supabase
-        .from('inquiries')
-        .select('*')
-        .eq('id', quote.inquiry_id)
-        .single()
+      const quote = row.quote
+      const inq   = row.inquiry
 
-      if (iErr || !inq) {
-        setError(iErr?.message ?? 'פנייה לא נמצאה')
+      console.log('[QuotePrintView] rendering with quote:', !!quote, 'inquiry:', !!inq)
+
+      if (!quote || !inq) {
+        setError('הצעת מחיר לא נמצאה')
         return
       }
 
-      // 3. Merge saved draft_content onto current defaults — identical to QuoteBuilder's logic
+      // Merge saved draft_content onto current defaults — identical to QuoteBuilder's logic
       const base   = buildInitialData(inq)
       const merged = quote.draft_content
         ? { ...base, ...quote.draft_content }

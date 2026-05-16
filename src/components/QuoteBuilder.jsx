@@ -40,8 +40,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
         .limit(1)
         .maybeSingle()
 
-      console.log('loaded quote:', existing, 'error:', loadError)
-
       if (existing) {
         // Merge saved content onto current defaults so any new schema fields
         // introduced since the draft was saved get a safe fallback value.
@@ -86,7 +84,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
   const doSave = async () => {
     const toSave = dataRef.current ?? data
     if (!toSave) throw new Error('no data to save')
-    console.log('saving data:', toSave)
 
     if (quoteId) {
       // Row already exists — update it
@@ -96,7 +93,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
         .eq('id', quoteId)
         .select()
         .single()
-      console.log('save result (update):', saved, error)
       if (error) throw error
       return quoteId
     } else {
@@ -111,7 +107,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
         }])
         .select()
         .single()
-      console.log('save result (insert):', created, error)
       if (error) throw error
       setQuoteId(created.id)
       onQuoteUpdated?.(inquiry.id, { id: created.id, status: 'draft' })
@@ -127,7 +122,6 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
       flash('נשמר ✓')
     } catch (err) {
       console.error('save error:', err)
-      console.log('save error full:', JSON.stringify(err))
       flash('שגיאה בשמירה')
     } finally {
       setSaving(false)
@@ -716,7 +710,14 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
                   const link = `${window.location.origin}/quote/${sendResultModal.token}`
                   const subject = 'הצעת מחיר — סטודיו בתים'
                   const body = `שלום ${inquiry.first_name},\n\nמצורף קישור להצעת מחיר עבורכם:\n${link}\n\nנשמח לקבל את חתימתכם דרך הקישור.\n\nלכל שאלה אני זמינה.\n\nבברכה,\nעינב שיפמן\nסטודיו בתים`
-                  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(inquiry.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                  const primaryEmail   = (inquiry.email         || '').trim()
+                  const secondaryEmail = (inquiry.contact2_email || '').trim()
+                  const toEmails = [primaryEmail]
+                  if (secondaryEmail && secondaryEmail.toLowerCase() !== primaryEmail.toLowerCase()) {
+                    toEmails.push(secondaryEmail)
+                  }
+                  const toParam  = toEmails.map(e => encodeURIComponent(e)).join(',')
+                  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${toParam}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
                   window.open(gmailUrl, '_blank')
                 }}
               >

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import QuoteBuilder from '../components/QuoteBuilder'
 import './Inquiries.css'
 
 /* ─────────── Status config ─────────── */
@@ -737,7 +736,6 @@ export default function Inquiries() {
   const [convertModalRow, setConvertModalRow] = useState(null) // row pending conversion
   const [converting, setConverting]     = useState(false)
   const [quotes, setQuotes]             = useState({})        // { [inquiry_id]: quote_object }
-  const [quoteBuilderRow, setQuoteBuilderRow] = useState(null)
 
   /* ── Admin guard ── */
   useEffect(() => {
@@ -790,14 +788,6 @@ export default function Inquiries() {
       setQuotes(qMap)
     }
     setLoading(false)
-  }
-
-  /* ── Quote updated callback ── */
-  const handleQuoteUpdated = (inquiryId, update) => {
-    setQuotes(prev => ({
-      ...prev,
-      [inquiryId]: { ...(prev[inquiryId] ?? {}), ...update },
-    }))
   }
 
   /* ── Inline patch (status / meeting_date) ── */
@@ -947,6 +937,7 @@ export default function Inquiries() {
             <thead>
               <tr>
                 <th className="inq-col-name">שם</th>
+                <th className="inq-col-city">יישוב</th>
                 <th className="inq-col-phone">טלפון</th>
                 <th className="inq-col-date">תאריך פניה</th>
                 <th className="inq-col-action">טופס פניה</th>
@@ -965,6 +956,9 @@ export default function Inquiries() {
                 >
                   {/* שם */}
                   <td className="inq-col-name">{fullName(row)}</td>
+
+                  {/* יישוב */}
+                  <td className="inq-col-city">{row.city || '—'}</td>
 
                   {/* טלפון */}
                   <td className="inq-col-phone" dir="ltr">{row.phone || '—'}</td>
@@ -1012,7 +1006,7 @@ export default function Inquiries() {
                   <td className="inq-col-action" onClick={e => e.stopPropagation()}>
                     <QuoteIcon
                       quote={quotes[row.id] ?? null}
-                      onClick={() => setQuoteBuilderRow(row)}
+                      onClick={() => window.open(`/quote-builder/${row.id}`, '_blank', 'noopener,noreferrer')}
                     />
                   </td>
 
@@ -1073,14 +1067,6 @@ export default function Inquiries() {
         />
       )}
 
-      {/* ── Quote Builder (full-screen) ── */}
-      {quoteBuilderRow && (
-        <QuoteBuilder
-          inquiry={quoteBuilderRow}
-          onClose={() => setQuoteBuilderRow(null)}
-          onQuoteUpdated={handleQuoteUpdated}
-        />
-      )}
     </div>
   )
 }

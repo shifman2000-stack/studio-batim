@@ -24,6 +24,7 @@ import QuotePrintView from './pages/QuotePrintView'
 import QuotePrintSigned from './pages/QuotePrintSigned'
 import QuotePublic from './pages/QuotePublic'
 import ResetPassword from './pages/ResetPassword'
+import QuoteBuilderPage from './pages/QuoteBuilderPage'
 
 function Layout() {
   return (
@@ -60,6 +61,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reports/hours" element={<HoursReport />} />
           <Route path="/inquiries" element={<Inquiries />} />
           <Route path="/reports/inquiries" element={<InquiriesReport />} />
+          <Route path="/quote-builder/:inquiryId" element={<QuoteBuilderPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,0 +1,357 @@
+.fod-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fod-card {
+  background: #F7F5F2;
+  border-radius: 8px;
+  width: 600px;
+  padding: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.fod-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.fod-title {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 20px;
+  color: #111;
+}
+
+/* Matches .prof-modal-close / .ktm-close pattern used in existing modals */
+.fod-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.fod-close:hover {
+  color: #555;
+}
+
+.fod-body {
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* ── Idle step ── */
+.fod-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+/* Primary pick button — matches btn-add-project / modal-btn-add pattern */
+.fod-btn-pick {
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Heebo', sans-serif;
+  cursor: pointer;
+}
+
+.fod-btn-pick:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.fod-btn-pick:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fod-error {
+  color: #c0392b;
+  font-size: 13px;
+  font-family: 'Heebo', sans-serif;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Selected step ── */
+.fod-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.fod-folder-card {
+  background: #fff;
+  border: 1px solid #e8e3dc;
+  border-radius: 8px;
+  padding: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+.fod-folder-label {
+  color: #888;
+  font-size: 12px;
+  font-family: 'Heebo', sans-serif;
+  margin: 0 0 6px 0;
+}
+
+.fod-folder-name {
+  font-weight: 500;
+  font-size: 16px;
+  color: #111;
+  font-family: 'Heebo', sans-serif;
+  margin: 0 0 6px 0;
+}
+
+.fod-folder-id {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  color: #999;
+  margin: 0;
+  word-break: break-all;
+  direction: ltr;
+  text-align: left;
+}
+
+/* Text-link style button */
+.fod-btn-replace {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 13px;
+  font-family: 'Heebo', sans-serif;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.fod-btn-replace:hover {
+  color: #111;
+}
+
+.fod-coming-soon {
+  color: #aaa;
+  font-size: 12px;
+  font-style: italic;
+  font-family: 'Heebo', sans-serif;
+  margin: 0;
+}
+
+/* ── Loading step ── */
+.fod-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 0;
+}
+
+/* CSS-only spinner — no extra dependencies */
+.fod-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #555;
+  border-radius: 50%;
+  animation: fod-spin 0.75s linear infinite;
+}
+
+@keyframes fod-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fod-loading-text {
+  color: #666;
+  font-size: 14px;
+  font-family: 'Heebo', sans-serif;
+  margin: 0;
+}
+
+/* ── Error step ── */
+.fod-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+/* ── Listed step ── */
+.fod-listed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: right;
+}
+
+/* Folder name row at top of listed step */
+.fod-listed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fod-listed-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fod-folder-label-inline {
+  font-size: 12px;
+  color: #888;
+  font-family: 'Heebo', sans-serif;
+}
+
+.fod-folder-name-inline {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111;
+  font-family: 'Heebo', sans-serif;
+}
+
+/* Scrollable file list container */
+.fod-file-list-wrap {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e8e3dc;
+  border-radius: 6px;
+}
+
+/* File table */
+.fod-file-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: 'Heebo', sans-serif;
+  text-align: right;
+  direction: rtl;
+}
+
+.fod-file-table th {
+  background: #ede9e3;
+  color: #555;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* In RTL, border-left separates columns visually */
+  border-left: 1px solid #ddd8d0;
+}
+
+.fod-file-table th:last-child {
+  border-left: none;
+}
+
+.fod-file-table tbody tr:nth-child(odd) td {
+  background: #fff;
+}
+
+.fod-file-table tbody tr:nth-child(even) td {
+  background: #faf9f7;
+}
+
+.fod-file-table tbody tr:hover td {
+  background: #ede9e3;
+}
+
+.fod-file-table td {
+  padding: 8px 12px;
+  color: #374151;
+  border-bottom: 1px solid #f0eeeb;
+  border-left: 1px solid #f0eeeb;
+}
+
+.fod-file-table td:last-child {
+  border-left: none;
+}
+
+/* Column widths */
+.fod-td-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fod-td-type {
+  white-space: nowrap;
+  color: #666;
+}
+
+.fod-td-size {
+  white-space: nowrap;
+  color: #666;
+  direction: ltr;
+  text-align: left;
+}
+
+.fod-td-date {
+  white-space: nowrap;
+  color: #666;
+}
+
+/* Empty folder message */
+.fod-empty {
+  padding: 24px;
+  color: #999;
+  font-size: 13px;
+  font-family: 'Heebo', sans-serif;
+  text-align: center;
+  margin: 0;
+}
+
+/* Debug folder ID footer */
+.fod-debug-id {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  color: #bbb;
+  margin: 0;
+  direction: ltr;
+  text-align: left;
+}
+
+.fod-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.fod-btn-close {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-family: 'Heebo', sans-serif;
+  color: #111;
+  cursor: pointer;
+}
+
+.fod-btn-close:hover {
+  background: #f0eeeb;
+}

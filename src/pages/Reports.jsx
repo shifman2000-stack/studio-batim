@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import '../pages/Reports.css'
+import FolderOrganizerDialog from '../components/FolderOrganizerDialog'
 
 export default function Reports() {
   const [role, setRole] = useState(null)
+  const [folderOrganizerOpen, setFolderOrganizerOpen] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -39,7 +41,17 @@ export default function Reports() {
           <div className="report-card-title">דוח פניות</div>
           <div className="report-card-desc">סיכום פניות לפי שנה, אחוז המרה לפרויקטים וגרף חודשי</div>
         </div>
+        <div className="report-card" onClick={() => setFolderOrganizerOpen(true)}>
+          <div className="report-card-icon">📁</div>
+          <div className="report-card-title">סידור תיקיות פרויקט</div>
+          <div className="report-card-desc">המלצות AI לסידור תיקיות פרויקט ב-Google Drive</div>
+        </div>
       </div>
+
+      <FolderOrganizerDialog
+        isOpen={folderOrganizerOpen}
+        onClose={() => setFolderOrganizerOpen(false)}
+      />
     </div>
   )
 }

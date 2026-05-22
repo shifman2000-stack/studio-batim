@@ -733,6 +733,8 @@ export default function Inquiries() {
   const [loading, setLoading]           = useState(true)
   const [modalRow, setModalRow]         = useState(undefined) // undefined = closed, null = new, obj = edit
   const [confirmId, setConfirmId]       = useState(null)      // row id pending inline delete
+  const [deletePopoverPos, setDeletePopoverPos] = useState({ top: 0, left: 0 })
+  const deletePopoverRef = useRef(null)
   const [convertModalRow, setConvertModalRow] = useState(null) // row pending conversion
   const [converting, setConverting]     = useState(false)
   const [quotes, setQuotes]             = useState({})        // { [inquiry_id]: quote_object }
@@ -750,6 +752,18 @@ export default function Inquiries() {
     }
     check()
   }, [navigate])
+
+  /* ── Close delete popover on outside click ── */
+  useEffect(() => {
+    if (!confirmId) return
+    function handler(e) {
+      if (deletePopoverRef.current && !deletePopoverRef.current.contains(e.target)) {
+        setConfirmId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [confirmId])
 
   /* ── Fetch ── */
   useEffect(() => {
@@ -1020,23 +1034,17 @@ export default function Inquiries() {
 
                   {/* מחק */}
                   <td className="inq-col-delete" onClick={e => e.stopPropagation()}>
-                    {confirmId === row.id ? (
-                      <div className="inq-delete-confirm">
-                        <span className="inq-delete-confirm-text">מחק?</span>
-                        <button className="inq-delete-confirm-yes"
-                          onClick={() => handleRowDelete(row.id)}>כן</button>
-                        <button className="inq-delete-confirm-no"
-                          onClick={() => setConfirmId(null)}>לא</button>
-                      </div>
-                    ) : (
-                      <button
-                        className="inq-delete-btn"
-                        onClick={() => setConfirmId(row.id)}
-                        title="מחק"
-                      >
-                        <IconTrash size={15} />
-                      </button>
-                    )}
+                    <button
+                      className="inq-delete-btn"
+                      onClick={e => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setDeletePopoverPos({ top: rect.bottom + 4, left: rect.left })
+                        setConfirmId(row.id)
+                      }}
+                      title="מחק"
+                    >
+                      <IconTrash size={15} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1065,6 +1073,21 @@ export default function Inquiries() {
           onCancel={() => setConvertModalRow(null)}
           converting={converting}
         />
+      )}
+
+      {/* ── Row delete confirm popover ── */}
+      {confirmId && createPortal(
+        <div
+          ref={deletePopoverRef}
+          className="inq-delete-popover"
+          style={{ position: 'fixed', top: deletePopoverPos.top, left: deletePopoverPos.left, zIndex: 9999 }}
+          dir="rtl"
+        >
+          <span className="inq-delete-popover-text">מחק פנייה?</span>
+          <button className="inq-delete-confirm-yes" onClick={() => handleRowDelete(confirmId)}>מחק</button>
+          <button className="inq-delete-confirm-no" onClick={() => setConfirmId(null)}>ביטול</button>
+        </div>,
+        document.body
       )}
 
     </div>

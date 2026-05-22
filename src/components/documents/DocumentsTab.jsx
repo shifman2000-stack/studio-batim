@@ -7,17 +7,16 @@ const ACCENT   = '#7bc1b5'
 const ACCENT_DARK = '#4a9a8c'
 const BUCKET   = 'project-files'
 
-const STAGE_ORDER = [
-  'קליטה ותיק מידע',
-  'הגא פטור',
-  'הגא ממד חדש',
-  'הקלה',
-  'פתיחת בקשה',
-  'הכנת מסמכים למנהל',
-  'בקרת תכן',
-  'סיום בקשה',
-  'תחילת עבודה - טופס 2',
-  'תעודת גמר - טופס 4',
+/* ── Stage definitions (order + kanban colors) — mirrors TasksTab.STAGES ── */
+const STAGES = [
+  { name: 'קליטת פרויקט', bg: '#f0f0f0', text: '#000' },
+  { name: 'סקיצות',        bg: '#e8e197', text: '#000' },
+  { name: 'הדמיה',         bg: '#cbc9a2', text: '#000' },
+  { name: 'הכנת גרמושקה',  bg: '#73946e', text: '#fff' },
+  { name: 'רישוי',         bg: '#7bc1b5', text: '#000' },
+  { name: 'תוכניות עבודה', bg: '#676977', text: '#fff' },
+  { name: 'בניה',          bg: '#89748b', text: '#fff' },
+  { name: 'גמר',           bg: '#87526d', text: '#fff' },
 ]
 
 const STATUS_OPTIONS = ['חסר', 'התקבל']
@@ -237,14 +236,14 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPr
 }
 
 /* ── Add custom doc inline form ── */
-function AddDocRow({ stage, onAdd }) {
+function AddDocRow({ stage, stageId, subStageId, onAdd }) {
   const [adding, setAdding]   = useState(false)
   const [name,   setName]     = useState('')
   const inputRef              = useRef(null)
 
   const confirm = async () => {
     if (!name.trim()) return
-    await onAdd(stage, name.trim())
+    await onAdd(stage, stageId, subStageId, name.trim())
     setName(''); setAdding(false)
   }
 
@@ -277,6 +276,8 @@ function AddDocRow({ stage, onAdd }) {
 /* ── Main component ── */
 export default function DocumentsTab({ projectId }) {
   const [docs,        setDocs]        = useState([])
+  const [stagesLut,   setStagesLut]   = useState([])
+  const [subStages,   setSubStages]   = useState([])
   const [loading,     setLoading]     = useState(true)
   const [openStages,  setOpenStages]  = useState({})
   const [previewFile,    setPreviewFile]    = useState(null) // { url, name }
@@ -311,13 +312,50 @@ export default function DocumentsTab({ projectId }) {
   const loadDocs = async () => {
     setLoading(true)
 
-    let { data } = await supabase
-      .from('project_documents')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('sort_order')
+    /* ── Fetch LUTs (stages + sub_stages) ── */
+    const [
+      { data: stagesLutData },
+      { data: subStagesData },
+    ] = await Promise.all([
+      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('sub_stages').select('id, name, stage_id, order_index').order('order_index'),
+    ])
+    setStagesLut(stagesLutData || [])
+    setSubStages(subStagesData || [])
 
-    if (data && data.length === 0) {
+    /* ── Step 1: clean up any duplicates (keep MIN id per project+template) ── */
+    const { data: allRows } = await supabase
+      .from('project_documents')
+      .select('id, project_id, template_id')
+      .not('template_id', 'is', null)
+      .order('id', { ascending: true })
+
+    if (allRows && allRows.length > 0) {
+      const seen     = new Map()
+      const toDelete = []
+      for (const row of allRows) {
+        const key = `${row.project_id}:${row.template_id}`
+        if (seen.has(key)) {
+          toDelete.push(row.id)
+        } else {
+          seen.set(key, row.id)
+        }
+      }
+      if (toDelete.length > 0) {
+        await supabase.from('project_documents').delete().in('id', toDelete)
+      }
+    }
+
+    /* ── Step 2: use a count check before deciding to seed ── */
+    const { count } = await supabase
+      .from('project_documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+
+    let data = null
+
+    if (count === 0) {
+      /* No rows yet — seed from templates */
       const { data: templates } = await supabase
         .from('document_templates')
         .select('*')
@@ -328,6 +366,8 @@ export default function DocumentsTab({ projectId }) {
           project_id:  projectId,
           template_id: t.id,
           stage:       t.stage,
+          stage_id:     t.stage_id ?? null,
+          sub_stage_id: t.sub_stage_id ?? null,
           name:        t.name,
           required:    true,
           status:      'חסר',
@@ -342,9 +382,19 @@ export default function DocumentsTab({ projectId }) {
       }
     }
 
+    /* ── Step 3: fetch current rows if not already set from insert ── */
+    if (!data) {
+      const { data: fetched } = await supabase
+        .from('project_documents')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('sort_order')
+      data = fetched
+    }
+
     setDocs(data || [])
     const state = {}
-    STAGE_ORDER.forEach(s => { state[s] = false })
+    STAGES.forEach(s => { state[s.name] = false })
     setOpenStages(state)
     setLoading(false)
   }
@@ -378,19 +428,25 @@ export default function DocumentsTab({ projectId }) {
   }
 
   /* ── Add custom doc ── */
-  const addCustomDoc = async (stage, name) => {
-    const stageDocs = docs.filter(d => d.stage === stage)
-    const maxOrder  = stageDocs.reduce((m, d) => Math.max(m, d.sort_order ?? 0), 0)
+  const addCustomDoc = async (stage, stageId, subStageId, name) => {
+    /* peers = docs already in the same target group (for sort_order) */
+    const peers = docs.filter(d => {
+      if (subStageId == null) return d.stage_id === stageId && d.sub_stage_id == null
+      return d.sub_stage_id === subStageId
+    })
+    const maxOrder = peers.reduce((m, d) => Math.max(m, d.sort_order ?? 0), 0)
     const { data } = await supabase
       .from('project_documents')
       .insert([{
-        project_id:  projectId,
-        template_id: null,
+        project_id:   projectId,
+        template_id:  null,
         stage,
+        stage_id:     stageId,
+        sub_stage_id: subStageId,
         name,
-        required:    true,
-        status:      'חסר',
-        sort_order:  maxOrder + 1,
+        required:     true,
+        status:       'חסר',
+        sort_order:   maxOrder + 1,
       }])
       .select()
       .single()
@@ -416,10 +472,20 @@ export default function DocumentsTab({ projectId }) {
 
   /* ── Group by stage ── */
   const byStage = {}
-  STAGE_ORDER.forEach(s => { byStage[s] = [] })
+  STAGES.forEach(s => { byStage[s.name] = [] })
   docs.forEach(d => {
     if (byStage[d.stage]) byStage[d.stage].push(d)
     else byStage[d.stage] = [d]
+  })
+
+  /* ── Lookups derived from LUTs ── */
+  const stageIdByName = {}
+  stagesLut.forEach(s => { stageIdByName[s.name] = s.id })
+
+  const subStagesByStageId = {}
+  subStages.forEach(ss => {
+    if (!subStagesByStageId[ss.stage_id]) subStagesByStageId[ss.stage_id] = []
+    subStagesByStageId[ss.stage_id].push(ss)
   })
 
   const toggleStage = (stage) =>
@@ -448,51 +514,99 @@ export default function DocumentsTab({ projectId }) {
 
         {/* Accordions */}
         <div className="dt-accordions">
-          {STAGE_ORDER.map(stage => {
-            const stageDocs     = byStage[stage] || []
-            const stageReceived = stageDocs.filter(d => d.status === 'התקבל')
-            const isComplete    = stageDocs.length > 0 && stageReceived.length === stageDocs.length
-            const isOpen        = openStages[stage]
+          {STAGES.map(({ name: stage, bg, text }) => {
+            const stageDocs      = byStage[stage] || []
+            const stageReceived  = stageDocs.filter(d => d.status === 'התקבל')
+            const isComplete     = stageDocs.length > 0 && stageReceived.length === stageDocs.length
+            const isOpen         = openStages[stage]
+            const stageId        = stageIdByName[stage] ?? null
+            const stageSubStages = stageId != null ? (subStagesByStageId[stageId] || []) : []
+            const hasSubStages   = stageSubStages.length > 0
 
             return (
               <div key={stage} className="dt-accordion">
                 <button
                   type="button"
-                  className={'dt-accordion-header' + (isComplete ? ' dt-accordion-header--complete' : '')}
+                  className="dt-accordion-header"
+                  style={{ background: bg, color: text }}
                   onClick={() => toggleStage(stage)}
                 >
                   <span className="dt-accordion-arrow">{isOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
                   <span className="dt-accordion-title">{stage}</span>
-                  <span className={'dt-accordion-count' + (isComplete ? ' dt-accordion-count--complete' : '')}>
+                  <span className="dt-accordion-count" style={{
+                    background: 'rgba(255,255,255,0.3)',
+                    color: text,
+                  }}>
                     {stageReceived.length}/{stageDocs.length}
                   </span>
                 </button>
 
                 {isOpen && (
                   <div className="dt-accordion-body">
-                    <div className="dt-table-header">
-                      <div className="dt-col-name">שם המסמך</div>
-                      <div className="dt-col-status">סטטוס</div>
-                      <div className="dt-col-date">תאריך</div>
-                      <div className="dt-col-file">קובץ</div>
-                      <div className="dt-col-notes">הערות</div>
-                      <div className="dt-col-delete" />
-                    </div>
+                    {stageDocs.length > 0 && (
+                      <div className="dt-table-header">
+                        <div className="dt-col-name">שם המסמך</div>
+                        <div className="dt-col-status">סטטוס</div>
+                        <div className="dt-col-date">תאריך</div>
+                        <div className="dt-col-file">קובץ</div>
+                        <div className="dt-col-notes">הערות</div>
+                        <div className="dt-col-delete" />
+                      </div>
+                    )}
 
-                    {stageDocs.map((doc, i) => (
-                      <DocRow
-                        key={doc.id}
-                        doc={doc}
-                        index={i}
-                        onPatch={patchDoc}
-                        onUpload={uploadFile}
-                        onFileDelete={deleteFile}
-                        onDocDelete={deleteDoc}
-                        onPreview={setPreviewFile}
-                      />
-                    ))}
-
-                    <AddDocRow stage={stage} onAdd={addCustomDoc} />
+                    {hasSubStages ? (
+                      /* Stage HAS sub-stages — render grouped by sub_stage_id */
+                      stageSubStages.map(ss => {
+                        const ssDocs = stageDocs
+                          .filter(d => d.sub_stage_id === ss.id)
+                          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                        return (
+                          <div key={ss.id} className="dt-sub-stage-group">
+                            <div className="dt-sub-stage-header">{ss.name}</div>
+                            {ssDocs.map((doc, i) => (
+                              <DocRow
+                                key={doc.id}
+                                doc={doc}
+                                index={i}
+                                onPatch={patchDoc}
+                                onUpload={uploadFile}
+                                onFileDelete={deleteFile}
+                                onDocDelete={deleteDoc}
+                                onPreview={setPreviewFile}
+                              />
+                            ))}
+                            <AddDocRow
+                              stage={stage}
+                              stageId={stageId}
+                              subStageId={ss.id}
+                              onAdd={addCustomDoc}
+                            />
+                          </div>
+                        )
+                      })
+                    ) : (
+                      /* No sub-stages — flat list as before */
+                      <>
+                        {stageDocs.map((doc, i) => (
+                          <DocRow
+                            key={doc.id}
+                            doc={doc}
+                            index={i}
+                            onPatch={patchDoc}
+                            onUpload={uploadFile}
+                            onFileDelete={deleteFile}
+                            onDocDelete={deleteDoc}
+                            onPreview={setPreviewFile}
+                          />
+                        ))}
+                        <AddDocRow
+                          stage={stage}
+                          stageId={stageId}
+                          subStageId={null}
+                          onAdd={addCustomDoc}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
               </div>

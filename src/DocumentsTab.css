@@ -9,7 +9,7 @@
 }
 
 .dt-panel-right {
-  flex: 1;
+  flex: 3;
   min-width: 0;
 }
 
@@ -208,6 +208,23 @@
   gap: 6px;
 }
 
+/* ── Sub-stage header (group divider inside accordion body) ── */
+.dt-sub-stage-header {
+  padding: 8px 12px;
+  background: #e8e8e8;
+  color: #374151;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+  direction: rtl;
+  border-bottom: 1px solid #d1d5db;
+  border-top: 1px solid #d1d5db;
+}
+
+.dt-sub-stage-group:first-of-type .dt-sub-stage-header {
+  border-top: none;
+}
+
 /* ── Document row ── */
 .dt-doc-row {
   display: flex;
@@ -238,7 +255,7 @@
 .dt-col-status   { flex: 0 0 36px;  display: flex; justify-content: center; }
 .dt-col-date     { flex: 0 0 120px; }
 .dt-col-file     { flex: 1.4;       min-width: 0; }
-.dt-col-notes    { flex: 1.4;       min-width: 0; }
+.dt-col-notes    { flex: 3;         min-width: 0; }
 .dt-col-delete   { flex: 0 0 24px;  display: flex; justify-content: center; }
 
 /* ── Document name ── */

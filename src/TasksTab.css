@@ -1,7 +1,7 @@
 /* ── Root ── */
 .tt-root {
   direction: rtl;
-  max-width: 50%;
+  max-width: 75%;
 }
 
 .tt-loading {
@@ -214,6 +214,23 @@
   gap: 6px;
 }
 
+/* ── Sub-stage header (group divider inside accordion body) ── */
+.tt-sub-stage-header {
+  padding: 8px 12px;
+  background: #e8e8e8;
+  color: #374151;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+  direction: rtl;
+  border-bottom: 1px solid #d1d5db;
+  border-top: 1px solid #d1d5db;
+}
+
+.tt-sub-stage-group:first-of-type .tt-sub-stage-header {
+  border-top: none;
+}
+
 /* ── Task row ── */
 .tt-task-row {
   display: flex;
@@ -250,7 +267,7 @@
 .tt-col-name      { flex: 2;        min-width: 0; }
 .tt-col-status    { flex: 0 0 96px; }
 .tt-col-date      { flex: 0 0 120px; }
-.tt-col-notes     { flex: 1.5;      min-width: 0; }
+.tt-col-notes     { flex: 3;        min-width: 0; }
 .tt-col-delete    { flex: 0 0 28px; display: flex; justify-content: center; }
 
 /* ── Star / milestone button ── */

@@ -7,9 +7,9 @@ const STAGES = [
   { name: 'קליטת פרויקט', bg: '#f0f0f0', text: '#000' },
   { name: 'סקיצות',        bg: '#e8e197', text: '#000' },
   { name: 'הדמיה',         bg: '#cbc9a2', text: '#000' },
-  { name: 'גרמושקה',       bg: '#73946e', text: '#fff' },
+  { name: 'הכנת גרמושקה',  bg: '#73946e', text: '#fff' },
   { name: 'רישוי',         bg: '#7bc1b5', text: '#000' },
-  { name: 'תכניות עבודה',  bg: '#676977', text: '#fff' },
+  { name: 'תוכניות עבודה', bg: '#676977', text: '#fff' },
   { name: 'בניה',          bg: '#89748b', text: '#fff' },
   { name: 'גמר',           bg: '#87526d', text: '#fff' },
 ]
@@ -256,14 +256,14 @@ function TaskRow({ task, index, stageBg, onPatch, onDelete }) {
 }
 
 /* ── Add custom task inline form ── */
-function AddTaskRow({ stage, onAdd }) {
+function AddTaskRow({ stage, stageId, subStageId, onAdd }) {
   const [adding, setAdding] = useState(false)
   const [name,   setName]   = useState('')
   const inputRef            = useRef(null)
 
   const confirm = async () => {
     if (!name.trim()) return
-    await onAdd(stage, name.trim())
+    await onAdd(stage, stageId, subStageId, name.trim())
     setName(''); setAdding(false)
   }
 
@@ -350,6 +350,8 @@ function MilestoneTimeline({ milestones }) {
 /* ── Main component ── */
 export default function TasksTab({ projectId }) {
   const [tasks,      setTasks]      = useState([])
+  const [stagesLut,  setStagesLut]  = useState([])
+  const [subStages,  setSubStages]  = useState([])
   const [loading,    setLoading]    = useState(true)
   const [openStages, setOpenStages] = useState({})
 
@@ -357,6 +359,17 @@ export default function TasksTab({ projectId }) {
 
   const loadTasks = async () => {
     setLoading(true)
+
+    /* ── Fetch LUTs (stages + sub_stages) ── */
+    const [
+      { data: stagesLutData },
+      { data: subStagesData },
+    ] = await Promise.all([
+      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('sub_stages').select('id, name, stage_id, order_index').order('order_index'),
+    ])
+    setStagesLut(stagesLutData || [])
+    setSubStages(subStagesData || [])
 
     /* ── Step 1: clean up any duplicates (keep MIN id per project+template) ── */
     const { data: allRows } = await supabase
@@ -401,6 +414,8 @@ export default function TasksTab({ projectId }) {
           project_id:   projectId,
           template_id:  t.id,
           stage:        t.stage,
+          stage_id:     t.stage_id ?? null,
+          sub_stage_id: t.sub_stage_id ?? null,
           name:         t.name,
           status:       'לא התחיל',
           is_milestone: t.is_milestone ?? false,
@@ -445,15 +460,21 @@ export default function TasksTab({ projectId }) {
   }
 
   /* ── Add custom task ── */
-  const addCustomTask = async (stage, name) => {
-    const stageTasks = tasks.filter(t => t.stage === stage)
-    const maxOrder   = stageTasks.reduce((m, t) => Math.max(m, t.sort_order ?? 0), 0)
+  const addCustomTask = async (stage, stageId, subStageId, name) => {
+    /* peers = tasks already in the same target group (for sort_order) */
+    const peers = tasks.filter(t => {
+      if (subStageId == null) return t.stage_id === stageId && t.sub_stage_id == null
+      return t.sub_stage_id === subStageId
+    })
+    const maxOrder = peers.reduce((m, t) => Math.max(m, t.sort_order ?? 0), 0)
     const { data } = await supabase
       .from('project_tasks')
       .insert([{
         project_id:   projectId,
         template_id:  null,
         stage,
+        stage_id:     stageId,
+        sub_stage_id: subStageId,
         name,
         status:       'לא התחיל',
         is_milestone: false,
@@ -488,6 +509,16 @@ export default function TasksTab({ projectId }) {
     else byStage[t.stage] = [t]
   })
 
+  /* ── Lookups derived from LUTs ── */
+  const stageIdByName = {}
+  stagesLut.forEach(s => { stageIdByName[s.name] = s.id })
+
+  const subStagesByStageId = {}
+  subStages.forEach(ss => {
+    if (!subStagesByStageId[ss.stage_id]) subStagesByStageId[ss.stage_id] = []
+    subStagesByStageId[ss.stage_id].push(ss)
+  })
+
   const toggleStage = (stage) =>
     setOpenStages(prev => ({ ...prev, [stage]: !prev[stage] }))
 
@@ -513,10 +544,13 @@ export default function TasksTab({ projectId }) {
       {/* ── Accordions ── */}
       <div className="tt-accordions">
         {STAGES.map(({ name: stage, bg, text }) => {
-          const stageTasks = byStage[stage] || []
-          const stageDone  = stageTasks.filter(t => t.status === 'הושלם')
-          const isComplete = stageTasks.length > 0 && stageDone.length === stageTasks.length
-          const isOpen     = openStages[stage]
+          const stageTasks     = byStage[stage] || []
+          const stageDone      = stageTasks.filter(t => t.status === 'הושלם')
+          const isComplete     = stageTasks.length > 0 && stageDone.length === stageTasks.length
+          const isOpen         = openStages[stage]
+          const stageId        = stageIdByName[stage] ?? null
+          const stageSubStages = stageId != null ? (subStagesByStageId[stageId] || []) : []
+          const hasSubStages   = stageSubStages.length > 0
 
           return (
             <div key={stage} className="tt-accordion">
@@ -549,18 +583,55 @@ export default function TasksTab({ projectId }) {
                     </div>
                   )}
 
-                  {stageTasks.map((task, i) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      index={i}
-                      stageBg={bg}
-                      onPatch={patchTask}
-                      onDelete={deleteTask}
-                    />
-                  ))}
-
-                  <AddTaskRow stage={stage} onAdd={addCustomTask} />
+                  {hasSubStages ? (
+                    /* Stage HAS sub-stages — render grouped by sub_stage_id */
+                    stageSubStages.map(ss => {
+                      const ssTasks = stageTasks
+                        .filter(t => t.sub_stage_id === ss.id)
+                        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                      return (
+                        <div key={ss.id} className="tt-sub-stage-group">
+                          <div className="tt-sub-stage-header">{ss.name}</div>
+                          {ssTasks.map((task, i) => (
+                            <TaskRow
+                              key={task.id}
+                              task={task}
+                              index={i}
+                              stageBg={bg}
+                              onPatch={patchTask}
+                              onDelete={deleteTask}
+                            />
+                          ))}
+                          <AddTaskRow
+                            stage={stage}
+                            stageId={stageId}
+                            subStageId={ss.id}
+                            onAdd={addCustomTask}
+                          />
+                        </div>
+                      )
+                    })
+                  ) : (
+                    /* No sub-stages — flat list as before */
+                    <>
+                      {stageTasks.map((task, i) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          index={i}
+                          stageBg={bg}
+                          onPatch={patchTask}
+                          onDelete={deleteTask}
+                        />
+                      ))}
+                      <AddTaskRow
+                        stage={stage}
+                        stageId={stageId}
+                        subStageId={null}
+                        onAdd={addCustomTask}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>

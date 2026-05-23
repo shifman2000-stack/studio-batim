@@ -201,7 +201,7 @@ const TABS = [
 
 /* ── Professional roles (card 3) ── */
 const PROF_ROLES = [
-  { label: 'אחראית פרויקט',   profession: 'אחראית פרויקט',   idField: 'project_manager_id' },
+  { label: 'אחראית פרויקט',   profession: 'אחראית פרויקט',   idField: 'project_manager_id', source: 'employees' },
   { label: 'מודד',             profession: 'מודד',             idField: 'surveyor_id' },
   { label: 'קונסטרוקטור',      profession: 'קונסטרוקטור',      idField: 'constructor_id' },
   { label: 'מהנדס אינסטלציה',  profession: 'מהנדס אינסטלציה',  idField: 'plumbing_engineer_id' },
@@ -288,13 +288,27 @@ function ProjectDetail() {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite, gantt_state')
+        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id')
         .eq('id', id)
         .single()
       if (data) setProject(data)
     }
     fetchProject()
   }, [id])
+
+  /* ── fetch employees (for "אחראית פרויקט") ── */
+  const [employees, setEmployees] = useState([])
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('role', ['admin', 'employee'])
+        .order('first_name')
+      if (data) setEmployees(data)
+    }
+    fetchEmployees()
+  }, [])
 
   /* ── fetch current user role ── */
   useEffect(() => {
@@ -390,6 +404,13 @@ function ProjectDetail() {
   const deleteContact = async (contactId) => {
     await supabase.from('project_contacts').delete().eq('id', contactId)
     setContacts(prev => prev.filter(c => c.id !== contactId))
+  }
+
+  /* ── Project responsible helper (אחראית פרויקט) ── */
+  const saveResponsible = async (newId) => {
+    const value = newId || null
+    await supabase.from('projects').update({ responsible_id: value }).eq('id', id)
+    setProject(prev => prev ? { ...prev, responsible_id: value } : prev)
   }
 
   /* ── Client info helper ── */
@@ -829,26 +850,33 @@ function ProjectDetail() {
               {/* Left 25%: בעלי מקצוע */}
               <div className="pd-info-card">
                 <div className="pd-card-title">בעלי מקצוע</div>
-                {PROF_ROLES.map(({ label, profession, idField }) => {
-                  const options      = profList.filter(p => p.profession === profession)
-                  const selectedId   = clientInfo?.[idField] ?? ''
-                  const selectedProf = profList.find(p => p.id === selectedId)
-                  const fullName     = selectedProf
-                    ? `${selectedProf.first_name ?? ''} ${selectedProf.last_name ?? ''}`.trim()
+                {PROF_ROLES.map(({ label, profession, idField, source }) => {
+                  const isEmp        = source === 'employees'
+                  const options      = isEmp ? employees : profList.filter(p => p.profession === profession)
+                  const selectedId   = isEmp ? (project?.responsible_id ?? '') : (clientInfo?.[idField] ?? '')
+                  const selectedRow  = options.find(p => p.id === selectedId)
+                  const fullName     = selectedRow
+                    ? `${selectedRow.first_name ?? ''} ${selectedRow.last_name ?? ''}`.trim()
                     : ''
                   return (
                     <div key={idField} className="pd-prof-row">
                       <span className="pd-prof-label">{label}</span>
                       <div className="pd-prof-value-wrap">
                         {selectedId && fullName ? (
-                          <button type="button" className="pd-prof-name-btn" onClick={() => openProfEdit(selectedId)} title="ערוך פרטי בעל מקצוע">
-                            {fullName}
-                          </button>
+                          isEmp ? (
+                            <span className="pd-prof-name-btn" style={{ cursor: 'default' }}>{fullName}</span>
+                          ) : (
+                            <button type="button" className="pd-prof-name-btn" onClick={() => openProfEdit(selectedId)} title="ערוך פרטי בעל מקצוע">
+                              {fullName}
+                            </button>
+                          )
                         ) : (
                           <span className="pd-prof-empty">—</span>
                         )}
                         {selectedId && !fromArchive && (
-                          <button type="button" className="pd-prof-clear-btn" onClick={() => saveClientInfo(idField, '')} title="הסר בחירה">
+                          <button type="button" className="pd-prof-clear-btn"
+                            onClick={() => isEmp ? saveResponsible(null) : saveClientInfo(idField, '')}
+                            title="הסר בחירה">
                             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="3 6 5 6 21 6"/>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -872,7 +900,11 @@ function ProjectDetail() {
                               ) : (
                                 options.map(p => (
                                   <button key={p.id} type="button" className="pd-prof-popover-item"
-                                    onClick={() => { saveClientInfo(idField, p.id); setSelectionPopover(null) }}>
+                                    onClick={() => {
+                                      if (isEmp) saveResponsible(p.id)
+                                      else saveClientInfo(idField, p.id)
+                                      setSelectionPopover(null)
+                                    }}>
                                     {`${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || '—'}
                                   </button>
                                 ))

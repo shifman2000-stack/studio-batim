@@ -35,6 +35,13 @@ const IconArchive = ({ size = 14 }) => (
   </svg>
 )
 
+const IconCheck = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = iso.slice(0, 10)
@@ -56,6 +63,7 @@ function ProjectsKanban() {
   const [dragId, setDragId]                 = useState(null)
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
   const [ctxResponsible, setCtxResponsible] = useState('')
+  const [ctxRenameValue, setCtxRenameValue] = useState('')
   const [filterResponsible, setFilterResponsible] = useState('')
   const [tasksByProject, setTasksByProject]       = useState({})
   const menuRef                             = useRef(null)
@@ -326,7 +334,24 @@ function ProjectsKanban() {
     const x = e.clientX + menuW > window.innerWidth  ? e.clientX - menuW : e.clientX
     const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY
     setCtxResponsible(project.responsible_id || '')
+    setCtxRenameValue(project.name || '')
     setContextMenu({ x, y, project })
+  }
+
+  const handleRename = async () => {
+    if (!contextMenu) return
+    const trimmed = ctxRenameValue.trim()
+    const current = contextMenu.project.name || ''
+    if (!trimmed || trimmed === current) {
+      setContextMenu(null)
+      return
+    }
+    await supabase.from('projects').update({ name: trimmed }).eq('id', contextMenu.project.id)
+    setProjects(prev => prev.map(p => p.id === contextMenu.project.id
+      ? { ...p, name: trimmed }
+      : p
+    ))
+    setContextMenu(null)
   }
 
   const handleToggleFavorite = async () => {
@@ -666,6 +691,26 @@ function ProjectsKanban() {
           <button className="context-menu-favorite-btn" onClick={() => openTaskModal(contextMenu.project)}>
             ＋ פתח משימה חדשה
           </button>
+          <div className="context-menu-divider" />
+          <div className="context-menu-row">
+            <span className="context-menu-label">שנה שם</span>
+            <input
+              type="text"
+              className="context-menu-input"
+              value={ctxRenameValue}
+              onChange={e => setCtxRenameValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRename() }}
+              dir="rtl"
+            />
+            <button
+              type="button"
+              onClick={handleRename}
+              title="שמור שם"
+              style={{ background: 'none', border: 'none', padding: '2px 4px', cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center' }}
+            >
+              <IconCheck />
+            </button>
+          </div>
           <div className="context-menu-divider" />
           <button className="context-menu-favorite-btn" onClick={handleToggleFavorite}>
             {contextMenu.project.is_favorite ? '☆ הסר ממועדפים' : '★ הוסף למועדפים'}

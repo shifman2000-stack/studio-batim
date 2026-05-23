@@ -44,14 +44,38 @@ async function downloadBlob(url, fileName) {
   URL.revokeObjectURL(href)
 }
 
+/* True for URLs not hosted on Supabase Storage (e.g. Google Drive). */
+function isExternalUrl(url) {
+  if (!url) return false
+  return !url.includes(`/object/public/${BUCKET}/`)
+}
+
 /* ── Utilities ── */
 function previewType(url) {
   if (!url) return null
+  /* Google Drive URLs are embedded via /preview iframe (handles PDF/images/docs). */
+  if (url.startsWith('https://drive.google.com/')) return 'pdf'
   const ext = fileExt(url.split('?')[0])
   if (['jpg','jpeg','png','gif','webp','bmp','svg','tiff','tif'].includes(ext)) return 'image'
   if (ext === 'pdf') return 'pdf'
   if (['doc','docx'].includes(ext)) return 'word'
   return 'unsupported'
+}
+
+/* Lowercase extension derived from doc.file_name when present, else from file_url. */
+function getFileExtension(doc) {
+  if (doc?.file_name) {
+    const dot = doc.file_name.lastIndexOf('.')
+    if (dot !== -1) return doc.file_name.slice(dot + 1).toLowerCase()
+  }
+  return fileExt(doc?.file_url)
+}
+
+/* Convert a Google Drive `/view` URL to its embeddable `/preview` form. */
+function getPreviewUrl(url) {
+  if (!url) return url
+  const m = url.match(/^(https:\/\/drive\.google\.com\/file\/d\/[^/]+)\/view/)
+  return m ? `${m[1]}/preview` : url
 }
 
 /* ── Inline SVGs ── */
@@ -139,7 +163,7 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPr
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
-  const ext      = fileExt(doc.file_url)
+  const ext      = getFileExtension(doc)
   const fullName = doc.file_url ? decodeURIComponent(doc.file_url.split('/').pop()) : ''
 
   const handleFileChange = async (e) => {
@@ -186,7 +210,10 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPr
               <IconEye />
             </button>
             <button type="button" className="dt-file-icon-btn"
-              onClick={() => downloadBlob(doc.file_url, fullName)} title="הורד">
+              onClick={() => isExternalUrl(doc.file_url)
+                ? window.open(doc.file_url, '_blank', 'noopener,noreferrer')
+                : downloadBlob(doc.file_url, fullName)
+              } title="הורד">
               <IconDownload />
             </button>
             <button type="button" className="dt-file-icon-btn dt-file-delete-btn"
@@ -625,7 +652,7 @@ export default function DocumentsTab({ projectId }) {
               <img src={previewFile.url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt={previewFile.name} />
             )}
             {pType === 'pdf' && (
-              <iframe src={previewFile.url} width="100%" height="100%" style={{ border: 'none', flex: 1 }} title={previewFile.name} />
+              <iframe src={getPreviewUrl(previewFile.url)} width="100%" height="100%" style={{ border: 'none', flex: 1 }} title={previewFile.name} />
             )}
             {pType === 'word' && (
               wordLoading

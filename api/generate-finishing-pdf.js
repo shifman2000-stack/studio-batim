@@ -38,18 +38,6 @@ export default async function handler(req, res) {
 
     const page = await browser.newPage()
 
-    // ── TEMP DIAGNOSTIC LOGGING (remove once bug is identified) ──
-    page.on('console', msg => console.log('[PAGE CONSOLE]', msg.type(), msg.text()))
-    page.on('pageerror', err => console.log('[PAGE ERROR]', err.message))
-    page.on('requestfailed', req => console.log('[REQUEST FAILED]', req.url(), req.failure()?.errorText))
-    page.on('response', resp => {
-      if (resp.url().includes('supabase') || resp.url().includes('rpc')) {
-        console.log('[SUPABASE RESPONSE]', resp.status(), resp.url())
-      }
-    })
-
-    console.log('[PUPPETEER] Navigating to:', printUrl)
-
     // Navigate to the clean print route (no UI chrome)
     await page.goto(printUrl, { waitUntil: 'networkidle0', timeout: 30000 })
 
@@ -65,23 +53,6 @@ export default async function handler(req, res) {
     await page.evaluateHandle('document.fonts.ready')
     // Small extra buffer for slow font CDNs
     await new Promise(r => setTimeout(r, 500))
-
-    // ── TEMP DIAGNOSTIC: snapshot the DOM right before capture ──
-    const bodyText   = await page.evaluate(() => document.body.innerText)
-    const bodyLength = await page.evaluate(() => document.body.innerHTML.length)
-    const visibleCount = await page.evaluate(() => {
-      const all = document.querySelectorAll('*')
-      let visible = 0
-      all.forEach(el => {
-        const style = window.getComputedStyle(el)
-        if (style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null) visible++
-      })
-      return { totalElements: all.length, visibleElements: visible }
-    })
-    console.log('[DOM AT CAPTURE] bodyLength:', bodyLength)
-    console.log('[DOM AT CAPTURE] visibleCount:', JSON.stringify(visibleCount))
-    console.log('[DOM AT CAPTURE] innerText length:', bodyText.length)
-    console.log('[DOM AT CAPTURE] innerText first 600 chars:', bodyText.substring(0, 600))
 
     // Generate PDF — same options as the quote PDF so layout/fonts/breaks behave identically.
     const pdfBytes = await page.pdf({

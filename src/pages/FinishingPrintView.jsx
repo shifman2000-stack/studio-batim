@@ -78,6 +78,19 @@ export default function FinishingPrintView() {
           padding: 0 !important;
           background: #f7f5f2 !important;
         }
+
+        /* Counter the three global @media print rules in the app
+           (Hours.css, QuoteBuilder.css, ReportTable.css) that set
+           `* { visibility: hidden !important }` and whitelist only their
+           own containers. None of them know about us, so we whitelist
+           ourselves explicitly. Without this, Puppeteer's print-media
+           emulation hides every element and the PDF is blank. */
+        @media print {
+          .finishing-print-mode,
+          .finishing-print-mode * {
+            visibility: visible !important;
+          }
+        }
       `}</style>
 
       <FinishingReport data={data} />

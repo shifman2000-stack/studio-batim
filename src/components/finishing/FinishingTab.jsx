@@ -243,6 +243,11 @@ export default function FinishingTab({ projectId }) {
 
   useEffect(() => { loadItems() }, [projectId])
 
+  /* Default disclaimer pre-filled into the textarea when finishing_notes is NULL
+     (project never had notes yet). NOT auto-saved — saved only when the user
+     blurs / Ctrl+Enters, via the existing save logic. */
+  const DEFAULT_FINISHING_NOTES = 'באחריות הלקוח לוודא כמויות סופיות בשטח למניעת חוסרים/עודפים'
+
   /* ── Fetch the project's general finishing notes ── */
   useEffect(() => {
     const fetchNotes = async () => {
@@ -256,7 +261,12 @@ export default function FinishingTab({ projectId }) {
         .eq('id', projectId)
         .single()
       if (data) {
-        setNotes(data.finishing_notes ?? '')
+        /* If NULL → show the default disclaimer. Anything else (including '')
+           is treated as the user's deliberate value and shown as-is. */
+        const initialNotes = data.finishing_notes === null
+          ? DEFAULT_FINISHING_NOTES
+          : data.finishing_notes
+        setNotes(initialNotes)
         setNotesSaved(data.finishing_notes ?? null)
         setProjectName(data.name ?? '')
       }

@@ -110,10 +110,6 @@ export default function FinishingReport({ data }) {
         </div>
       )}
 
-      <div className="fr-disclaimer">
-        באחריות הלקוח לוודא כמויות סופיות בשטח למניעת חוסרים/עודפים
-      </div>
-
       <div className="fr-signature">
         <div className="fr-signature-brand">סטודיו בָּתִים</div>
         <div>einav.studiob@gmail.com</div>

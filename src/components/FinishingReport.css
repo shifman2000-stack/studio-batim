@@ -3,7 +3,7 @@
 
 @page {
   size: A4 portrait;
-  margin: 0;
+  margin: 15mm 12mm;
 }
 
 .fr-page {
@@ -12,7 +12,9 @@
   direction: rtl;
   font-family: 'Heebo', 'Segoe UI', sans-serif;
   font-weight: 300;
-  padding: 18mm 16mm;
+  /* @page now provides 15mm 12mm of paper margin; keep a small inner inset
+     so total spacing remains visually similar to the original 18mm 16mm. */
+  padding: 3mm 4mm;
   min-height: 100vh;
   box-sizing: border-box;
   -webkit-print-color-adjust: exact;

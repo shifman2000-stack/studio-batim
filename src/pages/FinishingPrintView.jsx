@@ -51,10 +51,10 @@ export default function FinishingPrintView() {
   return (
     <div className="finishing-print-mode" data-finishing-ready="true">
       <style>{`
-        /* Force A4 paged layout for Puppeteer */
+        /* Force A4 paged layout for Puppeteer. Margins kept in sync with FinishingReport.css. */
         @page {
           size: A4 portrait;
-          margin: 0;
+          margin: 15mm 12mm;
         }
 
         /* Liberate html / body / #root so the report can flow across pages.

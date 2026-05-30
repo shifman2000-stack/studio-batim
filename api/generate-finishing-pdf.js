@@ -67,10 +67,21 @@ export default async function handler(req, res) {
     await new Promise(r => setTimeout(r, 500))
 
     // ── TEMP DIAGNOSTIC: snapshot the DOM right before capture ──
-    const bodyHtmlSnapshot = await page.evaluate(() => document.body.innerHTML.substring(0, 500))
-    const bodyLength       = await page.evaluate(() => document.body.innerHTML.length)
+    const bodyText   = await page.evaluate(() => document.body.innerText)
+    const bodyLength = await page.evaluate(() => document.body.innerHTML.length)
+    const visibleCount = await page.evaluate(() => {
+      const all = document.querySelectorAll('*')
+      let visible = 0
+      all.forEach(el => {
+        const style = window.getComputedStyle(el)
+        if (style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null) visible++
+      })
+      return { totalElements: all.length, visibleElements: visible }
+    })
     console.log('[DOM AT CAPTURE] bodyLength:', bodyLength)
-    console.log('[DOM AT CAPTURE] bodyHtml first 500 chars:', bodyHtmlSnapshot)
+    console.log('[DOM AT CAPTURE] visibleCount:', JSON.stringify(visibleCount))
+    console.log('[DOM AT CAPTURE] innerText length:', bodyText.length)
+    console.log('[DOM AT CAPTURE] innerText first 600 chars:', bodyText.substring(0, 600))
 
     // Generate PDF — same options as the quote PDF so layout/fonts/breaks behave identically.
     const pdfBytes = await page.pdf({

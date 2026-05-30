@@ -749,3 +749,41 @@
 .prof-modal--view {
   max-width: 460px;
 }
+
+/* ── Autocomplete dropdown (Supplier modal — תחום field) ── */
+.prof-autocomplete-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.prof-autocomplete-suggestions {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  z-index: 100;
+  max-height: 180px;
+  overflow-y: auto;
+  direction: rtl;
+}
+
+.prof-autocomplete-suggestion {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: right;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1a1a2e;
+  cursor: pointer;
+}
+
+.prof-autocomplete-suggestion:hover {
+  background: #f8f6f3;
+}

@@ -2,6 +2,7 @@
 // Pure-render report used by ContractorSpecPrintView. No data fetching here.
 // Mirrors FinishingReport.jsx structure exactly.
 
+import { Fragment } from 'react'
 import './ContractorSpecReport.css'
 
 function fmtDate(d) {
@@ -64,25 +65,27 @@ export default function ContractorSpecReport({ data }) {
         </div>
       </div>
 
-      {/* ── Body: grouped table ── */}
+      {/* ── Body: one <table> for all groups (column header repeats via thead). ── */}
       {groups.length === 0 ? (
         <div style={{ marginTop: '14mm', color: '#8a8680', fontSize: '12px' }}>
           טרם נבחרו פריטים במפרט לקבלן.
         </div>
       ) : (
-        groups.map(({ category, items: catItems }) => (
-          <div key={category}>
-            <div className="csr-category">{category}</div>
-            <table className="csr-table">
-              <thead>
-                <tr>
-                  <th className="csr-col-item">תאור</th>
-                  <th className="csr-col-quantity">כמות</th>
-                  <th className="csr-col-unit">יחידה</th>
-                  <th className="csr-col-notes">הערות</th>
+        <table className="csr-table">
+          <thead>
+            <tr>
+              <th className="csr-col-item">תאור</th>
+              <th className="csr-col-quantity">כמות</th>
+              <th className="csr-col-unit">יחידה</th>
+              <th className="csr-col-notes">הערות</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(({ category, items: catItems }) => (
+              <Fragment key={category}>
+                <tr className="csr-category-row">
+                  <td colSpan={4} className="csr-category">{category}</td>
                 </tr>
-              </thead>
-              <tbody>
                 {catItems.map(item => (
                   <tr key={item.id}>
                     <td className="csr-col-item">{item.item         || '—'}</td>
@@ -91,10 +94,10 @@ export default function ContractorSpecReport({ data }) {
                     <td className="csr-col-notes">{item.notes       || '—'}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ))
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {/* ── Footer: general notes (if any) + signature ── */}
@@ -106,10 +109,10 @@ export default function ContractorSpecReport({ data }) {
       )}
 
       <div className="csr-signature">
-        <div className="csr-signature-brand">סטודיו בָּתִים</div>
-        <div>einav.studiob@gmail.com</div>
-        <div>עינב שיפמן</div>
-        <div className="csr-signature-line--ltr">052-9593927</div>
+        <span className="csr-signature-brand">סטודיו בתים</span>
+        {' - עינב שיפמן | '}
+        <span dir="ltr">052-9593927</span>
+        {' | Einav.StudioB@gmail.com'}
       </div>
 
     </div>

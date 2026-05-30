@@ -2,6 +2,7 @@
 // Pure-render report used by QuantitiesPrintView. No data fetching here.
 // Mirrors FinishingReport.jsx structure exactly.
 
+import { Fragment } from 'react'
 import './QuantitiesReport.css'
 
 function fmtDate(d) {
@@ -64,26 +65,28 @@ export default function QuantitiesReport({ data }) {
         </div>
       </div>
 
-      {/* ── Body: grouped table ── */}
+      {/* ── Body: one <table> for all groups (column header repeats via thead). ── */}
       {groups.length === 0 ? (
         <div style={{ marginTop: '14mm', color: '#8a8680', fontSize: '12px' }}>
           טרם נבחרו פריטים בכתב הכמויות.
         </div>
       ) : (
-        groups.map(({ category, items: catItems }) => (
-          <div key={category}>
-            <div className="qr-category">{category}</div>
-            <table className="qr-table">
-              <thead>
-                <tr>
-                  <th className="qr-col-item">פריט</th>
-                  <th className="qr-col-qty-sqm">כמות במ"ר</th>
-                  <th className="qr-col-units">מספר יחידות</th>
-                  <th className="qr-col-dimensions">מידות בס"מ</th>
-                  <th className="qr-col-description">תיאור</th>
+        <table className="qr-table">
+          <thead>
+            <tr>
+              <th className="qr-col-item">פריט</th>
+              <th className="qr-col-qty-sqm">כמות במ"ר</th>
+              <th className="qr-col-units">מספר יחידות</th>
+              <th className="qr-col-dimensions">מידות בס"מ</th>
+              <th className="qr-col-description">תיאור</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(({ category, items: catItems }) => (
+              <Fragment key={category}>
+                <tr className="qr-category-row">
+                  <td colSpan={5} className="qr-category">{category}</td>
                 </tr>
-              </thead>
-              <tbody>
                 {catItems.map(item => (
                   <tr key={item.id}>
                     <td className="qr-col-item">{item.item               || '—'}</td>
@@ -93,10 +96,10 @@ export default function QuantitiesReport({ data }) {
                     <td className="qr-col-description">{item.description || '—'}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ))
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {/* ── Footer: general notes (if any) + signature ── */}
@@ -108,10 +111,10 @@ export default function QuantitiesReport({ data }) {
       )}
 
       <div className="qr-signature">
-        <div className="qr-signature-brand">סטודיו בָּתִים</div>
-        <div>einav.studiob@gmail.com</div>
-        <div>עינב שיפמן</div>
-        <div className="qr-signature-line--ltr">052-9593927</div>
+        <span className="qr-signature-brand">סטודיו בתים</span>
+        {' - עינב שיפמן | '}
+        <span dir="ltr">052-9593927</span>
+        {' | Einav.StudioB@gmail.com'}
       </div>
 
     </div>

@@ -10,7 +10,10 @@
 .hours-split {
   display: flex;
   align-items: flex-start;
-  min-height: calc(100vh - 56px);
+  /* min-height: 0 lets the flex container shrink to its actual content height.
+     Previously was `calc(100vh - 56px)` which forced content slightly above viewport
+     once drill-down rows and multi-select changes were added, causing a page scrollbar. */
+  min-height: 0;
   direction: rtl;
 }
 
@@ -584,6 +587,123 @@
   margin-top: 10px;
   border-top: 1px solid #e0e0e0;
   direction: rtl;
+}
+
+/* ── Admin: stack of per-employee summary rows below the calendar ── */
+.hours-monthly-summary-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 4px;
+  margin-top: 10px;
+  border-top: 1px solid #e0e0e0;
+  direction: rtl;
+}
+
+.hours-summary-row {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 16px 24px;
+}
+
+.hours-employee-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111;
+  white-space: nowrap;
+}
+
+.hours-summary-sep {
+  font-size: 14px;
+  color: #c0c0c0;
+}
+
+/* ── Drill-down: per-employee day list (calendar tab + report tabs) ── */
+.hours-summary-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.hours-drill-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #555;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  font-family: monospace;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.hours-drill-toggle:hover {
+  background: #eee;
+  color: #111;
+  border-color: #999;
+}
+
+.hours-drill-list {
+  padding: 4px 24px 8px 4px;       /* RTL: padding-right = visual right side = indent */
+  font-size: 12px;
+  color: #555;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  direction: rtl;
+}
+
+.hours-drill-line {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.hours-drill-loading,
+.hours-drill-empty {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+/* Report-table drill row: spans the entire row, soft background. */
+.hours-drill-row td {
+  background: #fafafa;
+  padding: 8px 16px;
+  border-top: none;
+}
+
+.hours-drill-row .hours-drill-list {
+  padding: 0;
+}
+
+/* Empty header cell for the drill column — keep it small. */
+.hours-drill-toggle-header,
+.hours-drill-toggle-cell {
+  width: 32px;
+  text-align: center;
+}
+
+/* On window.print() (report tab export icon), hide all drill UI so the
+   exported file contains only the monthly summary rows. The existing
+   `@media print` rule in this file hides everything except
+   `.report-table-container`; here we further hide the drill bits inside it,
+   beating `visibility: visible` via `display: none`. */
+@media print {
+  .hours-drill-toggle,
+  .hours-drill-toggle-header,
+  .hours-drill-toggle-cell,
+  .hours-drill-row,
+  .hours-drill-list {
+    display: none !important;
+  }
 }
 
 .hours-summary-item {

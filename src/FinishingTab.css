@@ -21,35 +21,41 @@
   overflow: visible;
 }
 
-/* ── Column header row (mirrors .dt-table-header) ── */
+/* ── Column header row — MOST prominent in the table ── */
 .ft-table-header {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  background: #f7faf9;
-  border-bottom: 1px solid #b2dbd5;
-  font-size: 13px;
+  padding: 8px 10px;
+  background: #e8e3dc;                          /* warm beige — brand "table header" */
+  border-bottom: 1px solid rgba(26,26,24,0.12);
+  font-size: 14px;                              /* larger than category and rows */
   font-weight: 700;
   color: #1a1a18;
   direction: rtl;
   gap: 6px;
 }
 
-/* ── Category header row (group divider — mirrors .dt-sub-stage-header) ── */
+/* ── Category header row — LESS prominent than column header ── */
 .ft-category-header {
-  padding: 8px 12px;
-  background: #e8e8e8;
-  color: #374151;
-  font-weight: 700;
-  font-size: 13px;
+  padding: 7px 12px;
+  background: #fafaf8;                          /* lighter than column header */
+  color: #1a1a18;
+  font-weight: 600;
+  font-size: 12px;
   text-align: right;
   direction: rtl;
-  border-bottom: 1px solid #d1d5db;
-  border-top: 1px solid #d1d5db;
+  border-bottom: 1px solid rgba(26,26,24,0.06);
+  border-top: 1px solid rgba(26,26,24,0.06);
 }
 
 .ft-table > .ft-category-header:first-of-type {
   border-top: none;
+}
+
+/* ── Vertical column dividers (column header + data rows; skip category headers) ── */
+.ft-table-header > div:not(:last-child),
+.ft-row > div:not(:last-child) {
+  border-left: 1px solid rgba(26,26,24,0.06);
 }
 
 /* ── Item row (mirrors .dt-doc-row) ── */

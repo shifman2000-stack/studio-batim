@@ -75,7 +75,7 @@ export default function QuantitiesPrintView() {
         html, body {
           margin: 0 !important;
           padding: 0 !important;
-          background: #f7f5f2 !important;
+          background: #ffffff !important;
         }
 
         /* Counter the three global at-media-print rules in the app

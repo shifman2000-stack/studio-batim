@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
+import EmployeesMultiSelect from '../../components/EmployeesMultiSelect'
 import '../ReportTable.css'
 
 const MONTH_NAMES = [
@@ -32,7 +33,8 @@ export default function HoursReport() {
   const [reportData, setReportData]   = useState([])
   const [reportLoading, setReportLoading] = useState(false)
   const [allUsers, setAllUsers]       = useState([])
-  const [filterUserId, setFilterUserId] = useState('')
+  /* Multi-select state — Set of selected employee IDs. Initialized to all on load. */
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set())
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -43,9 +45,14 @@ export default function HoursReport() {
       if (!profile || profile.role !== 'admin') { navigate('/dashboard'); return }
       setRole('admin')
       const { data: users } = await supabase
-        .from('profiles').select('id, first_name, last_name')
+        .from('profiles').select('id, first_name, last_name, role')
         .in('role', ['admin', 'employee']).order('first_name')
-      if (users) setAllUsers(users)
+      if (users) {
+        setAllUsers(users)
+        /* Default: ALL employees selected. */
+        const empIds = users.filter(u => u.role === 'employee').map(u => u.id)
+        setSelectedEmployeeIds(new Set(empIds))
+      }
     }
     init()
   }, [])
@@ -114,27 +121,23 @@ export default function HoursReport() {
         >
           {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        {allUsers.length > 0 && (
-          <select
-            className="report-project-select"
-            value={filterUserId}
-            onChange={e => setFilterUserId(e.target.value)}
-            style={{ width: 160 }}
-          >
-            <option value="">כל העובדים</option>
-            {allUsers.map(u => (
-              <option key={u.id} value={u.id}>
-                {[u.first_name, u.last_name].filter(Boolean).join(' ')}
-              </option>
-            ))}
-          </select>
+        {allUsers.filter(u => u.role === 'employee').length > 0 && (
+          <EmployeesMultiSelect
+            employees={allUsers.filter(u => u.role === 'employee')}
+            selectedIds={selectedEmployeeIds}
+            onChange={setSelectedEmployeeIds}
+          />
         )}
         <button className="hours-report-fetch-btn" onClick={fetchReportData}>הצג</button>
       </div>
 
       {reportLoading && <p className="report-loading">טוען...</p>}
 
-      {!reportLoading && reportData.length > 0 && (
+      {!reportLoading && reportData.length > 0 && reportData.filter(r => selectedEmployeeIds.has(r.id)).length === 0 && (
+        <p className="report-empty">בחרי לפחות עובד אחד</p>
+      )}
+
+      {!reportLoading && reportData.length > 0 && reportData.filter(r => selectedEmployeeIds.has(r.id)).length > 0 && (
         <div className="report-card" style={{ overflow: 'hidden', width: '100%' }}>
           <div className="report-print-header-standalone">
             סטודיו בתים — דיווח שעות עובדים | {MONTH_NAMES[reportMonth]} {reportYear}
@@ -152,7 +155,7 @@ export default function HoursReport() {
             </thead>
             <tbody>
               {reportData
-                .filter(row => !filterUserId || row.id === filterUserId)
+                .filter(row => selectedEmployeeIds.has(row.id))
                 .map(row => (
                   <tr key={row.id}>
                     <td>{row.name}</td>

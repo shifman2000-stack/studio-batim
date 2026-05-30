@@ -1,0 +1,99 @@
+/* ── Shared multi-select used in /hours דוחות tab + /reports/hours ── */
+.emp-mselect {
+  position: relative;
+  display: inline-block;
+  direction: rtl;
+}
+
+.emp-mselect-btn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 160px;
+  text-align: right;
+  transition: border-color 0.12s;
+}
+
+.emp-mselect-btn:hover {
+  border-color: #999;
+}
+
+.emp-mselect-btn:focus {
+  outline: none;
+  border-color: #7bc1b5;
+}
+
+.emp-mselect-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.emp-mselect-arrow {
+  font-size: 10px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.emp-mselect-panel {
+  /* position:fixed escapes any ancestor overflow boundary (e.g. .hours-form-panel).
+     top / right / minWidth come from inline style (computed via getBoundingClientRect). */
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  padding: 6px 0;
+  max-height: 280px;
+  overflow-y: auto;
+  direction: rtl;
+}
+
+.emp-mselect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  font-family: 'Heebo', sans-serif;
+}
+
+.emp-mselect-row:hover {
+  background: #f5f5f5;
+}
+
+.emp-mselect-row input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.emp-mselect-row--all {
+  font-weight: 600;
+}
+
+.emp-mselect-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.emp-mselect-empty {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}

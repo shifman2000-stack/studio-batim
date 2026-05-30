@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import GoogleCalendarPanel from './components/hours/GoogleCalendarPanel'
+import EmployeesMultiSelect from './components/EmployeesMultiSelect'
 import './Hours.css'
 
 // NOTE: Ensure the following columns exist in your Supabase tables:
@@ -54,6 +55,21 @@ const toHHMM = (mins) => {
 
 const isoDate = (y, m, d) =>
   `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
+/* Format ISO YYYY-MM-DD → DD/MM/YY (two-digit year, used in drill-down lines). */
+const formatDDMMYY = (iso) => {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y.slice(2)}`
+}
+
+/* Total hours formatter (non-padded hours): 8:30, 0:45, 12:15. */
+const formatTotalHHMM = (mins) => {
+  if (!mins && mins !== 0) return ''
+  const h = Math.floor(Math.abs(mins) / 60)
+  const m = Math.abs(mins) % 60
+  return `${h}:${String(m).padStart(2, '0')}`
+}
 
 const todayISO = () => {
   const n = new Date()
@@ -118,13 +134,32 @@ function Hours() {
     sickDays: 0, vacationDays: 0, totalMins: 0,
     pendingMins: 0, rejectedMins: 0, officeDays: 0, wfhDays: 0,
   })
+  /* Per-employee summary rows shown below the calendar in ADMIN view. */
+  const [employeesSummary, setEmployeesSummary] = useState([])
+
+  /* ── Drill-down state ──
+     Calendar drill-down (below the calendar — keyed by userId).
+     Resets on viewYear/viewMonth change so re-expand fetches fresh data. */
+  const [calendarDrillExpanded, setCalendarDrillExpanded] = useState(() => new Set())
+  const [calendarDrillCache,    setCalendarDrillCache]    = useState({})
+  const [calendarDrillLoading,  setCalendarDrillLoading]  = useState(() => new Set())
+
+  /* Report-tab drill-down (employee & admin reports — keyed by userId).
+     Resets on reportYear/reportMonth change or on fetchReportData. */
+  const [reportDrillExpanded, setReportDrillExpanded] = useState(() => new Set())
+  const [reportDrillCache,    setReportDrillCache]    = useState({})
+  const [reportDrillLoading,  setReportDrillLoading]  = useState(() => new Set())
   const [gcalDots, setGcalDots]           = useState({}) // { 'YYYY-MM-DD': ['#hex',...] }
   const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
+  const [employeeTab, setEmployeeTab]     = useState(1) // 1=הזנת שעות 2=דוחות
   const [reportYear, setReportYear]       = useState(new Date().getFullYear())
   const [reportMonth, setReportMonth]     = useState(new Date().getMonth())
   const [reportData, setReportData]       = useState([])
   const [reportLoading, setReportLoading] = useState(false)
-  const [reportUserId, setReportUserId]   = useState('')  // '' = all employees
+  const [reportUserId, setReportUserId]   = useState('')  // legacy — kept for employee locked view back-compat
+  /* Admin report multi-select: set of employee IDs currently visible.
+     Initialized to ALL employees when allUsers loads (see useEffect below). */
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set())
 
   useEffect(() => { init() }, [])
   useEffect(() => {
@@ -190,7 +225,7 @@ function Hours() {
     setViewUserId(session.user.id)
     setUserEmail(session.user.email || null)
     const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', session.user.id).single()
+      .from('profiles').select('role, first_name, last_name').eq('id', session.user.id).single()
     if (profile) setUserRole(profile.role)
     const [{ data: projs }, { data: stg }] = await Promise.all([
       supabase.from('projects').select('id, name').eq('archived', false).order('name'),
@@ -200,9 +235,17 @@ function Hours() {
     if (stg) setStages(stg.filter(s => s.id !== 9))
     if (profile?.role === 'admin') {
       const { data: users } = await supabase
-        .from('profiles').select('id, first_name, last_name')
+        .from('profiles').select('id, first_name, last_name, role')
         .in('role', ['admin', 'employee']).order('first_name')
       if (users) setAllUsers(users)
+    } else if (profile?.role === 'employee') {
+      /* Populate allUsers with just the current user so the reports dropdown
+         can show their name (locked / disabled for employees). */
+      setAllUsers([{
+        id:         session.user.id,
+        first_name: profile.first_name,
+        last_name:  profile.last_name,
+      }])
     }
   }
 
@@ -347,10 +390,173 @@ function Hours() {
     const wfhDays      = approvedWork.filter(a =>  a.work_from_home).length
 
     setMonthlySummary({ sickDays, vacationDays, totalMins, pendingMins, rejectedMins, officeDays, wfhDays })
+
+    /* For admin: also compute per-employee summary rows for the same month. */
+    if (userRole === 'admin') {
+      const [{ data: employees }, { data: allAtt }, { data: allRep }] = await Promise.all([
+        supabase.from('profiles').select('id, first_name, last_name')
+          .eq('role', 'employee').order('first_name'),
+        supabase.from('attendance').select('user_id, day_type, work_from_home, arrival_time, departure_time')
+          .gte('date', first).lte('date', last),
+        supabase.from('hour_reports').select('user_id, hours, minutes')
+          .gte('date', first).lte('date', last),
+      ])
+      const rows = (employees || []).map(emp => {
+        const empAtt = allAtt ? allAtt.filter(a => a.user_id === emp.id) : []
+        const empRep = allRep ? allRep.filter(r => r.user_id === emp.id) : []
+        const empAttMins = empAtt
+          .filter(a => a.day_type === 'work' && a.arrival_time && a.departure_time)
+          .reduce((s, a) =>
+            s + toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5)), 0)
+        const empRepMins = empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0)
+        return {
+          id:           emp.id,
+          name:         [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() || '-',
+          totalMins:    empAttMins > 0 ? empAttMins : empRepMins,
+          sickDays:     empAtt.filter(a => a.day_type === 'sick').length,
+          vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,
+          officeDays:   empAtt.filter(a => a.day_type === 'work' && !a.work_from_home).length,
+          wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
+        }
+      })
+      rows.sort((a, b) => a.name.localeCompare(b.name, 'he'))
+      setEmployeesSummary(rows)
+    }
   }
+
+  /* ── Drill-down helpers — fetch + toggle + render body ── */
+  const fetchEmployeeDailyDetails = async (uId, year, month) => {
+    const first   = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month + 1, 0).getDate()
+    const last    = isoDate(year, month, lastDay)
+
+    const [{ data: attData }, { data: repData }] = await Promise.all([
+      supabase.from('attendance').select('date, day_type, arrival_time, departure_time')
+        .eq('user_id', uId).gte('date', first).lte('date', last),
+      supabase.from('hour_reports').select('date, hours, minutes')
+        .eq('user_id', uId).gte('date', first).lte('date', last),
+    ])
+
+    const dayMap = new Map()
+    for (const a of (attData || [])) {
+      const existing = dayMap.get(a.date) || {
+        date: a.date, dayType: null, attMins: 0, repMins: 0,
+        arrivalTime: null, departureTime: null,
+      }
+      if (a.day_type) existing.dayType = a.day_type
+      /* Capture first non-null arrival/departure seen for this date */
+      if (a.arrival_time && !existing.arrivalTime) existing.arrivalTime = a.arrival_time.slice(0, 5)
+      if (a.departure_time && !existing.departureTime) existing.departureTime = a.departure_time.slice(0, 5)
+      if (a.day_type === 'work' && a.arrival_time && a.departure_time) {
+        existing.attMins += toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5))
+      }
+      dayMap.set(a.date, existing)
+    }
+    for (const r of (repData || [])) {
+      const existing = dayMap.get(r.date) || {
+        date: r.date, dayType: null, attMins: 0, repMins: 0,
+        arrivalTime: null, departureTime: null,
+      }
+      existing.repMins += (r.hours || 0) * 60 + (r.minutes || 0)
+      dayMap.set(r.date, existing)
+    }
+
+    const rows = []
+    for (const day of dayMap.values()) {
+      /* Prefer attendance-diff (actual time at work); fall back to hour_reports sum (admin case) */
+      const totalMins = day.attMins > 0 ? day.attMins : day.repMins
+      /* Include days that are marked vacation/sick OR that have any hours.
+         Skip empty days (no day_type AND no hours). */
+      if (day.dayType === 'vacation' || day.dayType === 'sick' || totalMins > 0) {
+        rows.push({
+          date:          day.date,
+          dayType:       day.dayType,
+          arrivalTime:   day.arrivalTime,
+          departureTime: day.departureTime,
+          totalMins,
+        })
+      }
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date))
+    return rows
+  }
+
+  const formatDrillLine = (day) => {
+    const date = formatDDMMYY(day.date)
+    /* Vacation / sick days — no times, no total */
+    if (day.dayType === 'vacation') return `${date}  |  יום חופש`
+    if (day.dayType === 'sick')     return `${date}  |  יום מחלה`
+    /* Work day (or any day with hours): "DD/MM/YY  |  HH:MM - HH:MM  |  סה״כ שעות: H:MM".
+       Missing arrival/departure → "—". The "HH:MM - HH:MM" run is left to the browser's
+       natural bidi handling (LTR run inside RTL paragraph) — arrival reads rightmost. */
+    const arrival   = day.arrivalTime   || '—'
+    const departure = day.departureTime || '—'
+    const total     = formatTotalHHMM(day.totalMins)
+    return `${date}  |  ${arrival} - ${departure}  |  סה״כ שעות: ${total}`
+  }
+
+  const toggleCalendarDrill = async (uId) => {
+    if (calendarDrillExpanded.has(uId)) {
+      setCalendarDrillExpanded(prev => { const n = new Set(prev); n.delete(uId); return n })
+      return
+    }
+    setCalendarDrillExpanded(prev => new Set(prev).add(uId))
+    if (!calendarDrillCache[uId]) {
+      setCalendarDrillLoading(prev => new Set(prev).add(uId))
+      const days = await fetchEmployeeDailyDetails(uId, viewYear, viewMonth)
+      setCalendarDrillCache(prev => ({ ...prev, [uId]: days }))
+      setCalendarDrillLoading(prev => { const n = new Set(prev); n.delete(uId); return n })
+    }
+  }
+
+  const toggleReportDrill = async (uId) => {
+    if (reportDrillExpanded.has(uId)) {
+      setReportDrillExpanded(prev => { const n = new Set(prev); n.delete(uId); return n })
+      return
+    }
+    setReportDrillExpanded(prev => new Set(prev).add(uId))
+    if (!reportDrillCache[uId]) {
+      setReportDrillLoading(prev => new Set(prev).add(uId))
+      const days = await fetchEmployeeDailyDetails(uId, reportYear, reportMonth)
+      setReportDrillCache(prev => ({ ...prev, [uId]: days }))
+      setReportDrillLoading(prev => { const n = new Set(prev); n.delete(uId); return n })
+    }
+  }
+
+  const renderDrillBody = (uId, mode) => {
+    const loadingSet = mode === 'calendar' ? calendarDrillLoading : reportDrillLoading
+    const cache      = mode === 'calendar' ? calendarDrillCache    : reportDrillCache
+    if (loadingSet.has(uId)) return <div className="hours-drill-loading">טוען...</div>
+    const days = cache[uId]
+    if (!days || days.length === 0) return <div className="hours-drill-empty">אין ימים פעילים</div>
+    return days.map(day => (
+      <div key={day.date} className="hours-drill-line">{formatDrillLine(day)}</div>
+    ))
+  }
+
+  /* Reset calendar drill state when the calendar month changes. */
+  useEffect(() => {
+    setCalendarDrillExpanded(new Set())
+    setCalendarDrillCache({})
+  }, [viewYear, viewMonth])
+
+  /* Reset report drill state when the report month changes. */
+  useEffect(() => {
+    setReportDrillExpanded(new Set())
+    setReportDrillCache({})
+  }, [reportYear, reportMonth])
+
+  /* Initialize the admin multi-select with ALL employees when allUsers loads. */
+  useEffect(() => {
+    const empIds = allUsers.filter(u => u.role === 'employee').map(u => u.id)
+    setSelectedEmployeeIds(new Set(empIds))
+  }, [allUsers])
 
   // ── Reports (admin Tab 3) ──
   const fetchReportData = async () => {
+    /* Collapse all drill-downs and clear cache before re-fetching summary data */
+    setReportDrillExpanded(new Set())
+    setReportDrillCache({})
     setReportLoading(true)
     const first   = `${reportYear}-${String(reportMonth + 1).padStart(2, '0')}-01`
     const lastDay = new Date(reportYear, reportMonth + 1, 0).getDate()
@@ -1008,17 +1214,63 @@ function Hours() {
         })}
       </div>
 
-      <div className="hours-monthly-summary">
-        <div className="hours-summary-item">
-          <span className="hours-summary-label">ימי מחלה</span>
-          <span className="hours-summary-value">{monthlySummary.sickDays}</span>
+      {isAdmin ? (
+        /* Admin: one row per employee (alphabetical). Each row matches the
+           employee single-row styling, prefixed with "{name} |". Each row has
+           a +/- drill toggle to reveal the active days of that month. */
+        <div className="hours-monthly-summary-admin">
+          {employeesSummary.map(emp => (
+            <div key={emp.id} className="hours-summary-group">
+              <div className="hours-summary-row">
+                <span className="hours-employee-name">{emp.name}</span>
+                <span className="hours-summary-sep">|</span>
+                <div className="hours-summary-item">
+                  <span className="hours-summary-label">ימי עבודה במשרד</span>
+                  <span className="hours-summary-value">{emp.officeDays}</span>
+                </div>
+                <div className="hours-summary-item">
+                  <span className="hours-summary-label">ימי עבודה מהבית</span>
+                  <span className="hours-summary-value">{emp.wfhDays}</span>
+                </div>
+                <div className="hours-summary-item">
+                  <span className="hours-summary-label">ימי חופשה</span>
+                  <span className="hours-summary-value">{emp.vacationDays}</span>
+                </div>
+                <div className="hours-summary-item">
+                  <span className="hours-summary-label">ימי מחלה</span>
+                  <span className="hours-summary-value">{emp.sickDays}</span>
+                </div>
+                <div className="hours-summary-item">
+                  <span className="hours-summary-label">סה״כ שעות</span>
+                  <span className="hours-summary-value">{toHHMM(emp.totalMins)}</span>
+                </div>
+                <button
+                  type="button"
+                  className="hours-drill-toggle"
+                  onClick={() => toggleCalendarDrill(emp.id)}
+                  title={calendarDrillExpanded.has(emp.id) ? 'סגור' : 'הצג ימים פעילים'}
+                >
+                  {calendarDrillExpanded.has(emp.id) ? '−' : '+'}
+                </button>
+              </div>
+              {calendarDrillExpanded.has(emp.id) && (
+                <div className="hours-drill-list">{renderDrillBody(emp.id, 'calendar')}</div>
+              )}
+            </div>
+          ))}
         </div>
-        <div className="hours-summary-item">
-          <span className="hours-summary-label">ימי חופשה</span>
-          <span className="hours-summary-value">{monthlySummary.vacationDays}</span>
-        </div>
-        {!isAdmin && (
-          <>
+      ) : (
+        /* Employee: single row + drill-down toggle. */
+        <div className="hours-summary-group">
+          <div className="hours-monthly-summary">
+            <div className="hours-summary-item">
+              <span className="hours-summary-label">ימי מחלה</span>
+              <span className="hours-summary-value">{monthlySummary.sickDays}</span>
+            </div>
+            <div className="hours-summary-item">
+              <span className="hours-summary-label">ימי חופשה</span>
+              <span className="hours-summary-value">{monthlySummary.vacationDays}</span>
+            </div>
             <div className="hours-summary-item">
               <span className="hours-summary-label">ימי עבודה מהבית</span>
               <span className="hours-summary-value">{monthlySummary.wfhDays}</span>
@@ -1027,23 +1279,34 @@ function Hours() {
               <span className="hours-summary-label">ימי עבודה במשרד</span>
               <span className="hours-summary-value">{monthlySummary.officeDays}</span>
             </div>
-          </>
-        )}
-        <div className="hours-summary-item">
-          <span className="hours-summary-label">סה״כ שעות</span>
-          <span className="hours-summary-value">
-            {toHHMM(monthlySummary.totalMins)}
-            {!isAdmin && (monthlySummary.pendingMins > 0 || monthlySummary.rejectedMins > 0) && (
-              <span className="hours-summary-sub">
-                ({[
-                  monthlySummary.pendingMins  > 0 && `${toHHMM(monthlySummary.pendingMins)} ממתינות`,
-                  monthlySummary.rejectedMins > 0 && `${toHHMM(monthlySummary.rejectedMins)} נדחו`,
-                ].filter(Boolean).join(' | ')})
+            <div className="hours-summary-item">
+              <span className="hours-summary-label">סה״כ שעות</span>
+              <span className="hours-summary-value">
+                {toHHMM(monthlySummary.totalMins)}
+                {(monthlySummary.pendingMins > 0 || monthlySummary.rejectedMins > 0) && (
+                  <span className="hours-summary-sub">
+                    ({[
+                      monthlySummary.pendingMins  > 0 && `${toHHMM(monthlySummary.pendingMins)} ממתינות`,
+                      monthlySummary.rejectedMins > 0 && `${toHHMM(monthlySummary.rejectedMins)} נדחו`,
+                    ].filter(Boolean).join(' | ')})
+                  </span>
+                )}
               </span>
-            )}
-          </span>
+            </div>
+            <button
+              type="button"
+              className="hours-drill-toggle"
+              onClick={() => toggleCalendarDrill(userId)}
+              title={calendarDrillExpanded.has(userId) ? 'סגור' : 'הצג ימים פעילים'}
+            >
+              {calendarDrillExpanded.has(userId) ? '−' : '+'}
+            </button>
+          </div>
+          {calendarDrillExpanded.has(userId) && (
+            <div className="hours-drill-list">{renderDrillBody(userId, 'calendar')}</div>
+          )}
         </div>
-      </div>
+      )}
     </>
   )
 
@@ -1244,88 +1507,129 @@ function Hours() {
     </div>
   )
 
-  // Reports content — admin Tab 3
-  const reportsContent = (
-    <div className="hours-reports-tab">
-      <div className="hours-reports-controls">
-        {allUsers.length > 0 && (
+  // Reports content — used by admin Tab 4 and employee Tab 2.
+  // When `lockedUserId` is set (employee mode), the employee dropdown is
+  // pre-filled with that user, disabled, and the "הכל" option is hidden.
+  const renderReportsContent = ({ lockedUserId = null } = {}) => {
+    const userIsLocked = !!lockedUserId
+    /* Admin sees the multi-select; locked employee sees a single-row table
+       (no employee picker at all — they can only see themselves). */
+    const employees = allUsers.filter(u => u.role === 'employee')
+    const filteredRows = reportData.filter(row =>
+      userIsLocked ? row.id === lockedUserId : selectedEmployeeIds.has(row.id)
+    )
+    return (
+      <div className="hours-reports-tab">
+        <div className="hours-reports-controls">
+          {userIsLocked ? (
+            <select
+              className="hours-user-select"
+              value={lockedUserId}
+              disabled
+            >
+              {allUsers.filter(u => u.id === lockedUserId).map(u => (
+                <option key={u.id} value={u.id}>
+                  {[u.first_name, u.last_name].filter(Boolean).join(' ')}
+                </option>
+              ))}
+            </select>
+          ) : (
+            employees.length > 0 && (
+              <EmployeesMultiSelect
+                employees={employees}
+                selectedIds={selectedEmployeeIds}
+                onChange={setSelectedEmployeeIds}
+              />
+            )
+          )}
           <select
-            className="hours-user-select"
-            value={reportUserId}
-            onChange={e => setReportUserId(e.target.value)}
+            className="hours-select hours-reports-select"
+            value={reportMonth}
+            onChange={e => setReportMonth(Number(e.target.value))}
           >
-            <option value="">הכל</option>
-            {allUsers.map(u => (
-              <option key={u.id} value={u.id}>
-                {[u.first_name, u.last_name].filter(Boolean).join(' ')}
-              </option>
-            ))}
+            {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
           </select>
+          <select
+            className="hours-select hours-reports-select"
+            value={reportYear}
+            onChange={e => setReportYear(Number(e.target.value))}
+          >
+            {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button className="hours-reports-fetch-btn" onClick={fetchReportData}>הצג</button>
+        </div>
+        {reportLoading && <div className="hours-reports-loading">טוען...</div>}
+        {!reportLoading && reportData.length > 0 && filteredRows.length === 0 && !userIsLocked && (
+          <div className="hours-reports-empty">בחרי לפחות עובד אחד</div>
         )}
-        <select
-          className="hours-select hours-reports-select"
-          value={reportMonth}
-          onChange={e => setReportMonth(Number(e.target.value))}
-        >
-          {MONTH_NAMES.map((name, i) => <option key={i} value={i}>{name}</option>)}
-        </select>
-        <select
-          className="hours-select hours-reports-select"
-          value={reportYear}
-          onChange={e => setReportYear(Number(e.target.value))}
-        >
-          {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <button className="hours-reports-fetch-btn" onClick={fetchReportData}>הצג</button>
-      </div>
-      {reportLoading && <div className="hours-reports-loading">טוען...</div>}
-      {!reportLoading && reportData.length > 0 && (
-        <>
-          <div className="report-table-container">
-            <div className="report-print-header">
-              סטודיו בתים — דיווח שעות עובדים | {MONTH_NAMES[reportMonth]} {reportYear}
-            </div>
-            <table className="hours-report-table">
-              <thead>
-                <tr>
-                  <th>שם עובד</th>
-                  <th>סה״כ שעות</th>
-                  <th>ימי עבודה במשרד</th>
-                  <th>ימי עבודה מהבית</th>
-                  <th>ימי חופשה</th>
-                  <th>ימי מחלה</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.filter(row => !reportUserId || row.id === reportUserId).map(row => (
-                  <tr key={row.id}>
-                    <td>{row.name}</td>
-                    <td>{toHHMM(row.totalMins)}</td>
-                    <td>{row.officeDays}</td>
-                    <td>{row.wfhDays}</td>
-                    <td>{row.vacationDays}</td>
-                    <td>{row.sickDays}</td>
+        {!reportLoading && reportData.length > 0 && filteredRows.length > 0 && (
+          <>
+            <div className="report-table-container">
+              <div className="report-print-header">
+                סטודיו בתים — דיווח שעות עובדים | {MONTH_NAMES[reportMonth]} {reportYear}
+              </div>
+              <table className="hours-report-table">
+                <thead>
+                  <tr>
+                    <th>שם עובד</th>
+                    <th>סה״כ שעות</th>
+                    <th>ימי עבודה במשרד</th>
+                    <th>ימי עבודה מהבית</th>
+                    <th>ימי חופשה</th>
+                    <th>ימי מחלה</th>
+                    <th className="hours-drill-toggle-header" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="hours-reports-export-row">
-            <button className="hours-reports-export-btn" title="ייצוא ל-PDF" onClick={() => window.print()}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-            </button>
-          </div>
-        </>
-      )}
-      {!reportLoading && reportData.length === 0 && (
-        <div className="hours-reports-empty">בחר חודש ולחץ הצג</div>
-      )}
-    </div>
-  )
+                </thead>
+                <tbody>
+                  {filteredRows.map(row => (
+                    <Fragment key={row.id}>
+                      <tr>
+                        <td>{row.name}</td>
+                        <td>{toHHMM(row.totalMins)}</td>
+                        <td>{row.officeDays}</td>
+                        <td>{row.wfhDays}</td>
+                        <td>{row.vacationDays}</td>
+                        <td>{row.sickDays}</td>
+                        <td className="hours-drill-toggle-cell">
+                          <button
+                            type="button"
+                            className="hours-drill-toggle"
+                            onClick={() => toggleReportDrill(row.id)}
+                            title={reportDrillExpanded.has(row.id) ? 'סגור' : 'הצג ימים פעילים'}
+                          >
+                            {reportDrillExpanded.has(row.id) ? '−' : '+'}
+                          </button>
+                        </td>
+                      </tr>
+                      {reportDrillExpanded.has(row.id) && (
+                        <tr className="hours-drill-row">
+                          <td colSpan={7}>
+                            <div className="hours-drill-list">{renderDrillBody(row.id, 'report')}</div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="hours-reports-export-row">
+              <button className="hours-reports-export-btn" title="ייצוא ל-PDF" onClick={() => window.print()}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+              </button>
+            </div>
+          </>
+        )}
+        {!reportLoading && reportData.length === 0 && (
+          <div className="hours-reports-empty">בחר חודש ולחץ הצג</div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="hours-page" dir="rtl">
@@ -1373,18 +1677,30 @@ function Hours() {
               )}
               {adminTab === 2 && entryFormBody}
               {adminTab === 3 && approvalsContent}
-              {adminTab === 4 && reportsContent}
+              {adminTab === 4 && renderReportsContent()}
             </div>
           </>
         ) : (
           <>
-            {/* Employee: RIGHT = calendar, LEFT = entry form */}
+            {/* Employee: RIGHT = calendar, LEFT = tabbed interface (entry / reports) */}
             <div className="hours-calendar-panel">
               {calendarContent}
             </div>
 
             <div className="hours-form-panel">
-              {entryFormBody}
+              <div className="hours-admin-tabs-bar">
+                <button
+                  className={`hours-admin-tab${employeeTab === 1 ? ' active' : ''}`}
+                  onClick={() => setEmployeeTab(1)}
+                >הזנת שעות</button>
+                <button
+                  className={`hours-admin-tab${employeeTab === 2 ? ' active' : ''}`}
+                  onClick={() => setEmployeeTab(2)}
+                >דוחות</button>
+              </div>
+
+              {employeeTab === 1 && entryFormBody}
+              {employeeTab === 2 && renderReportsContent({ lockedUserId: userId })}
             </div>
           </>
         )}

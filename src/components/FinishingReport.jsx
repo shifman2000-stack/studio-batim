@@ -1,6 +1,7 @@
 // src/components/FinishingReport.jsx
 // Pure-render report used by FinishingPrintView. No data fetching here.
 
+import { Fragment } from 'react'
 import './FinishingReport.css'
 
 function fmtDate(d) {
@@ -63,28 +64,33 @@ export default function FinishingReport({ data }) {
         </div>
       </div>
 
-      {/* ── Body: grouped table ── */}
+      {/* ── Body: one <table> for all groups. Column header in <thead> is
+            shown ONCE at the top and re-printed by the browser on each new page
+            (default `table-header-group` behavior). Category headers are <tr>s
+            with a colSpan-7 <td> styled as the group divider. ── */}
       {groups.length === 0 ? (
         <div style={{ marginTop: '14mm', color: '#8a8680', fontSize: '12px' }}>
           טרם נבחרו פריטים בחומרי הגמר.
         </div>
       ) : (
-        groups.map(({ category, items: catItems }) => (
-          <div key={category}>
-            <div className="fr-category">{category}</div>
-            <table className="fr-table">
-              <thead>
-                <tr>
-                  <th className="fr-col-element">אלמנט</th>
-                  <th className="fr-col-guidance">הנחיות לבחירה</th>
-                  <th className="fr-col-client-choice">בחירת הלקוח</th>
-                  <th className="fr-col-quantity">כמות</th>
-                  <th className="fr-col-dimension">מידה</th>
-                  <th className="fr-col-supplier">ספק</th>
-                  <th className="fr-col-notes">הערות</th>
+        <table className="fr-table">
+          <thead>
+            <tr>
+              <th className="fr-col-element">אלמנט</th>
+              <th className="fr-col-guidance">הנחיות לבחירה</th>
+              <th className="fr-col-client-choice">בחירת הלקוח</th>
+              <th className="fr-col-quantity">כמות</th>
+              <th className="fr-col-dimension">מידה</th>
+              <th className="fr-col-supplier">ספק</th>
+              <th className="fr-col-notes">הערות</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(({ category, items: catItems }) => (
+              <Fragment key={category}>
+                <tr className="fr-category-row">
+                  <td colSpan={7} className="fr-category">{category}</td>
                 </tr>
-              </thead>
-              <tbody>
                 {catItems.map(item => (
                   <tr key={item.id}>
                     <td className="fr-col-element">{item.element             || '—'}</td>
@@ -96,10 +102,10 @@ export default function FinishingReport({ data }) {
                     <td className="fr-col-notes">{item.notes                 || '—'}</td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        ))
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
       )}
 
       {/* ── Footer: general notes (if any) + disclaimer + signature ── */}
@@ -111,10 +117,10 @@ export default function FinishingReport({ data }) {
       )}
 
       <div className="fr-signature">
-        <div className="fr-signature-brand">סטודיו בָּתִים</div>
-        <div>einav.studiob@gmail.com</div>
-        <div>עינב שיפמן</div>
-        <div className="fr-signature-line--ltr">052-9593927</div>
+        <span className="fr-signature-brand">סטודיו בתים</span>
+        {' - עינב שיפמן | '}
+        <span dir="ltr">052-9593927</span>
+        {' | Einav.StudioB@gmail.com'}
       </div>
 
     </div>

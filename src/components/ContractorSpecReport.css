@@ -8,7 +8,7 @@
 }
 
 .csr-page {
-  background: #f7f5f2;
+  background: #ffffff;
   color: #1a1a18;
   direction: rtl;
   font-family: 'Heebo', 'Segoe UI', sans-serif;
@@ -63,10 +63,9 @@
   color: #1a1a18;
 }
 
-/* ── Category divider ── */
+/* ── Category divider row (now a <td colSpan> inside the single <table>) ── */
 .csr-category {
-  margin-top: 9mm;
-  padding: 5px 10px;
+  padding: 6px 10px;
   background: #ede9e1;
   color: #1a1a18;
   font-weight: 500;
@@ -74,6 +73,11 @@
   border-right: 3px solid #7a9478;
   page-break-after: avoid;
   break-after: avoid;
+}
+
+.csr-category-row td {
+  padding: 0;
+  border-bottom: none;
 }
 
 /* ── Table ── */
@@ -141,20 +145,20 @@
 
 .csr-signature {
   margin-top: 10mm;
-  padding-top: 6mm;
-  border-top: 0.5px solid rgba(26,26,24,0.14);
-  font-size: 12px;
-  line-height: 1.7;
+  padding-top: 4mm;
+  border-top: 1px solid rgba(26,26,24,0.10);
+  text-align: center;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 11px;
   color: #1a1a18;
+  direction: rtl;
 }
 
 .csr-signature-brand {
-  font-weight: 500;
+  font-family: 'Rubik', sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.05em;
   font-size: 13px;
   color: #1a1a18;
-}
-
-.csr-signature-line--ltr {
-  direction: ltr;
-  text-align: right;
 }

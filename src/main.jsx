@@ -22,6 +22,7 @@ import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import QuotePrintView from './pages/QuotePrintView'
 import QuotePrintSigned from './pages/QuotePrintSigned'
+import FinishingPrintView from './pages/FinishingPrintView'
 import QuotePublic from './pages/QuotePublic'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
@@ -46,6 +47,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
         <Route path="/quote-print-signed/:token" element={<QuotePrintSigned />} />
+        <Route path="/finishing-print/:projectId" element={<FinishingPrintView />} />
         <Route path="/quote/:token" element={<QuotePublic />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<Layout />}>

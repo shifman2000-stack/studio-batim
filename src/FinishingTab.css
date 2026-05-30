@@ -1,0 +1,183 @@
+/* ── Root ── */
+.ft-root {
+  direction: rtl;
+  max-width: 75%;
+}
+
+.ft-loading,
+.ft-empty {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+/* ── Table wrapper ── */
+.ft-table {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.06);
+  /* visible so the supplier autocomplete dropdown can spill below the last row */
+  overflow: visible;
+}
+
+/* ── Column header row (mirrors .dt-table-header) ── */
+.ft-table-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f7faf9;
+  border-bottom: 1px solid #b2dbd5;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  direction: rtl;
+  gap: 6px;
+}
+
+/* ── Category header row (group divider — mirrors .dt-sub-stage-header) ── */
+.ft-category-header {
+  padding: 8px 12px;
+  background: #e8e8e8;
+  color: #374151;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+  direction: rtl;
+  border-bottom: 1px solid #d1d5db;
+  border-top: 1px solid #d1d5db;
+}
+
+.ft-table > .ft-category-header:first-of-type {
+  border-top: none;
+}
+
+/* ── Item row (mirrors .dt-doc-row) ── */
+.ft-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+  border-bottom: 1px solid #f3f4f6;
+  direction: rtl;
+  min-height: 36px;
+  background: #fff;
+  font-size: 13px;
+  color: #1a1a2e;
+}
+
+.ft-row--even {
+  background: #f9fafb;
+}
+
+.ft-row:last-child {
+  border-bottom: none;
+}
+
+/* ── Column widths ── */
+.ft-col-element       { flex: 1;        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 6px; }
+.ft-col-guidance      { flex: 1.8;      min-width: 0; padding: 3px 6px; }
+.ft-col-client-choice { flex: 1.2;      min-width: 0; }
+.ft-col-quantity      { flex: 0 0 70px; text-align: center; }
+.ft-col-dimension     { flex: 0 0 80px; text-align: center; }
+.ft-col-supplier      { flex: 1;        min-width: 0; position: relative; }
+.ft-col-notes         { flex: 1.5;      min-width: 0; }
+
+/* ── Inline editable cell input (mirrors .dt-notes-input) ── */
+.ft-cell-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: transparent;
+  color: #1a1a2e;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+  direction: rtl;
+}
+
+.ft-cell-input:hover,
+.ft-cell-input:focus {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.ft-cell-input:focus {
+  border-color: #7bc1b5;
+}
+
+/* ── General notes section (below the table) ── */
+.ft-notes-section {
+  margin-top: 18px;
+  direction: rtl;
+}
+
+.ft-notes-title {
+  padding: 6px 4px 8px;
+  color: #374151;
+  font-weight: 600;
+  font-size: 13px;
+  text-align: right;
+}
+
+.ft-notes-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;        /* subtle visible border (matches focused cell baseline) */
+  border-radius: 5px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #1a1a2e;
+  background: #fff;
+  outline: none;
+  resize: vertical;
+  min-height: 110px;                /* ~5 rows */
+  direction: rtl;
+  transition: border-color 0.15s;
+}
+
+.ft-notes-textarea:focus {
+  border-color: #7bc1b5;            /* matches .ft-cell-input:focus accent */
+}
+
+.ft-notes-textarea:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+/* ── PDF export button (mirrors .qb-btn primitives, sage-on-cream variant) ── */
+.ft-pdf-section {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-start;   /* in RTL, flex-start = visually right */
+  direction: rtl;
+}
+
+.ft-pdf-btn {
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 8px 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid #c8bfb0;       /* sand */
+  background: transparent;
+  color: #7a9478;                   /* sage */
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.ft-pdf-btn:hover:not(:disabled) {
+  background: rgba(122, 148, 120, 0.08);
+  border-color: #7a9478;
+}
+
+.ft-pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

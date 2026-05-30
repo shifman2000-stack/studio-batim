@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient'
 import ProfessionalModal from './components/professionals/ProfessionalModal'
 import DocumentsTab from './components/documents/DocumentsTab'
 import TasksTab from './components/tasks/TasksTab'
+import FinishingTab from './components/finishing/FinishingTab'
 import NewTaskModal from './NewTaskModal'
 import ProjectGantt from './components/ProjectGantt'
 import './ProjectDetail.css'
@@ -194,7 +195,7 @@ const TABS = [
   { id: 3, label: 'מעקב שלבי התקדמות' },
   { id: 2, label: 'מעקב מסמכים' },
   { id: 6, label: 'כתב כמויות', disabled: true },
-  { id: 7, label: 'חומרי גמר', disabled: true },
+  { id: 7, label: 'חומרי גמר' },
   { id: 4, label: 'שעות', disabled: true },
   { id: 8, label: 'גאנט' },
 ]
@@ -961,6 +962,11 @@ function ProjectDetail() {
         {/* ── Tab 3 — מעקב שלבי התקדמות ── */}
         {activeTab === 3 && (
           <TasksTab projectId={id} />
+        )}
+
+        {/* ── Tab 7 — חומרי גמר ── */}
+        {activeTab === 7 && (
+          <FinishingTab projectId={id} />
         )}
 
         {/* ── Tab 8 — גאנט ── */}

@@ -1,0 +1,170 @@
+/* ── Studio Batim — Finishing Materials Report (Puppeteer-rendered) ─────
+   Cream + charcoal + sage palette. RTL, Heebo. Single flow, A4 paged. */
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+.fr-page {
+  background: #f7f5f2;
+  color: #1a1a18;
+  direction: rtl;
+  font-family: 'Heebo', 'Segoe UI', sans-serif;
+  font-weight: 300;
+  padding: 18mm 16mm;
+  min-height: 100vh;
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── Header ── */
+.fr-header {
+  border-bottom: 0.5px solid rgba(26,26,24,0.18);
+  padding-bottom: 10mm;
+  margin-bottom: 10mm;
+}
+
+.fr-brand {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: #8a8680;
+  margin: 0 0 6mm;
+}
+
+.fr-title {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+  color: #1a1a18;
+  margin: 0 0 6mm;
+}
+
+.fr-meta {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  font-size: 12px;
+  color: #1a1a18;
+}
+
+.fr-meta-label {
+  font-weight: 500;
+  color: #8a8680;
+}
+
+.fr-meta-value {
+  color: #1a1a18;
+}
+
+/* ── Category divider ── */
+.fr-category {
+  margin-top: 9mm;
+  padding: 5px 10px;
+  background: #ede9e1;
+  color: #1a1a18;
+  font-weight: 500;
+  font-size: 13px;
+  border-right: 3px solid #7a9478;   /* sage accent on the visual right (RTL start) */
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+/* ── Table ── */
+.fr-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3mm 0 0;
+  font-size: 11px;
+  page-break-inside: auto;
+}
+
+.fr-table thead {
+  display: table-header-group;       /* repeat header on each page */
+}
+
+.fr-table thead th {
+  text-align: right;
+  padding: 6px 8px;
+  border-bottom: 0.5px solid #c8bfb0;
+  color: #8a8680;
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  vertical-align: bottom;
+}
+
+.fr-table tbody td {
+  padding: 6px 8px;
+  border-bottom: 0.5px solid #ede9e1;
+  vertical-align: top;
+  color: #1a1a18;
+  font-weight: 300;
+}
+
+.fr-table tbody tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Column hints — keep the grid breathable, longer text wraps naturally */
+.fr-col-element       { width: 12%; }
+.fr-col-guidance      { width: 22%; }
+.fr-col-client-choice { width: 14%; }
+.fr-col-quantity      { width: 7%;  text-align: center; }
+.fr-col-dimension     { width: 9%;  text-align: center; }
+.fr-col-supplier      { width: 11%; }
+.fr-col-notes         { width: 25%; }
+
+/* ── Footer area ── */
+.fr-notes-block {
+  margin-top: 12mm;
+  page-break-inside: avoid;
+}
+
+.fr-notes-heading {
+  font-weight: 500;
+  font-size: 13px;
+  color: #1a1a18;
+  margin-bottom: 4mm;
+}
+
+.fr-notes-body {
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: #1a1a18;
+  line-height: 1.65;
+}
+
+.fr-disclaimer {
+  margin-top: 8mm;
+  font-size: 11px;
+  color: #8a8680;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+.fr-signature {
+  margin-top: 10mm;
+  padding-top: 6mm;
+  border-top: 0.5px solid rgba(26,26,24,0.14);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #1a1a18;
+}
+
+.fr-signature-brand {
+  font-weight: 500;
+  font-size: 13px;
+  color: #1a1a18;
+}
+
+.fr-signature-line--ltr {
+  direction: ltr;
+  text-align: right;     /* RTL flow keeps it under the others, glyphs flow LTR */
+}

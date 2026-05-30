@@ -38,6 +38,18 @@ export default async function handler(req, res) {
 
     const page = await browser.newPage()
 
+    // ── TEMP DIAGNOSTIC LOGGING (remove once bug is identified) ──
+    page.on('console', msg => console.log('[PAGE CONSOLE]', msg.type(), msg.text()))
+    page.on('pageerror', err => console.log('[PAGE ERROR]', err.message))
+    page.on('requestfailed', req => console.log('[REQUEST FAILED]', req.url(), req.failure()?.errorText))
+    page.on('response', resp => {
+      if (resp.url().includes('supabase') || resp.url().includes('rpc')) {
+        console.log('[SUPABASE RESPONSE]', resp.status(), resp.url())
+      }
+    })
+
+    console.log('[PUPPETEER] Navigating to:', printUrl)
+
     // Navigate to the clean print route (no UI chrome)
     await page.goto(printUrl, { waitUntil: 'networkidle0', timeout: 30000 })
 
@@ -53,6 +65,12 @@ export default async function handler(req, res) {
     await page.evaluateHandle('document.fonts.ready')
     // Small extra buffer for slow font CDNs
     await new Promise(r => setTimeout(r, 500))
+
+    // ── TEMP DIAGNOSTIC: snapshot the DOM right before capture ──
+    const bodyHtmlSnapshot = await page.evaluate(() => document.body.innerHTML.substring(0, 500))
+    const bodyLength       = await page.evaluate(() => document.body.innerHTML.length)
+    console.log('[DOM AT CAPTURE] bodyLength:', bodyLength)
+    console.log('[DOM AT CAPTURE] bodyHtml first 500 chars:', bodyHtmlSnapshot)
 
     // Generate PDF — same options as the quote PDF so layout/fonts/breaks behave identically.
     const pdfBytes = await page.pdf({

@@ -45,13 +45,16 @@
   margin: 0 0 6mm;
 }
 
-.csr-meta {
-  display: grid;
-  grid-template-columns: 70px 1fr 70px 1fr;
-  column-gap: 16px;
-  row-gap: 4px;
+.csr-meta-line {
+  margin-top: 6mm;
+  padding-top: 4mm;
+  border-top: 1px solid rgba(26,26,24,0.10);
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
   font-size: 12px;
   color: #1a1a18;
+  text-align: right;
+  direction: rtl;
 }
 
 .csr-meta-label {
@@ -59,18 +62,14 @@
   color: #8a8680;
 }
 
-.csr-meta-value {
-  color: #1a1a18;
-}
-
 /* ── Category divider row (now a <td colSpan> inside the single <table>) ── */
 .csr-category {
   padding: 6px 10px;
-  background: #ede9e1;
+  background: #fafaf8;                              /* near white — matches on-screen tabs */
   color: #1a1a18;
   font-weight: 500;
   font-size: 13px;
-  border-right: 3px solid #7a9478;
+  border-bottom: 1px solid rgba(26,26,24,0.10);     /* subtle separator without dark bg */
   page-break-after: avoid;
   break-after: avoid;
 }
@@ -115,6 +114,14 @@
 .csr-table tbody tr {
   page-break-inside: avoid;
   break-inside: avoid;
+}
+
+/* ── Vertical column dividers (skip category-header row) ──
+   In RTL, border-left visually appears between this cell and the next one
+   to its left — i.e. between columns. */
+.csr-table thead th:not(:last-child),
+.csr-table tbody tr:not(.csr-category-row) td:not(:last-child) {
+  border-left: 1px solid rgba(26,26,24,0.06);
 }
 
 /* Column widths — four columns total */

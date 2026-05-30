@@ -52,16 +52,14 @@ export default function ContractorSpecReport({ data }) {
       <div className="csr-header">
         <div className="csr-brand">סטודיו בָּתִים</div>
         <h1 className="csr-title">מפרט לקבלן{project.name ? ` — ${project.name}` : ''}</h1>
-        <div className="csr-meta">
-          <span className="csr-meta-label">שם לקוח</span>
-          <span className="csr-meta-value">{clientName}</span>
-          <span className="csr-meta-label">תאריך</span>
-          <span className="csr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{today}</span>
-
-          <span className="csr-meta-label">טלפון</span>
-          <span className="csr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{clientPhone}</span>
-          <span className="csr-meta-label">כתובת</span>
-          <span className="csr-meta-value">{clientCity}</span>
+        <div className="csr-meta-line">
+          <span className="csr-meta-label">שם לקוח: </span>{clientName}
+          {'  |  '}
+          <span className="csr-meta-label">טלפון: </span><span dir="ltr">{clientPhone}</span>
+          {'  |  '}
+          <span className="csr-meta-label">כתובת: </span>{clientCity}
+          {'  |  '}
+          <span className="csr-meta-label">תאריך: </span>{today}
         </div>
       </div>
 

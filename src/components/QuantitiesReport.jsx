@@ -52,16 +52,14 @@ export default function QuantitiesReport({ data }) {
       <div className="qr-header">
         <div className="qr-brand">סטודיו בָּתִים</div>
         <h1 className="qr-title">כתב כמויות{project.name ? ` — ${project.name}` : ''}</h1>
-        <div className="qr-meta">
-          <span className="qr-meta-label">שם לקוח</span>
-          <span className="qr-meta-value">{clientName}</span>
-          <span className="qr-meta-label">תאריך</span>
-          <span className="qr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{today}</span>
-
-          <span className="qr-meta-label">טלפון</span>
-          <span className="qr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{clientPhone}</span>
-          <span className="qr-meta-label">כתובת</span>
-          <span className="qr-meta-value">{clientCity}</span>
+        <div className="qr-meta-line">
+          <span className="qr-meta-label">שם לקוח: </span>{clientName}
+          {'  |  '}
+          <span className="qr-meta-label">טלפון: </span><span dir="ltr">{clientPhone}</span>
+          {'  |  '}
+          <span className="qr-meta-label">כתובת: </span>{clientCity}
+          {'  |  '}
+          <span className="qr-meta-label">תאריך: </span>{today}
         </div>
       </div>
 

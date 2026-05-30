@@ -51,16 +51,14 @@ export default function FinishingReport({ data }) {
       <div className="fr-header">
         <div className="fr-brand">סטודיו בָּתִים</div>
         <h1 className="fr-title">חומרי גמר{project.name ? ` — ${project.name}` : ''}</h1>
-        <div className="fr-meta">
-          <span className="fr-meta-label">שם לקוח</span>
-          <span className="fr-meta-value">{clientName}</span>
-          <span className="fr-meta-label">תאריך</span>
-          <span className="fr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{today}</span>
-
-          <span className="fr-meta-label">טלפון</span>
-          <span className="fr-meta-value" dir="ltr" style={{ textAlign: 'right' }}>{clientPhone}</span>
-          <span className="fr-meta-label">כתובת</span>
-          <span className="fr-meta-value">{clientCity}</span>
+        <div className="fr-meta-line">
+          <span className="fr-meta-label">שם לקוח: </span>{clientName}
+          {'  |  '}
+          <span className="fr-meta-label">טלפון: </span><span dir="ltr">{clientPhone}</span>
+          {'  |  '}
+          <span className="fr-meta-label">כתובת: </span>{clientCity}
+          {'  |  '}
+          <span className="fr-meta-label">תאריך: </span>{today}
         </div>
       </div>
 

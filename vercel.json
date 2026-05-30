@@ -8,6 +8,14 @@
     "api/generate-finishing-pdf.js": {
       "maxDuration": 30,
       "memory": 1024
+    },
+    "api/generate-quantities-pdf.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/generate-contractor-spec-pdf.js": {
+      "maxDuration": 30,
+      "memory": 1024
     }
   }
 }

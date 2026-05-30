@@ -23,6 +23,8 @@ import InquiryForm from './pages/InquiryForm'
 import QuotePrintView from './pages/QuotePrintView'
 import QuotePrintSigned from './pages/QuotePrintSigned'
 import FinishingPrintView from './pages/FinishingPrintView'
+import QuantitiesPrintView from './pages/QuantitiesPrintView'
+import ContractorSpecPrintView from './pages/ContractorSpecPrintView'
 import QuotePublic from './pages/QuotePublic'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
@@ -48,6 +50,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
         <Route path="/quote-print-signed/:token" element={<QuotePrintSigned />} />
         <Route path="/finishing-print/:projectId" element={<FinishingPrintView />} />
+        <Route path="/quantities-print/:projectId" element={<QuantitiesPrintView />} />
+        <Route path="/contractor-spec-print/:projectId" element={<ContractorSpecPrintView />} />
         <Route path="/quote/:token" element={<QuotePublic />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<Layout />}>

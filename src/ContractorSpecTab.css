@@ -1,0 +1,106 @@
+/* ── Root ── */
+.cs-root {
+  direction: rtl;
+  max-width: 75%;
+}
+
+.cs-loading,
+.cs-empty {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+/* ── Table wrapper ── */
+.cs-table {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.06);
+  overflow: visible;
+}
+
+/* ── Column header row (mirrors .ft-table-header) ── */
+.cs-table-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f7faf9;
+  border-bottom: 1px solid #b2dbd5;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a18;
+  direction: rtl;
+  gap: 6px;
+}
+
+/* ── Category header row (group divider — mirrors .ft-category-header) ── */
+.cs-category-header {
+  padding: 8px 12px;
+  background: #e8e8e8;
+  color: #374151;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: right;
+  direction: rtl;
+  border-bottom: 1px solid #d1d5db;
+  border-top: 1px solid #d1d5db;
+}
+
+.cs-table > .cs-category-header:first-of-type {
+  border-top: none;
+}
+
+/* ── Item row (mirrors .ft-row) ── */
+.cs-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+  border-bottom: 1px solid #f3f4f6;
+  direction: rtl;
+  min-height: 36px;
+  background: #fff;
+  font-size: 13px;
+  color: #1a1a2e;
+}
+
+.cs-row--even {
+  background: #f9fafb;
+}
+
+.cs-row:last-child {
+  border-bottom: none;
+}
+
+/* ── Column widths ── */
+.cs-col-item     { flex: 2;         min-width: 0; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-col-quantity { flex: 0 0 100px; text-align: center; }
+.cs-col-unit     { flex: 0 0 100px; text-align: center; }
+.cs-col-notes    { flex: 2.5;       min-width: 0; padding: 3px 6px; }
+
+/* ── Inline editable cell input (mirrors .ft-cell-input) ── */
+.cs-cell-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: transparent;
+  color: #1a1a2e;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
+  direction: rtl;
+}
+
+.cs-cell-input:hover,
+.cs-cell-input:focus {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.cs-cell-input:focus {
+  border-color: #7bc1b5;
+}

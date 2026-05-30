@@ -1,0 +1,163 @@
+/* ── Studio Batim — Quantities Report (Puppeteer-rendered) ─────────────
+   Mirrors FinishingReport.css visually — same palette, same flow.
+   qr- prefix for quantities. RTL, Heebo. Single flow, A4 paged. */
+
+@page {
+  size: A4 portrait;
+  margin: 15mm 12mm;
+}
+
+.qr-page {
+  background: #f7f5f2;
+  color: #1a1a18;
+  direction: rtl;
+  font-family: 'Heebo', 'Segoe UI', sans-serif;
+  font-weight: 300;
+  /* @page provides 15mm 12mm of paper margin; small inner inset to match
+     the original visual whitespace. */
+  padding: 3mm 4mm;
+  min-height: 100vh;
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── Header ── */
+.qr-header {
+  border-bottom: 0.5px solid rgba(26,26,24,0.18);
+  padding-bottom: 10mm;
+  margin-bottom: 10mm;
+}
+
+.qr-brand {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: #8a8680;
+  margin: 0 0 6mm;
+}
+
+.qr-title {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+  color: #1a1a18;
+  margin: 0 0 6mm;
+}
+
+.qr-meta {
+  display: grid;
+  grid-template-columns: 70px 1fr 70px 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  font-size: 12px;
+  color: #1a1a18;
+}
+
+.qr-meta-label {
+  font-weight: 500;
+  color: #8a8680;
+}
+
+.qr-meta-value {
+  color: #1a1a18;
+}
+
+/* ── Category divider ── */
+.qr-category {
+  margin-top: 9mm;
+  padding: 5px 10px;
+  background: #ede9e1;
+  color: #1a1a18;
+  font-weight: 500;
+  font-size: 13px;
+  border-right: 3px solid #7a9478;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+/* ── Table ── */
+.qr-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3mm 0 0;
+  font-size: 11px;
+  page-break-inside: auto;
+}
+
+.qr-table thead {
+  display: table-header-group;
+}
+
+.qr-table thead th {
+  text-align: right;
+  padding: 6px 8px;
+  border-bottom: 0.5px solid #c8bfb0;
+  color: #8a8680;
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  vertical-align: bottom;
+}
+
+.qr-table tbody td {
+  padding: 6px 8px;
+  border-bottom: 0.5px solid #ede9e1;
+  vertical-align: top;
+  color: #1a1a18;
+  font-weight: 300;
+}
+
+.qr-table tbody tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Column widths — five columns total */
+.qr-col-item        { width: 22%; }
+.qr-col-qty-sqm     { width: 12%; text-align: center; }
+.qr-col-units       { width: 12%; text-align: center; }
+.qr-col-dimensions  { width: 14%; text-align: center; }
+.qr-col-description { width: 40%; }
+
+/* ── Footer area ── */
+.qr-notes-block {
+  margin-top: 12mm;
+  page-break-inside: avoid;
+}
+
+.qr-notes-heading {
+  font-weight: 500;
+  font-size: 13px;
+  color: #1a1a18;
+  margin-bottom: 4mm;
+}
+
+.qr-notes-body {
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: #1a1a18;
+  line-height: 1.65;
+}
+
+.qr-signature {
+  margin-top: 10mm;
+  padding-top: 6mm;
+  border-top: 0.5px solid rgba(26,26,24,0.14);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #1a1a18;
+}
+
+.qr-signature-brand {
+  font-weight: 500;
+  font-size: 13px;
+  color: #1a1a18;
+}
+
+.qr-signature-line--ltr {
+  direction: ltr;
+  text-align: right;
+}

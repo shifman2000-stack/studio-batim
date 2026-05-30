@@ -4,6 +4,10 @@
     "api/generate-pdf.js": {
       "maxDuration": 30,
       "memory": 1024
+    },
+    "api/generate-finishing-pdf.js": {
+      "maxDuration": 30,
+      "memory": 1024
     }
   }
 }

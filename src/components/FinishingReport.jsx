@@ -52,13 +52,10 @@ export default function FinishingReport({ data }) {
         <div className="fr-brand">סטודיו בָּתִים</div>
         <h1 className="fr-title">חומרי גמר{project.name ? ` — ${project.name}` : ''}</h1>
         <div className="fr-meta-line">
-          <span className="fr-meta-label">שם לקוח: </span>{clientName}
-          {'  |  '}
-          <span className="fr-meta-label">טלפון: </span><span dir="ltr">{clientPhone}</span>
-          {'  |  '}
-          <span className="fr-meta-label">כתובת: </span>{clientCity}
-          {'  |  '}
-          <span className="fr-meta-label">תאריך: </span>{today}
+          <span><span className="fr-meta-label">שם לקוח:</span> {clientName}</span>
+          <span><span className="fr-meta-label">טלפון:</span> <span dir="ltr">{clientPhone}</span></span>
+          <span><span className="fr-meta-label">כתובת:</span> {clientCity}</span>
+          <span><span className="fr-meta-label">תאריך:</span> {today}</span>
         </div>
       </div>
 
@@ -116,9 +113,9 @@ export default function FinishingReport({ data }) {
 
       <div className="fr-signature">
         <span className="fr-signature-brand">סטודיו בתים</span>
-        {' - עינב שיפמן | '}
+        <span>עינב שיפמן</span>
         <span dir="ltr">052-9593927</span>
-        {' | Einav.StudioB@gmail.com'}
+        <span>Einav.StudioB@gmail.com</span>
       </div>
 
     </div>

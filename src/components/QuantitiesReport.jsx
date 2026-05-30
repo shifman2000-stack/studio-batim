@@ -53,10 +53,13 @@ export default function QuantitiesReport({ data }) {
         <div className="qr-brand">סטודיו בָּתִים</div>
         <h1 className="qr-title">כתב כמויות{project.name ? ` — ${project.name}` : ''}</h1>
         <div className="qr-meta-line">
-          <span><span className="qr-meta-label">שם לקוח:</span> {clientName}</span>
-          <span><span className="qr-meta-label">טלפון:</span> <span dir="ltr">{clientPhone}</span></span>
-          <span><span className="qr-meta-label">כתובת:</span> {clientCity}</span>
-          <span><span className="qr-meta-label">תאריך:</span> {today}</span>
+          לקוח: {clientName}
+          {'  |  '}
+          <span dir="ltr">{clientPhone}</span>
+          {'  |  '}
+          {clientCity}
+          {'  |  '}
+          {today}
         </div>
       </div>
 
@@ -107,9 +110,9 @@ export default function QuantitiesReport({ data }) {
 
       <div className="qr-signature">
         <span className="qr-signature-brand">סטודיו בתים</span>
-        <span>עינב שיפמן</span>
+        {' - עינב שיפמן  |  '}
         <span dir="ltr">052-9593927</span>
-        <span>Einav.StudioB@gmail.com</span>
+        {'  |  einav.studiob@gmail.com'}
       </div>
 
     </div>

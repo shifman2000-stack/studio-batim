@@ -53,10 +53,13 @@ export default function ContractorSpecReport({ data }) {
         <div className="csr-brand">סטודיו בָּתִים</div>
         <h1 className="csr-title">מפרט לקבלן{project.name ? ` — ${project.name}` : ''}</h1>
         <div className="csr-meta-line">
-          <span><span className="csr-meta-label">שם לקוח:</span> {clientName}</span>
-          <span><span className="csr-meta-label">טלפון:</span> <span dir="ltr">{clientPhone}</span></span>
-          <span><span className="csr-meta-label">כתובת:</span> {clientCity}</span>
-          <span><span className="csr-meta-label">תאריך:</span> {today}</span>
+          לקוח: {clientName}
+          {'  |  '}
+          <span dir="ltr">{clientPhone}</span>
+          {'  |  '}
+          {clientCity}
+          {'  |  '}
+          {today}
         </div>
       </div>
 
@@ -105,9 +108,9 @@ export default function ContractorSpecReport({ data }) {
 
       <div className="csr-signature">
         <span className="csr-signature-brand">סטודיו בתים</span>
-        <span>עינב שיפמן</span>
+        {' - עינב שיפמן  |  '}
         <span dir="ltr">052-9593927</span>
-        <span>Einav.StudioB@gmail.com</span>
+        {'  |  einav.studiob@gmail.com'}
       </div>
 
     </div>

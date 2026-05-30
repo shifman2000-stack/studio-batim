@@ -41,6 +41,11 @@ export default async function handler(req, res) {
     // Navigate to the clean print route (no UI chrome)
     await page.goto(printUrl, { waitUntil: 'networkidle0', timeout: 30000 })
 
+    // Synchronization fence — FinishingPrintView only sets this attribute on its
+    // success-path render, AFTER the RPC has resolved and FinishingReport mounted.
+    // Guards against networkidle0 firing before React mounts + dispatches the RPC.
+    await page.waitForSelector('[data-finishing-ready="true"]', { timeout: 30000 })
+
     // Switch to print media so @page rules take effect.
     await page.emulateMediaType('print')
 

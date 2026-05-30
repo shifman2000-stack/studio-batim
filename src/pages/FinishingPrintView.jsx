@@ -49,7 +49,7 @@ export default function FinishingPrintView() {
   if (!data) return null
 
   return (
-    <div className="finishing-print-mode">
+    <div className="finishing-print-mode" data-finishing-ready="true">
       <style>{`
         /* Force A4 paged layout for Puppeteer */
         @page {

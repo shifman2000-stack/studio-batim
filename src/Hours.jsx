@@ -134,8 +134,12 @@ function Hours() {
     sickDays: 0, vacationDays: 0, totalMins: 0,
     pendingMins: 0, rejectedMins: 0, officeDays: 0, wfhDays: 0,
   })
-  /* Per-employee summary rows shown below the calendar in ADMIN view. */
-  const [employeesSummary, setEmployeesSummary] = useState([])
+  /* Per-employee daily details for the calendar's viewed month (ADMIN view).
+     Shape: [{ id, name, byDate: { 'YYYY-MM-DD': entry } }]
+     Populated by fetchMonthlySummary's admin branch — reuses the same query
+     (with `date` added to the SELECT). Rendered below the calendar as a
+     per-day view keyed by the user's currently selected day. */
+  const [dailyByEmployee, setDailyByEmployee] = useState([])
 
   /* ── Drill-down state ──
      Calendar drill-down (below the calendar — keyed by userId).
@@ -391,36 +395,74 @@ function Hours() {
 
     setMonthlySummary({ sickDays, vacationDays, totalMins, pendingMins, rejectedMins, officeDays, wfhDays })
 
-    /* For admin: also compute per-employee summary rows for the same month. */
+    /* For admin: also build a per-employee daily breakdown for the same month.
+       Renders below the calendar as a per-day view (one row per selected
+       employee for the user's selected day). Uses the SAME two queries with
+       `date` added to the SELECT — no extra round-trips. */
     if (userRole === 'admin') {
       const [{ data: employees }, { data: allAtt }, { data: allRep }] = await Promise.all([
         supabase.from('profiles').select('id, first_name, last_name')
           .eq('role', 'employee').order('first_name'),
-        supabase.from('attendance').select('user_id, day_type, work_from_home, arrival_time, departure_time')
+        supabase.from('attendance').select('user_id, date, day_type, arrival_time, departure_time')
           .gte('date', first).lte('date', last),
-        supabase.from('hour_reports').select('user_id, hours, minutes')
+        supabase.from('hour_reports').select('user_id, date, hours, minutes')
           .gte('date', first).lte('date', last),
       ])
-      const rows = (employees || []).map(emp => {
+
+      const empDaily = (employees || []).map(emp => {
         const empAtt = allAtt ? allAtt.filter(a => a.user_id === emp.id) : []
         const empRep = allRep ? allRep.filter(r => r.user_id === emp.id) : []
-        const empAttMins = empAtt
-          .filter(a => a.day_type === 'work' && a.arrival_time && a.departure_time)
-          .reduce((s, a) =>
-            s + toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5)), 0)
-        const empRepMins = empRep.reduce((s, r) => s + (r.hours || 0) * 60 + (r.minutes || 0), 0)
+
+        /* Aggregate by date — same logic as fetchEmployeeDailyDetails so the
+           rendered line is identical to the report's drill-down entries. */
+        const dayMap = new Map()
+        for (const a of empAtt) {
+          const existing = dayMap.get(a.date) || {
+            date: a.date, dayType: null, attMins: 0, repMins: 0,
+            arrivalTime: null, departureTime: null,
+          }
+          if (a.day_type) existing.dayType = a.day_type
+          if (a.arrival_time   && !existing.arrivalTime)   existing.arrivalTime   = a.arrival_time.slice(0, 5)
+          if (a.departure_time && !existing.departureTime) existing.departureTime = a.departure_time.slice(0, 5)
+          if (a.day_type === 'work' && a.arrival_time && a.departure_time) {
+            existing.attMins += toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5))
+          }
+          dayMap.set(a.date, existing)
+        }
+        for (const r of empRep) {
+          const existing = dayMap.get(r.date) || {
+            date: r.date, dayType: null, attMins: 0, repMins: 0,
+            arrivalTime: null, departureTime: null,
+          }
+          existing.repMins += (r.hours || 0) * 60 + (r.minutes || 0)
+          dayMap.set(r.date, existing)
+        }
+
+        const byDate = {}
+        for (const day of dayMap.values()) {
+          /* Prefer attendance diff (actual at-work mins); fall back to project sum (admin case). */
+          const totalMins = day.attMins > 0 ? day.attMins : day.repMins
+          /* Include vacation/sick days OR days with hours. Skip empty days. */
+          if (day.dayType === 'vacation' || day.dayType === 'sick' || totalMins > 0) {
+            byDate[day.date] = {
+              date:          day.date,
+              dayType:       day.dayType,
+              arrivalTime:   day.arrivalTime,
+              departureTime: day.departureTime,
+              totalMins,
+            }
+          }
+        }
+
         return {
-          id:           emp.id,
-          name:         [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() || '-',
-          totalMins:    empAttMins > 0 ? empAttMins : empRepMins,
-          sickDays:     empAtt.filter(a => a.day_type === 'sick').length,
-          vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,
-          officeDays:   empAtt.filter(a => a.day_type === 'work' && !a.work_from_home).length,
-          wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
+          id:    emp.id,
+          name:  [emp.first_name, emp.last_name].filter(Boolean).join(' ').trim() || '-',
+          byDate,
         }
       })
-      rows.sort((a, b) => a.name.localeCompare(b.name, 'he'))
-      setEmployeesSummary(rows)
+
+      empDaily.sort((a, b) => a.name.localeCompare(b.name, 'he'))
+      setDailyByEmployee(empDaily)
     }
   }
 
@@ -495,6 +537,20 @@ function Hours() {
     return `${date}  |  ${arrival} - ${departure}  |  סה״כ שעות: ${total}`
   }
 
+  /* Same as formatDrillLine but WITHOUT the leading "DD/MM/YY  |  " segment.
+     Used only in the per-day view below the calendar — the date is already
+     visible on the calendar itself, so showing it again on each row is noise.
+     formatDrillLine is intentionally left unchanged (still used by the report
+     drill-down and the employee daily-details list, which list multiple days). */
+  const formatDrillEntryNoDate = (day) => {
+    if (day.dayType === 'vacation') return 'יום חופש'
+    if (day.dayType === 'sick')     return 'יום מחלה'
+    const arrival   = day.arrivalTime   || '—'
+    const departure = day.departureTime || '—'
+    const total     = formatTotalHHMM(day.totalMins)
+    return `${arrival} - ${departure}  |  סה״כ שעות: ${total}`
+  }
+
   const toggleCalendarDrill = async (uId) => {
     if (calendarDrillExpanded.has(uId)) {
       setCalendarDrillExpanded(prev => { const n = new Set(prev); n.delete(uId); return n })
@@ -546,11 +602,23 @@ function Hours() {
     setReportDrillCache({})
   }, [reportYear, reportMonth])
 
-  /* Initialize the admin multi-select with ALL employees when allUsers loads. */
+  /* Initialize the admin multi-select with ONLY Adi + Inbar (by first_name)
+     when allUsers loads. All other employees (including Nir) start UNchecked. */
   useEffect(() => {
-    const empIds = allUsers.filter(u => u.role === 'employee').map(u => u.id)
+    const DEFAULT_FIRST_NAMES = new Set(['עדי', 'ענבר'])
+    const empIds = allUsers
+      .filter(u => u.role === 'employee' && DEFAULT_FIRST_NAMES.has(u.first_name))
+      .map(u => u.id)
     setSelectedEmployeeIds(new Set(empIds))
   }, [allUsers])
+
+  /* Auto-fetch report data whenever ANY filter changes (employee multi-select,
+     month, year) — replaces the manual "הצג" button click. Fires on mount once
+     userId is set, then again whenever a filter value changes. */
+  useEffect(() => {
+    if (userId) fetchReportData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, reportYear, reportMonth, selectedEmployeeIds])
 
   // ── Reports (admin Tab 3) ──
   const fetchReportData = async () => {
@@ -1215,49 +1283,23 @@ function Hours() {
       </div>
 
       {isAdmin ? (
-        /* Admin: one row per employee (alphabetical). Each row matches the
-           employee single-row styling, prefixed with "{name} |". Each row has
-           a +/- drill toggle to reveal the active days of that month. */
+        /* Admin: per-day view, driven by clicking a day in the calendar.
+           For each currently-selected employee that has an entry on the
+           selected day, render one row using the same daily-entry format
+           as the report's drill-down lines. Employees with no entry for
+           the selected day are omitted entirely. */
         <div className="hours-monthly-summary-admin">
-          {employeesSummary.map(emp => (
-            <div key={emp.id} className="hours-summary-group">
-              <div className="hours-summary-row">
-                <span className="hours-employee-name">{emp.name}</span>
-                <span className="hours-summary-sep">|</span>
-                <div className="hours-summary-item">
-                  <span className="hours-summary-label">ימי עבודה במשרד</span>
-                  <span className="hours-summary-value">{emp.officeDays}</span>
+          {dailyByEmployee
+            .filter(emp => selectedEmployeeIds.has(emp.id) && emp.byDate[selectedDate])
+            .map(emp => (
+              <div key={emp.id} className="hours-summary-group">
+                <div className="hours-summary-row">
+                  <span className="hours-employee-name">{emp.name}</span>
+                  <span className="hours-summary-sep">|</span>
+                  <span className="hours-drill-line">{formatDrillEntryNoDate(emp.byDate[selectedDate])}</span>
                 </div>
-                <div className="hours-summary-item">
-                  <span className="hours-summary-label">ימי עבודה מהבית</span>
-                  <span className="hours-summary-value">{emp.wfhDays}</span>
-                </div>
-                <div className="hours-summary-item">
-                  <span className="hours-summary-label">ימי חופשה</span>
-                  <span className="hours-summary-value">{emp.vacationDays}</span>
-                </div>
-                <div className="hours-summary-item">
-                  <span className="hours-summary-label">ימי מחלה</span>
-                  <span className="hours-summary-value">{emp.sickDays}</span>
-                </div>
-                <div className="hours-summary-item">
-                  <span className="hours-summary-label">סה״כ שעות</span>
-                  <span className="hours-summary-value">{toHHMM(emp.totalMins)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="hours-drill-toggle"
-                  onClick={() => toggleCalendarDrill(emp.id)}
-                  title={calendarDrillExpanded.has(emp.id) ? 'סגור' : 'הצג ימים פעילים'}
-                >
-                  {calendarDrillExpanded.has(emp.id) ? '−' : '+'}
-                </button>
               </div>
-              {calendarDrillExpanded.has(emp.id) && (
-                <div className="hours-drill-list">{renderDrillBody(emp.id, 'calendar')}</div>
-              )}
-            </div>
-          ))}
+            ))}
         </div>
       ) : (
         /* Employee: single row + drill-down toggle. */
@@ -1556,7 +1598,6 @@ function Hours() {
           >
             {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <button className="hours-reports-fetch-btn" onClick={fetchReportData}>הצג</button>
         </div>
         {reportLoading && <div className="hours-reports-loading">טוען...</div>}
         {!reportLoading && reportData.length > 0 && filteredRows.length === 0 && !userIsLocked && (
@@ -1625,7 +1666,7 @@ function Hours() {
           </>
         )}
         {!reportLoading && reportData.length === 0 && (
-          <div className="hours-reports-empty">בחר חודש ולחץ הצג</div>
+          <div className="hours-reports-empty">אין נתונים לחודש זה</div>
         )}
       </div>
     )

@@ -51,7 +51,18 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
   const [gapiReady, setGapiReady]       = useState(false)
+  const [tokenClientReady, setTokenClientReady] = useState(false)
   const tokenClientRef                  = useRef(null)
+
+  /* Silent reauth state.
+     silentTriedRef       — locks the auto-attempt to ONCE per mount, so a
+                            disconnect / 401 won't cause a popup-less retry loop.
+     silentInProgressRef  — flag for the shared GIS callback: when true and the
+                            callback receives resp.error, treat it as a silent
+                            miss (no visible UI error, just fall back to the
+                            manual "התחבר" button). */
+  const silentTriedRef      = useRef(false)
+  const silentInProgressRef = useRef(false)
 
   // ── 1. Load gapi and restore saved token ──────────────────────────────────
   useEffect(() => {
@@ -101,7 +112,16 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
         prompt:     'select_account',
         login_hint: userEmail || '',
         callback:   (resp) => {
+          const wasSilent = silentInProgressRef.current
+          silentInProgressRef.current = false
           if (resp.error) {
+            if (wasSilent) {
+              /* Silent reauth declined (user not yet authorized, consent
+                 needed, popup required, etc.) — quietly fall back to the
+                 manual "התחבר" button. No visible error. */
+              console.warn('silent gcal reauth declined:', resp.error)
+              return
+            }
             console.error('GSI error:', resp)
             setError('שגיאה בהתחברות: ' + resp.error)
             return
@@ -111,9 +131,31 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
           setError('')
         },
       })
+      setTokenClientReady(true)
     }
     waitForGoogle()
   }, [gapiReady, userEmail])
+
+  // ── 2b. Silent token refresh attempt on mount ─────────────────────────────
+  //   Runs ONCE per mount, after gapi + GIS + tokenClient are ready AND no
+  //   token was restored from sessionStorage. Asks Google to silently reissue
+  //   a token via `prompt: ''` — succeeds without a popup if the admin is
+  //   already authorized in this browser. If Google declines (consent needed,
+  //   first time in this browser, etc.), the callback path above quietly
+  //   leaves connected=false and the existing "התחבר" button stays visible.
+  //   silentTriedRef ensures this fires exactly once per mount even if
+  //   `connected` flips back to false later (handleDisconnect / handleExpired).
+  useEffect(() => {
+    if (!tokenClientReady || connected || silentTriedRef.current) return
+    silentTriedRef.current = true
+    silentInProgressRef.current = true
+    try {
+      tokenClientRef.current.requestAccessToken({ prompt: '' })
+    } catch (e) {
+      silentInProgressRef.current = false
+      console.warn('silent gcal reauth failed:', e)
+    }
+  }, [tokenClientReady, connected])
 
   // ── 3. Handle 401 — clears connection and notifies parent ─────────────────
   const handleExpired = useCallback(() => {

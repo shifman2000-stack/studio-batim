@@ -880,7 +880,7 @@ export default function Inquiries() {
           stage_id:         firstStageId,
           stage_entered_at: todayISO(),
           responsible_id:   currentUserId || null,
-          urgency:          null,
+          urgency:          'רגיל',          /* Prod has NOT NULL on urgency — default to "רגיל" */
           intake_date:      todayISO(),
           archived:         false,
         }])

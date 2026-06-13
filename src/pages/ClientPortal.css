@@ -1,0 +1,854 @@
+/* src/pages/ClientPortal.css
+   Client portal — shell (top bar + drawer + content) + shared screen styles.
+   Mobile-first, RTL, Heebo, cream brand background.
+
+   Layout model:
+     .cp-shell      — fills #root; flex column; cream background
+       .cp-topbar   — fixed-height row at the top (white, hamburger + greeting)
+       .cp-content  — flex: 1; overflow-y: auto  (← this is the scroll container)
+       .cp-drawer   — position: fixed; slides in from the visual RIGHT (RTL)
+       .cp-drawer-overlay — position: fixed; dim layer under the drawer
+
+   The global index.css sets body+#root to overflow:hidden; we make
+   .cp-content the scroll container so the portal scrolls cleanly while
+   the manager app keeps its own clipping behaviour.
+   ============================================================ */
+
+/* ── Shell ── */
+.cp-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #F7F5F2;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+  color: #1a1a18;
+  position: relative;          /* anchor for absolutely-positioned children */
+  overflow: hidden;            /* drawer is fixed; clip anything stray */
+}
+
+/* ── Top bar ── */
+.cp-topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;     /* centers the greeting */
+  min-height: 56px;
+  padding: 0 56px;             /* leave room on each side for the hamburger */
+  background: #ffffff;
+  border-bottom: 1px solid rgba(26, 26, 24, 0.08);
+  z-index: 5;
+  flex-shrink: 0;
+}
+
+.cp-hamburger {
+  position: absolute;
+  top: 50%;
+  right: 8px;                  /* RTL: visual right edge */
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #1a1a18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.cp-hamburger:hover,
+.cp-hamburger:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+  outline: none;
+}
+
+.cp-greeting {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  color: #1a1a18;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Content frame — the scroll container ── */
+.cp-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;               /* allows flex child to actually shrink */
+}
+
+/* ── Drawer overlay (dim layer) ── */
+.cp-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+  z-index: 99;
+}
+
+.cp-drawer-overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Drawer (slides in from the visual RIGHT in RTL) ── */
+.cp-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 290px;
+  max-width: 82vw;
+  background: #ffffff;
+  box-shadow: -2px 0 14px rgba(0, 0, 0, 0.12);
+  transform: translateX(100%);  /* off-screen to the right */
+  transition: transform 220ms ease;
+  z-index: 100;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  direction: rtl;
+}
+
+.cp-drawer--open {
+  transform: translateX(0);
+}
+
+.cp-drawer-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 0;
+}
+
+/* ── Menu item ── */
+.cp-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 22px;
+  border: none;
+  background: transparent;
+  font-family: 'Heebo', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a18;
+  text-align: right;           /* RTL: visual right */
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  /* Reserve room for the active accent so text doesn't jump on toggle. */
+  border-right: 3px solid transparent;
+}
+
+.cp-menu-item:hover:not(:disabled) {
+  background: #f7f5f2;
+}
+
+.cp-menu-item:focus-visible {
+  outline: none;
+  background: #f3efe7;
+}
+
+.cp-menu-item--disabled,
+.cp-menu-item:disabled {
+  color: #c8c4bc;
+  cursor: not-allowed;
+}
+
+.cp-menu-item--disabled:hover {
+  background: transparent;
+}
+
+.cp-menu-item--active {
+  background: #f3efe7;
+  border-right-color: #7a9478; /* sage accent on the start edge (RTL right) */
+  color: #1a1a18;
+}
+
+/* ── Page container (used by every screen inside .cp-content) ── */
+.cp-page {
+  direction: rtl;
+  padding: 12px 12px 32px;
+  box-sizing: border-box;
+}
+
+.cp-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ── Generic per-screen title (used by Contact, Account, Placeholder) ── */
+.cp-screen-title {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: #1a1a18;
+  margin: 4px 0 12px;
+}
+
+/* ── Page header used by ClientFile (project name + subtitle) ── */
+.cp-header {
+  margin-bottom: 14px;
+  text-align: right;
+}
+
+.cp-project-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: #1a1a18;
+  margin: 0 0 2px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.cp-project-subtitle {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 13px;
+  color: #8a8680;
+  margin: 0;
+}
+
+/* ── Card shell ── */
+.cp-card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
+  padding: 13px 14px;
+  margin-bottom: 11px;
+}
+
+.cp-card-title {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: #1a1a18;
+  margin: 0 0 9px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(26, 26, 24, 0.06);
+}
+
+/* In-card header — flex row with the card title plus an inline action
+   button (e.g. "ערוך" on the editable contacts card). RTL → both pack
+   to the visual right via justify-content: flex-start; gap separates
+   them. The wrapper owns the border-bottom so the title drops its own
+   to avoid a double line. */
+.cp-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;        /* RTL: flex-start = visual RIGHT */
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 9px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(26, 26, 24, 0.06);
+}
+
+.cp-card-header .cp-card-title {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* ── Inline "label: value" row ── */
+.cp-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.cp-row:last-child {
+  margin-bottom: 0;
+}
+
+.cp-label {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
+  color: #8a8680;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cp-value {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 400;
+  font-size: 13.5px;
+  color: #1a1a18;
+  line-height: 1.45;
+  word-break: break-word;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cp-value--multiline {
+  white-space: pre-wrap;
+}
+
+/* ── Link used inside .cp-value (Contact screen) ── */
+.cp-link {
+  color: #7a9478;              /* sage */
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.cp-link:hover,
+.cp-link:focus-visible {
+  color: #5d7259;
+  text-decoration: underline;
+  outline: none;
+}
+
+/* ── Responsible person (single-value display) ── */
+.cp-responsible-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 14.5px;
+  color: #1a1a18;
+  margin: 0;
+}
+
+/* ── Contact row (Contacts card on ClientFile) ── */
+.cp-contact {
+  display: flex;
+  flex-direction: column;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(26, 26, 24, 0.06);
+}
+
+.cp-contact:first-child {
+  padding-top: 0;
+}
+
+.cp-contact:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.cp-contact-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #1a1a18;
+  margin: 0 0 2px;
+}
+
+.cp-contact-line {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 12.5px;
+  color: #8a8680;
+  margin: 0 0 1px;
+  word-break: break-word;
+}
+
+.cp-contact-line:last-child {
+  margin-bottom: 0;
+}
+
+.cp-contact-line--ltr {
+  direction: ltr;
+  text-align: right;
+}
+
+/* ── Empty card text ── */
+.cp-empty-card {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 12.5px;
+  color: #8a8680;
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── In-screen loading state (used by ClientFile while fetching) ── */
+.cp-loading {
+  height: 100%;
+  background: #F7F5F2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Heebo', sans-serif;
+  direction: rtl;
+}
+
+.cp-loading p {
+  color: #8a8680;
+  font-size: 16px;
+  font-weight: 300;
+  margin: 0;
+}
+
+/* ── Placeholder screen (used by the 5 "בפיתוח" items) ── */
+.cp-placeholder-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 18px;
+}
+
+.cp-placeholder-msg {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 14px;
+  color: #8a8680;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Account screen logout button (full-width primary action) ── */
+.cp-account-logout-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  background: #ffffff;
+  border: 1px solid #C1BCAF;
+  border-radius: 12px;
+  padding: 13px 16px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a18;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  box-sizing: border-box;
+}
+
+.cp-account-logout-btn:hover,
+.cp-account-logout-btn:focus-visible {
+  background: #f7f5f2;
+  border-color: #a8a39a;
+  outline: none;
+}
+
+/* ── Edit-mode toggle button (view-mode only) ────────────────────────
+   Sits just below the project title in the cp-header. RTL: flex-start
+   = visual RIGHT, so the button hugs the right edge under the title. */
+.cp-edit-toggle-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.cp-edit-toggle-btn {
+  background: #ffffff;
+  border: 1px solid #7a9478;
+  color: #7a9478;
+  border-radius: 8px;
+  padding: 6px 22px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cp-edit-toggle-btn:hover,
+.cp-edit-toggle-btn:focus-visible {
+  background: #7a9478;
+  color: #ffffff;
+  outline: none;
+}
+
+/* ── Editable input — replaces .cp-value in edit-mode rows.
+   Uses the same row's flex:1 slot so it fills the remaining width
+   to the LEFT of the label (RTL). Single-line height kept around the
+   44px touch-target guideline. ── */
+.cp-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 6px 10px;
+  border: 1px solid rgba(26, 26, 24, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #1a1a18;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  box-sizing: border-box;
+}
+
+.cp-input:focus {
+  border-color: #7a9478;
+}
+
+.cp-input:disabled {
+  background: #f4f2ee;
+  color: #8a8680;
+  cursor: not-allowed;
+}
+
+.cp-input--multiline {
+  height: auto;
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.5;
+  padding: 8px 10px;
+  font-family: 'Heebo', sans-serif;
+}
+
+/* LTR inputs (phone, email): digits/Latin run LTR while the input box
+   still sits to the LEFT of its Hebrew label thanks to the flex flow. */
+.cp-input--ltr {
+  direction: ltr;
+  text-align: right;
+}
+
+/* Edit-mode rows: fixed-width label COLUMN so every input across every
+   editable card has the SAME width and aligns to the same left edge —
+   regardless of label text length.
+   The base .cp-row stays baseline-aligned for read-only text rows. */
+.cp-row--edit {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cp-row--edit .cp-label {
+  /* Override the base .cp-label (which is nowrap + natural width). The
+     fixed column makes every adjacent .cp-input start at the same X. */
+  width: 150px;
+  flex-shrink: 0;
+  white-space: normal;     /* let long labels wrap rather than blow out the column */
+  line-height: 1.3;
+}
+
+/* Multiline rows (textareas): top-anchor the label so it sits flush
+   with the textarea's first text line instead of floating at its
+   vertical center. Padding-top matches the textarea's internal padding. */
+.cp-row--edit:has(.cp-input--multiline) {
+  align-items: flex-start;
+}
+
+.cp-row--edit:has(.cp-input--multiline) .cp-label {
+  padding-top: 8px;
+}
+
+/* Contacts in edit mode: a visible divider between rows so it's clear
+   each contact is a separate entity. */
+.cp-contact--edit {
+  border-bottom: 1px solid rgba(26, 26, 24, 0.08);
+  padding: 12px 0;
+}
+
+.cp-contact--edit:first-child {
+  padding-top: 4px;
+}
+
+.cp-contact--edit:last-child {
+  padding-bottom: 4px;
+  border-bottom: none;
+}
+
+/* When the page is in edit mode, reserve room at the bottom for the
+   fixed action bar so the last card isn't hidden beneath it. */
+.cp-page--editing {
+  padding-bottom: 92px;
+}
+
+/* ── Sticky bottom action bar (edit mode only) ──────────────────────
+   position: fixed pulls it out of the scrolling content and pins it
+   to the viewport bottom regardless of where the user is on the page. */
+.cp-edit-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(26, 26, 24, 0.08);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  z-index: 20;
+  direction: rtl;
+}
+
+.cp-edit-btn-primary,
+.cp-edit-btn-secondary {
+  flex: 1 1 0;
+  height: 44px;
+  border-radius: 10px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.cp-edit-btn-primary {
+  background: #7a9478;
+  border: 1px solid #7a9478;
+  color: #ffffff;
+}
+
+.cp-edit-btn-primary:hover:not(:disabled),
+.cp-edit-btn-primary:focus-visible {
+  background: #5d7259;
+  border-color: #5d7259;
+  outline: none;
+}
+
+.cp-edit-btn-secondary {
+  background: #ffffff;
+  border: 1px solid #C1BCAF;
+  color: #1a1a18;
+}
+
+.cp-edit-btn-secondary:hover:not(:disabled),
+.cp-edit-btn-secondary:focus-visible {
+  background: #f7f5f2;
+  border-color: #a8a39a;
+  outline: none;
+}
+
+.cp-edit-btn-primary:disabled,
+.cp-edit-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Save error banner (above the project header in edit mode) ── */
+.cp-save-error {
+  background: #fff5f5;
+  border: 1px solid #f4c8c8;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #a83232;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+/* ── Subtle "נשמר" success indicator — fades away after 2s ── */
+.cp-save-success {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #7a9478;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 8px 22px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 30;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: cpSavedFadeIn 0.25s ease;
+}
+
+@keyframes cpSavedFadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── Documents screen ────────────────────────────────────────────────
+   Each project_documents row renders as a .cp-doc-row inside the stage
+   card. The name + meta are wrapped in a single tappable .cp-doc-link
+   (target=_blank). The optional "העלה גרסה חדשה" button sits next to
+   the link as a sibling — clicks on it do NOT propagate to the link. */
+.cp-doc-row {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(26, 26, 24, 0.06);
+}
+
+.cp-doc-row:first-child { padding-top: 4px; }
+.cp-doc-row:last-child  { padding-bottom: 4px; border-bottom: none; }
+
+.cp-doc-row-main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.cp-doc-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cp-doc-link:hover .cp-doc-name {
+  color: #7a9478;
+}
+
+.cp-doc-link--inert {
+  cursor: default;
+}
+
+.cp-doc-link--inert:hover .cp-doc-name {
+  color: #8a8680;              /* stays muted when there's no file to open */
+}
+
+.cp-doc-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a18;
+  margin: 0 0 2px;
+  line-height: 1.35;
+  word-break: break-word;
+  transition: color 0.15s;
+}
+
+.cp-doc-name--unfilled {
+  color: #8a8680;              /* no file yet → de-emphasize the name */
+  font-weight: 500;
+}
+
+.cp-doc-meta {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 12px;
+  color: #8a8680;
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.cp-doc-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.cp-doc-upload-btn {
+  background: #ffffff;
+  border: 1px solid #7a9478;
+  color: #7a9478;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.cp-doc-upload-btn:hover:not(:disabled),
+.cp-doc-upload-btn:focus-visible {
+  background: #7a9478;
+  color: #ffffff;
+  outline: none;
+}
+
+.cp-doc-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cp-doc-uploading {
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a8680;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.cp-doc-error {
+  margin-top: 6px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  color: #a83232;
+  background: #fff5f5;
+  border: 1px solid #f4c8c8;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* ── Home screen ("בית" — default landing) ──────────────────────────
+   Airy welcome composition: the studio Logo lockup + greeting + softer
+   tagline, centered both ways inside the content area. No card chrome —
+   just text on the cream page background. */
+.cp-home {
+  height: 100%;
+  display: flex;
+  align-items: flex-start;       /* top-anchored — sits in the UPPER portion */
+  justify-content: center;       /* horizontal centering preserved */
+  background: #F7F5F2;
+  direction: rtl;
+  padding: 72px 24px 32px;       /* comfortable top space, ~10-12% on mobile */
+  box-sizing: border-box;
+  overflow-y: auto;              /* allow content to scroll if a very short viewport */
+  -webkit-overflow-scrolling: touch;
+}
+
+.cp-home-content {
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+}
+
+.cp-home-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 56px;
+}
+
+.cp-home-greeting {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 21px;
+  line-height: 1.5;
+  color: #1a1a18;
+  margin: 0 0 24px;
+  letter-spacing: 0.01em;
+}
+
+.cp-home-subtagline {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #8a8680;
+  margin: 0;
+}
+
+/* ── Tighter spacing on very narrow phones ── */
+@media (max-width: 380px) {
+  .cp-topbar { padding: 0 52px; min-height: 52px; }
+  .cp-greeting { font-size: 14px; }
+  .cp-page { padding: 10px 8px 28px; }
+  .cp-page--editing { padding-bottom: 88px; }
+  .cp-card { padding: 11px 12px; }
+  .cp-project-name { font-size: 20px; }
+  .cp-screen-title { font-size: 16px; }
+  .cp-drawer { width: 270px; }
+  .cp-edit-btn-primary,
+  .cp-edit-btn-secondary { font-size: 14px; height: 42px; }
+
+  /* Narrow phones: shrink the label column so the input keeps a usable
+     tap target. Alignment stays uniform across all rows. */
+  .cp-row--edit .cp-label { width: 110px; font-size: 12px; }
+  .cp-row--edit:has(.cp-input--multiline) .cp-label { padding-top: 7px; }
+
+  /* Narrow phones: keep the upload button compact + stack-friendly. */
+  .cp-doc-upload-btn { padding: 5px 10px; font-size: 11.5px; }
+  .cp-doc-name { font-size: 13.5px; }
+  .cp-doc-meta { font-size: 11.5px; }
+
+  /* Narrow phones: scale the home composition down proportionally so
+     the logo + greeting + subtagline still fit comfortably above the fold. */
+  .cp-home { padding: 24px 18px; }
+  .cp-home-logo-wrap { margin-bottom: 40px; }
+  .cp-home-greeting { font-size: 18px; margin-bottom: 18px; }
+  .cp-home-subtagline { font-size: 13.5px; }
+}

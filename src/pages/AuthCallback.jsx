@@ -16,9 +16,8 @@ export default function AuthCallback() {
         return
       }
 
-      const email = user.email
-
-      // ── 1. Check profiles table ──
+      // ── 1. Staff check — profiles table (UNCHANGED) ──
+      //   Matches existing manager / employee / legacy-client routing.
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -26,49 +25,36 @@ export default function AuthCallback() {
         .maybeSingle()
 
       if (profile) {
+        // Clients are NOT in `profiles` in the new architecture — they are
+        // identified via the link_client_on_login RPC + a row in client_users
+        // (see fallback below). A stale legacy profile.role === 'client' must
+        // NOT short-circuit here; it would skip the RPC and land the user on
+        // /no-access via ClientRoute. Only staff roles are routed from here.
         if (profile.role === 'admin') navigate('/פרויקטים')
-        else if (profile.role === 'client') navigate('/client')
         else navigate('/tasks')
         return
       }
 
-      // ── 2. Check inquiries table ──
-      const { data: inquiry } = await supabase
-        .from('inquiries')
-        .select('first_name, last_name')
-        .eq('email', email)
-        .maybeSingle()
+      // ── 2. Not in profiles — try linking as a client via Phase B RPC ──
+      //   The SECURITY DEFINER function `link_client_on_login` matches
+      //   the authenticated email against `project_contacts` and, on
+      //   first hit, creates the client_users row. Returns the row(s)
+      //   on success, empty on no match. We accept either an array
+      //   (SETOF / RETURNS TABLE) or a single object return shape.
+      const { data: linkResult, error: linkError } = await supabase
+        .rpc('link_client_on_login')
 
-      if (inquiry) {
-        await supabase.from('profiles').insert({
-          id: user.id,
-          first_name: inquiry.first_name ?? null,
-          last_name: inquiry.last_name ?? null,
-          role: 'client',
-        })
-        navigate('/client')
-        return
+      if (!linkError) {
+        const hasRow = Array.isArray(linkResult)
+          ? linkResult.length > 0
+          : !!linkResult
+        if (hasRow) {
+          navigate('/client')
+          return
+        }
       }
 
-      // ── 3. Check project_contacts table ──
-      const { data: contact } = await supabase
-        .from('project_contacts')
-        .select('first_name, last_name')
-        .eq('email', email)
-        .maybeSingle()
-
-      if (contact) {
-        await supabase.from('profiles').insert({
-          id: user.id,
-          first_name: contact.first_name ?? null,
-          last_name: contact.last_name ?? null,
-          role: 'client',
-        })
-        navigate('/client')
-        return
-      }
-
-      // ── 4. Not found anywhere ──
+      // ── 3. Unrecognized — silent redirect, no special message ──
       navigate('/no-access')
     }
 

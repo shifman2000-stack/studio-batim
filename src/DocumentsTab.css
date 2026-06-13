@@ -256,7 +256,96 @@
 .dt-col-date     { flex: 0 0 120px; }
 .dt-col-file     { flex: 1.4;       min-width: 0; }
 .dt-col-notes    { flex: 3;         min-width: 0; }
+.dt-col-client-access {
+  flex: 0 0 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
 .dt-col-delete   { flex: 0 0 24px;  display: flex; justify-content: center; }
+
+/* ── Client-access dropdown (per-row) ──
+   Mirrors the StatusPopover pattern in TasksTab.css: a tiny trigger
+   that opens a floating popover with three options, with the current
+   selection highlighted by a soft green background. */
+.dt-access-popover-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dt-access-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dt-access-popover {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 150px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  direction: rtl;
+}
+
+.dt-access-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a1a18;
+  text-align: right;
+  direction: rtl;
+}
+
+.dt-access-option:hover {
+  background: #f3f4f6;
+}
+
+.dt-access-option--active {
+  background: #f0fdf4;        /* same soft green highlight as StatusPopover */
+}
+
+/* ── Transient error toast for client_access save failures ── */
+.dt-access-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #a83232;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 9px 22px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  animation: dtAccessToastFadeIn 0.25s ease;
+}
+
+@keyframes dtAccessToastFadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
 
 /* ── Document name ── */
 .dt-doc-name {

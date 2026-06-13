@@ -222,7 +222,7 @@ function ConvertBtn({ row, onRequestConvert }) {
 }
 
 /* ─────────── Convert confirm modal ─────────── */
-function ConvertConfirmModal({ row, onConfirm, onCancel, converting }) {
+function ConvertConfirmModal({ row, onConfirm, onCancel, converting, error }) {
   const name = [row.first_name, row.last_name].filter(Boolean).join(' ')
   return (
     <div className="inq-modal-overlay" onClick={onCancel}>
@@ -235,6 +235,23 @@ function ConvertConfirmModal({ row, onConfirm, onCancel, converting }) {
           <p style={{ margin: 0, fontSize: 15, color: '#374151', lineHeight: 1.6 }}>
             האם להפוך את הפניה של <strong>{name}</strong> לפרויקט חדש?
           </p>
+          {error && (
+            <p
+              role="alert"
+              style={{
+                margin: '14px 0 0',
+                padding: '8px 12px',
+                fontSize: 13.5,
+                lineHeight: 1.55,
+                color: '#a83232',
+                background: '#fff5f5',
+                border: '1px solid #f4c8c8',
+                borderRadius: 6,
+              }}
+            >
+              {error}
+            </p>
+          )}
         </div>
         <div className="inq-modal-footer">
           <div />
@@ -737,6 +754,7 @@ export default function Inquiries() {
   const deletePopoverRef = useRef(null)
   const [convertModalRow, setConvertModalRow] = useState(null) // row pending conversion
   const [converting, setConverting]     = useState(false)
+  const [convertError, setConvertError] = useState('')         // surfaced inside the modal on failure
   const [quotes, setQuotes]             = useState({})        // { [inquiry_id]: quote_object }
 
   /* ── Admin guard ── */
@@ -833,89 +851,124 @@ export default function Inquiries() {
   const handleConvert = async () => {
     const inq = convertModalRow
     setConverting(true)
+    setConvertError('')
 
-    // a. Create project
-    const projectName = [inq.first_name, inq.last_name].filter(Boolean).join(' ').trim()
-    const { data: newProject, error: projErr } = await supabase
-      .from('projects')
-      .insert([{
-        name:          projectName,
-        current_stage: 'קליטת פרויקט',
-        responsible_id: currentUserId || null,
-        urgency:       null,
-        intake_date:   todayISO(),
-        archived:      false,
-      }])
-      .select('id')
-      .single()
+    try {
+      /* ── 0. Look up the first stage dynamically (mirrors the lookup in
+            ProjectsKanban.addProject: ordered list, prefer 'קליטת פרויקט'
+            by name, fall back to the first row, never hardcode an id). ── */
+      const { data: stagesData, error: stagesErr } = await supabase
+        .from('stages')
+        .select('id, name')
+        .order('order_index')
+      if (stagesErr) throw stagesErr
+      const stages = stagesData || []
+      const firstStageId =
+        stages.find(s => s.name === 'קליטת פרויקט')?.id
+        ?? stages[0]?.id
+        ?? null
+      if (firstStageId == null) throw new Error('first stage lookup returned no rows')
 
-    if (projErr || !newProject) {
-      setConverting(false)
-      return
-    }
+      /* ── a. Create project — include stage_id and stage_entered_at so the
+            new row is visible on the Kanban (which filters by stage_id). ── */
+      const projectName = [inq.first_name, inq.last_name].filter(Boolean).join(' ').trim()
+      const { data: newProject, error: projErr } = await supabase
+        .from('projects')
+        .insert([{
+          name:             projectName,
+          current_stage:    'קליטת פרויקט',
+          stage_id:         firstStageId,
+          stage_entered_at: todayISO(),
+          responsible_id:   currentUserId || null,
+          urgency:          null,
+          intake_date:      todayISO(),
+          archived:         false,
+        }])
+        .select('id')
+        .single()
+      if (projErr) throw projErr
+      if (!newProject) throw new Error('project insert returned no row')
 
-    // b. Create project contacts (main + additional)
-    // Check if first_name is a coupled name (e.g. "רותם ואלמוג")
-    const coupled = splitCoupledFirstName(inq.first_name ?? '')
-    const mainContacts = coupled
-      ? [
-          // Contact 1: first part + last_name + phone
-          {
+      /* ── b. Create project contacts (main + additional).
+            Coupled-name split logic ("רותם ואלמוג" → two contacts) preserved
+            exactly as before. ── */
+      const coupled = splitCoupledFirstName(inq.first_name ?? '')
+      const mainContacts = coupled
+        ? [
+            // Contact 1: first part + last_name + phone
+            {
+              project_id: newProject.id,
+              first_name: coupled.part1,
+              last_name:  inq.last_name ?? null,
+              phone:      inq.phone     ?? null,
+              email:      null,
+            },
+            // Contact 2: second part + last_name, no phone
+            {
+              project_id: newProject.id,
+              first_name: coupled.part2,
+              last_name:  inq.last_name ?? null,
+              phone:      null,
+              email:      null,
+            },
+          ]
+        : [
+            {
+              project_id: newProject.id,
+              first_name: inq.first_name ?? null,
+              last_name:  inq.last_name  ?? null,
+              phone:      inq.phone      ?? null,
+              email:      null,
+            },
+          ]
+
+      const contactRows = [
+        ...mainContacts,
+        ...((Array.isArray(inq.additional_contacts) ? inq.additional_contacts : [])
+          .filter(c => c.first_name || c.last_name || c.phone)
+          .map(c => ({
             project_id: newProject.id,
-            first_name: coupled.part1,
-            last_name:  inq.last_name ?? null,
-            phone:      inq.phone     ?? null,
+            first_name: c.first_name ?? null,
+            last_name:  c.last_name  ?? null,
+            phone:      c.phone      ?? null,
             email:      null,
-          },
-          // Contact 2: second part + last_name, no phone
-          {
-            project_id: newProject.id,
-            first_name: coupled.part2,
-            last_name:  inq.last_name ?? null,
-            phone:      null,
-            email:      null,
-          },
-        ]
-      : [
-          {
-            project_id: newProject.id,
-            first_name: inq.first_name ?? null,
-            last_name:  inq.last_name  ?? null,
-            phone:      inq.phone      ?? null,
-            email:      null,
-          },
-        ]
+          }))
+        ),
+      ]
+      const { error: contactsErr } = await supabase
+        .from('project_contacts')
+        .insert(contactRows)
+      if (contactsErr) throw contactsErr
 
-    const contactRows = [
-      ...mainContacts,
-      ...((Array.isArray(inq.additional_contacts) ? inq.additional_contacts : [])
-        .filter(c => c.first_name || c.last_name || c.phone)
-        .map(c => ({
+      /* ── c. Create client_info ── */
+      const { error: ciErr } = await supabase
+        .from('client_info')
+        .insert([{
           project_id: newProject.id,
-          first_name: c.first_name ?? null,
-          last_name:  c.last_name  ?? null,
-          phone:      c.phone      ?? null,
-          email:      null,
-        }))
-      ),
-    ]
-    await supabase.from('project_contacts').insert(contactRows)
+          city:       inq.city ?? null,
+        }])
+      if (ciErr) throw ciErr
 
-    // c. Create client info
-    await supabase.from('client_info').insert([{
-      project_id: newProject.id,
-      city:       inq.city ?? null,
-    }])
+      /* ── d. Mark the inquiry as converted ── */
+      const { error: inqErr } = await supabase
+        .from('inquiries')
+        .update({ converted_to_project: true })
+        .eq('id', inq.id)
+      if (inqErr) throw inqErr
 
-    // d. Mark inquiry as converted
-    await supabase.from('inquiries').update({ converted_to_project: true }).eq('id', inq.id)
-
-    // e. Update local state and navigate
-    setRows(prev => prev.map(r => r.id === inq.id ? { ...r, converted_to_project: true } : r))
-    setConverting(false)
-    setConvertModalRow(null)
-    setModalRow(undefined)
-    navigate('/פרויקטים')
+      /* ── e. Success: local state + navigate ── */
+      setRows(prev => prev.map(r => r.id === inq.id ? { ...r, converted_to_project: true } : r))
+      setConverting(false)
+      setConvertModalRow(null)
+      setConvertError('')
+      setModalRow(undefined)
+      navigate('/פרויקטים')
+    } catch (err) {
+      console.error('handleConvert error:', err)
+      setConverting(false)
+      setConvertError('לא הצלחנו להפוך את הפנייה לפרויקט. נסה שוב או פנה לתמיכה.')
+      /* Stay in the modal so the user can retry or cancel; do NOT navigate. */
+    }
   }
 
   const fullName = (row) =>
@@ -1070,8 +1123,9 @@ export default function Inquiries() {
         <ConvertConfirmModal
           row={convertModalRow}
           onConfirm={handleConvert}
-          onCancel={() => setConvertModalRow(null)}
+          onCancel={() => { setConvertModalRow(null); setConvertError('') }}
           converting={converting}
+          error={convertError}
         />
       )}
 

@@ -18,6 +18,7 @@ import HoursReport from './pages/reports/HoursReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
+import ClientRoute from './components/ClientRoute'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import QuotePrintView from './pages/QuotePrintView'
@@ -44,7 +45,7 @@ createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/client" element={<ClientPortal />} />
+        <Route path="/client" element={<ClientRoute><ClientPortal /></ClientRoute>} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />

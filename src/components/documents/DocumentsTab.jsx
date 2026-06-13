@@ -134,6 +134,151 @@ const IconTrash2 = () => (
   </svg>
 )
 
+/* ── Client access dropdown ──────────────────────────────────────────
+   Per-row dropdown for project_documents.client_access, modelled on the
+   StatusPopover used by TasksTab (visit src/components/tasks/TasksTab.jsx
+   to compare): a tiny inline trigger that opens a floating list of three
+   options on click; outside-click or Esc closes; clicking an option
+   updates the row.
+
+   Closed cell shows ONLY the icon for the current state — coloured sage
+   when shared (view / view_edit) and muted gray when 'hidden'. The open
+   dropdown lists all three options in uniform charcoal with a green
+   highlight on the current selection — matching the StatusPopover layout. */
+
+const CLIENT_ACCESS_OPTIONS = [
+  { value: 'hidden',    label: 'ללא שיתוף לקוח' },
+  { value: 'view',      label: 'צפייה בלבד'     },
+  { value: 'view_edit', label: 'עריכה'          },
+]
+
+const CLIENT_ACCESS_TRIGGER_TITLE = {
+  hidden:    'הלקוח לא רואה את הקובץ',
+  view:      'הלקוח יכול לצפות בקובץ',
+  view_edit: 'הלקוח יכול לראות ולהחליף את הקובץ',
+}
+
+/* X — client_access = 'hidden'. Clean lucide-style X (two crossing
+   strokes), no surrounding figure. Stays muted gray in the closed cell
+   and sage when highlighted as the active option in the dropdown — same
+   color treatment as IconEyeAccess and IconPencilAccess. */
+const IconXAccess = ({ size = 18 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6"  x2="6"  y2="18" />
+    <line x1="6"  y1="6"  x2="18" y2="18" />
+  </svg>
+)
+
+/* Eye — client_access = 'view'. Standalone, accepts size prop (the
+   existing IconEye in this file is fixed-size; this one matches the
+   dropdown's needs without touching the file-preview icon). */
+const IconEyeAccess = ({ size = 18 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
+/* Pencil — client_access = 'view_edit'. Lucide Edit3 shape. */
+const IconPencilAccess = ({ size = 18 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+)
+
+function accessIcon(value, size = 18) {
+  if (value === 'view')      return <IconEyeAccess size={size} />
+  if (value === 'view_edit') return <IconPencilAccess size={size} />
+  return <IconXAccess size={size} />
+}
+
+function ClientAccessPopover({ value, docId, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [pos,  setPos]  = useState({ top: 0, left: 0 })
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  /* Normalize to one of the three known values; unknown → 'hidden'. */
+  const current = CLIENT_ACCESS_OPTIONS.find(o => o.value === value)?.value || 'hidden'
+  const triggerColor = current === 'hidden' ? '#c8c4be' : '#7a9478'
+
+  /* Outside-click + Esc close (same behaviour pattern as StatusPopover). */
+  useEffect(() => {
+    if (!open) return
+    const clickHandler = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        popoverRef.current && !popoverRef.current.contains(e.target)
+      ) setOpen(false)
+    }
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', clickHandler)
+    document.addEventListener('keydown',  keyHandler)
+    return () => {
+      document.removeEventListener('mousedown', clickHandler)
+      document.removeEventListener('keydown',  keyHandler)
+    }
+  }, [open])
+
+  const handleOpen = () => {
+    if (open) { setOpen(false); return }
+    const rect          = triggerRef.current.getBoundingClientRect()
+    const popoverHeight = 120     /* approximate; flips upward if it would overflow */
+    const below         = rect.bottom + 4
+    const above         = rect.top - popoverHeight
+    const top           = below + popoverHeight > window.innerHeight ? above : below
+    setPos({ top, left: rect.left })
+    setOpen(true)
+  }
+
+  const select = (val) => {
+    setOpen(false)
+    if (val !== current) onChange(docId, val)
+  }
+
+  return (
+    <div className="dt-access-popover-wrap">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="dt-access-trigger"
+        style={{ color: triggerColor }}
+        onClick={handleOpen}
+        title={CLIENT_ACCESS_TRIGGER_TITLE[current]}
+      >
+        {accessIcon(current)}
+      </button>
+      {open && (
+        <div
+          ref={popoverRef}
+          className="dt-access-popover"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+        >
+          {CLIENT_ACCESS_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              className={'dt-access-option' + (opt.value === current ? ' dt-access-option--active' : '')}
+              onClick={() => select(opt.value)}
+            >
+              <span style={{ display: 'flex', alignItems: 'center' }}>
+                {accessIcon(opt.value, 15)}
+              </span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* CheckCircle — התקבל */
 const IconCheckCircle = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
@@ -159,7 +304,7 @@ function StatusIcon({ status }) {
 }
 
 /* ── Single document row ── */
-function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPreview }) {
+function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPreview, onClientAccessChange }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
@@ -243,6 +388,17 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPr
         />
       </div>
 
+      {/* הרשאות לקוח — closed cell shows the icon for the current state;
+          clicking opens a small dropdown with three options. Layout +
+          behaviour mirror StatusPopover from TasksTab. */}
+      <div className="dt-col-client-access">
+        <ClientAccessPopover
+          value={doc.client_access}
+          docId={doc.id}
+          onChange={onClientAccessChange}
+        />
+      </div>
+
       {/* מחק — כל השורות */}
       <div className="dt-col-delete">
         {confirming ? (
@@ -311,6 +467,7 @@ export default function DocumentsTab({ projectId }) {
   const [wordHtml,       setWordHtml]       = useState('')
   const [wordLoading,    setWordLoading]    = useState(false)
   const [wordError,      setWordError]      = useState(false)
+  const [accessError,    setAccessError]    = useState('')   /* transient toast for client_access save failures */
 
   useEffect(() => {
     if (!previewFile || previewType(previewFile.url) !== 'word') return
@@ -430,6 +587,35 @@ export default function DocumentsTab({ projectId }) {
   const patchDoc = async (docId, field, value) => {
     setDocs(prev => prev.map(d => d.id === docId ? { ...d, [field]: value } : d))
     await supabase.from('project_documents').update({ [field]: value }).eq('id', docId)
+  }
+
+  /* ── Patch client_access — optimistic with revert + toast on error ──
+     Now driven by the per-row dropdown (ClientAccessPopover) — receives
+     the explicit target value instead of cycling. The popover already
+     short-circuits same-value selects, but we double-check defensively. */
+  const patchClientAccess = async (docId, value) => {
+    const doc = docs.find(d => d.id === docId)
+    if (!doc) return
+    const prev = doc.client_access
+    if (value === prev) return
+
+    setDocs(prevDocs => prevDocs.map(d =>
+      d.id === docId ? { ...d, client_access: value } : d
+    ))
+
+    const { error } = await supabase
+      .from('project_documents')
+      .update({ client_access: value })
+      .eq('id', docId)
+
+    if (error) {
+      console.error('client_access update error:', error)
+      setDocs(prevDocs => prevDocs.map(d =>
+        d.id === docId ? { ...d, client_access: prev } : d
+      ))
+      setAccessError('לא הצלחנו לעדכן, נסה שוב')
+      setTimeout(() => setAccessError(''), 3000)
+    }
   }
 
   /* ── File upload ── */
@@ -577,6 +763,7 @@ export default function DocumentsTab({ projectId }) {
                         <div className="dt-col-date">תאריך</div>
                         <div className="dt-col-file">קובץ</div>
                         <div className="dt-col-notes">הערות</div>
+                        <div className="dt-col-client-access">הרשאות לקוח</div>
                         <div className="dt-col-delete" />
                       </div>
                     )}
@@ -600,6 +787,7 @@ export default function DocumentsTab({ projectId }) {
                                 onFileDelete={deleteFile}
                                 onDocDelete={deleteDoc}
                                 onPreview={setPreviewFile}
+                                onClientAccessChange={patchClientAccess}
                               />
                             ))}
                             <AddDocRow
@@ -624,6 +812,7 @@ export default function DocumentsTab({ projectId }) {
                             onFileDelete={deleteFile}
                             onDocDelete={deleteDoc}
                             onPreview={setPreviewFile}
+                            onClientAccessChange={patchClientAccess}
                           />
                         ))}
                         <AddDocRow
@@ -642,6 +831,12 @@ export default function DocumentsTab({ projectId }) {
         </div>
 
       </div>
+
+      {/* Transient error toast for client_access save failures.
+          Fixed-position so it floats above whichever panel is active. */}
+      {accessError && (
+        <div className="dt-access-toast" role="alert">{accessError}</div>
+      )}
 
       {/* ── Left panel: preview ── */}
       <div className="dt-panel-left">

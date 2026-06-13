@@ -240,6 +240,7 @@ export default function FinishingTab({ projectId }) {
   /* PDF export — used for filename + button disabled state */
   const [projectName,   setProjectName]   = useState('')
   const [isExporting,   setIsExporting]   = useState(false)
+  const [exportError,   setExportError]   = useState('')   /* inline auth/network error shown next to the button */
 
   useEffect(() => { loadItems() }, [projectId])
 
@@ -288,6 +289,17 @@ export default function FinishingTab({ projectId }) {
   /* ── Export PDF via Puppeteer (mirrors QuoteBuilder.handleGeneratePDF) ── */
   const handleExportPdf = async () => {
     if (isExporting) return
+    setExportError('')
+
+    /* The PDF endpoint requires the caller's Supabase access token in
+       the Authorization header. If there's no session, ask the user to
+       sign in again before doing any work. */
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setExportError('יש להתחבר מחדש')
+      return
+    }
+
     setIsExporting(true)
     try {
       /* Flush any pending notes so the PDF reflects what's on screen */
@@ -297,7 +309,10 @@ export default function FinishingTab({ projectId }) {
 
       const response = await fetch('/api/generate-finishing-pdf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ projectId }),
       })
 
@@ -577,6 +592,17 @@ export default function FinishingTab({ projectId }) {
         >
           {isExporting ? 'מייצר PDF...' : 'ייצא ל-PDF'}
         </button>
+        {exportError && (
+          <span style={{
+            marginInlineStart: 12,
+            color: '#a83232',
+            fontFamily: "'Heebo', sans-serif",
+            fontSize: 13,
+            fontWeight: 400,
+          }}>
+            {exportError}
+          </span>
+        )}
       </div>
 
     </div>

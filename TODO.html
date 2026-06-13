@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>סטודיו בתים — TODO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;500;700&family=Rubik:wght@300&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:           #F7F5F2;
+      --surface:      #ffffff;
+      --text:         #1a1a18;
+      --text-muted:   #8a8680;
+      --border:       rgba(26,26,24,0.10);
+      --border-soft:  rgba(26,26,24,0.06);
+      --tab-hover:    #e8e3dc;
+      --sand:         #c8bfb0;
+      --sage:         #7a9478;
+      --category-bg:  #fafaf8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Heebo', sans-serif;
+      font-weight: 300;
+      direction: rtl;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+    }
+
+    .doc-brand {
+      font-family: 'Rubik', sans-serif;
+      font-weight: 300;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin: 0 0 8px;
+    }
+
+    .doc-title {
+      font-family: 'Heebo', sans-serif;
+      font-weight: 300;
+      font-size: 28px;
+      letter-spacing: 0.01em;
+      color: var(--text);
+      margin: 0 0 6px;
+    }
+
+    .doc-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 36px;
+    }
+
+    /* ── Section card ── */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.04);
+      padding: 28px 28px 24px;
+      margin-bottom: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .status-chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--category-bg);
+      border: 1px solid var(--border-soft);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .status-chip--planned {
+      background: var(--category-bg);
+      color: var(--text-muted);
+    }
+
+    .status-chip--in-progress {
+      background: rgba(122,148,120,0.10);
+      color: var(--sage);
+      border-color: rgba(122,148,120,0.30);
+    }
+
+    .status-chip--done {
+      background: rgba(26,26,24,0.04);
+      color: var(--text-muted);
+    }
+
+    /* ── Block within a section ── */
+    .block {
+      margin-bottom: 18px;
+    }
+
+    .block:last-child { margin-bottom: 0; }
+
+    .block-heading {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      text-transform: none;
+      margin: 0 0 8px;
+    }
+
+    .block-body {
+      font-size: 13.5px;
+      line-height: 1.7;
+      color: var(--text);
+    }
+
+    .block-body p { margin: 0 0 8px; }
+    .block-body p:last-child { margin-bottom: 0; }
+
+    .block-body ul {
+      margin: 0;
+      padding-right: 22px;
+    }
+
+    .block-body li {
+      margin-bottom: 6px;
+    }
+
+    .block-body code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12.5px;
+      background: var(--category-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: var(--text);
+      direction: ltr;
+      display: inline-block;
+    }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    /* ── Build-order steps ── */
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      counter-reset: step;
+    }
+
+    .steps li {
+      position: relative;
+      padding: 10px 36px 10px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      counter-increment: step;
+    }
+
+    .steps li:last-child {
+      border-bottom: none;
+    }
+
+    .steps li::before {
+      content: counter(step, upper-alpha);
+      position: absolute;
+      right: 0;
+      top: 10px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--tab-hover);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 0;
+    }
+
+    .step-title {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .step-verify {
+      display: block;
+      margin-top: 2px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    /* ── Two-column lists for read-only vs editable ── */
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .split-col {
+      background: var(--category-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    .split-col h4 {
+      margin: 0 0 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text);
+    }
+
+    .split-col h4 .badge {
+      display: inline-block;
+      margin-inline-start: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      vertical-align: 1px;
+    }
+
+    .badge--read  { background: rgba(26,26,24,0.06);    color: var(--text-muted); }
+    .badge--write { background: rgba(122,148,120,0.12); color: var(--sage); }
+
+    .split-col ul {
+      margin: 0;
+      padding-right: 18px;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    @media (max-width: 640px) {
+      .split { grid-template-columns: 1fr; }
+      .wrap  { padding: 28px 18px 60px; }
+      .doc-title { font-size: 24px; }
+      .section { padding: 22px 18px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ── Page header ─────────────────────────────────────────────── -->
+    <div class="doc-brand">סטודיו בתים — מערכת ניהול</div>
+    <h1 class="doc-title">TODO — תכניות פיתוח עתידיות</h1>
+    <p class="doc-subtitle">פיצ׳רים מתוכננים, החלטות סגורות, וסדר ביצוע. עדכן כאן בכל פעם שתוכנית פיצ׳ר חדש נסגרת.</p>
+
+    <!-- ── Section: Client Portal ──────────────────────────────────── -->
+    <section class="section" id="client-portal">
+      <div class="section-header">
+        <h2 class="section-title">Client Portal — פורטל לקוחות</h2>
+        <span class="status-chip status-chip--planned">תכנון סגור · טרם החל ביצוע</span>
+      </div>
+
+      <!-- Goal -->
+      <div class="block">
+        <h3 class="block-heading">מטרה</h3>
+        <div class="block-body">
+          <p>
+            לאפשר ללקוחות להתחבר דרך כפתור <strong>״כניסת משתמשים״</strong> הקיים
+            (אותו Google login של הצוות) ולהגיע לאזור לקוח ייעודי, mobile-first.
+            המסך הראשון: <strong>קריאה וכתיבה של ״פרטי תיק״</strong> של הפרויקט שלהם בלבד.
+          </p>
+        </div>
+      </div>
+
+      <!-- Identity & Security -->
+      <div class="block">
+        <h3 class="block-heading">זהות ואבטחה</h3>
+        <div class="block-body">
+          <ul>
+            <li>
+              טבלה ייעודית חדשה <code>client_users</code> (נפרדת מ-<code>profiles</code>):
+              עמודות <code>id</code> (uuid = <code>auth.uid()</code>),
+              <code>project_id</code> (uuid FK ל-<code>projects</code>),
+              <code>email</code>, <code>first_name</code>, <code>created_at</code>.
+            </li>
+            <li>
+              הזהות נוצרת <strong>אוטומטית בהתחברות הראשונה</strong>: אחרי ש-Google
+              מחזיר משתמש שלא נמצא ב-<code>profiles</code>, פונקציית SECURITY DEFINER
+              בשם <code>link_client_on_login()</code> קוראת את <code>auth.email()</code>,
+              מתאימה אותו מול <code>project_contacts</code>, ואם נמצא — יוצרת שורת
+              <code>client_users</code> עם <strong>הפרויקט הראשון התואם</strong>. מחזירה את השורה.
+            </li>
+            <li>לקוח אחד = פרויקט אחד בשלב זה (אין החלפת פרויקטים).</li>
+            <li>מייל לא מזוהה → ניתוב שקט ל-<code>/no-access</code> (ללא הודעה מיוחדת).</li>
+            <li>
+              <strong>RLS אמיתי</strong> על הטבלאות הזמינות ללקוח: לקוח רואה/עורך רק שורות
+              ש-<code>project_id</code> שלהן תואם ל-<code>client_users</code> שלו.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Routing -->
+      <div class="block">
+        <h3 class="block-heading">ניתוב</h3>
+        <div class="block-body">
+          <ul>
+            <li>
+              <strong>זרימת AuthCallback:</strong>
+              נמצא ב-<code>profiles</code> → צוות (ללא שינוי);
+              אחרת — הרצת <code>link_client_on_login</code> → לקוח;
+              אחרת — <code>/no-access</code>.
+            </li>
+            <li>שומר חדש <code>&lt;ClientRoute&gt;</code> שעוטף את אזור <code>/client</code>.</li>
+            <li>
+              <code>/client</code> משתמש ב-<strong>layout ייחודי mobile-first</strong>,
+              <em>לא</em> ב-layout של המנהלת.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Client "פרטי תיק" screen -->
+      <div class="block">
+        <h3 class="block-heading">מסך ״פרטי תיק״ ללקוח (mobile-first)</h3>
+        <div class="block-body">
+          <p>
+            כרטיסים מוערמים, גופן Heebo, רקע <code>#F7F5F2</code>.
+            השדות מחולקים בין הרשאות קריאה לעריכה:
+          </p>
+          <div class="split">
+            <div class="split-col">
+              <h4>קריאה בלבד <span class="badge badge--read">read</span></h4>
+              <ul>
+                <li>כל סקציית <strong>״בעלי מקצוע״</strong> (Professionals)</li>
+                <li><strong>״אחראית פרויקט״</strong></li>
+              </ul>
+              <p class="muted" style="font-size:12px; line-height:1.55; margin-top:8px;">
+                בעלי המקצוע מגיעים מטבלת <code>professionals</code> המרכזית דרך FK ב-<code>client_info</code> —
+                עריכה הייתה משנה את הרשומה המאסטר בכל הפרויקטים.
+                ״אחראית פרויקט״ משותפת לקנבן — read-only מונע דליפה לתצוגה הפנימית.
+              </p>
+            </div>
+            <div class="split-col">
+              <h4>עריכה <span class="badge badge--write">edit</span></h4>
+              <ul>
+                <li>פרטי פרויקט</li>
+                <li>שדות רישוי</li>
+                <li>פרטי קשר של הלקוח</li>
+              </ul>
+              <p class="muted" style="font-size:12px; line-height:1.55; margin-top:8px;">
+                פרטי הקשר נשמרים ב-<code>project_contacts</code>, שבו יכולים להיות מספר אנשי קשר לפרויקט.
+                הלקוח עורך <strong>אך ורק את שורת איש הקשר שלו</strong>, לא של בן/בת זוג.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Build order -->
+      <div class="block">
+        <h3 class="block-heading">סדר ביצוע — שכבה אחר שכבה (אימות בין כל שלב)</h3>
+        <div class="block-body">
+          <ol class="steps">
+            <li>
+              <span class="step-title">שכבת הנתונים</span> —
+              טבלת <code>client_users</code> + פונקציית <code>link_client_on_login</code>.
+              <span class="step-verify">אימות: זהות נוצרת תקין, מוחזר הפרויקט הנכון.</span>
+            </li>
+            <li>
+              <span class="step-title">ניתוב + שומר <code>&lt;ClientRoute&gt;</code></span> —
+              <span class="step-verify">
+                אימות: לקוח מגיע ל-<code>/client</code>; לא-לקוח ל-<code>/no-access</code>; צוות לא מושפע.
+              </span>
+            </li>
+            <li>
+              <span class="step-title">המסך — פרטי תיק ללקוח, mobile-first, קריאה בלבד תחילה</span>
+              <span class="step-verify">אימות: הנתונים מוצגים נכון במובייל.</span>
+            </li>
+            <li>
+              <span class="step-title">עריכה — הרשאות כתיבה ברמת שדה + שמירה מהמסך</span>
+              <span class="step-verify">
+                אימות: הלקוח עורך שדות שלו, ולא מצליח לגעת בשדות read-only.
+              </span>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── Section: BUG (HIGH) — "הפוך לפרויקט" non-functional ──────── -->
+    <section class="section" id="bug-inquiry-to-project-broken">
+      <div class="section-header">
+        <h2 class="section-title">BUG — ״הפוך לפרויקט״ לא פועל + אי-התאמה Dev/Prod</h2>
+        <span class="status-chip" style="background: rgba(168,50,50,0.10); border-color: rgba(168,50,50,0.30); color: #a83232;">באג · עדיפות גבוהה</span>
+      </div>
+
+      <!-- Steps to reproduce -->
+      <div class="block">
+        <h3 class="block-heading">שלבים לשחזור</h3>
+        <div class="block-body">
+          <ol>
+            <li>נכנסים למסך ״פניות״ (inquiries).</li>
+            <li>בשורת פנייה לוחצים על הפעולה ״הפוך לפרויקט״.</li>
+            <li>נפתחת מודל עם הכותרת ״הפיכת פניה לפרויקט״ וכפתור אישור ״צור פרויקט״.</li>
+            <li>לוחצים ״צור פרויקט״.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Expected vs Actual -->
+      <div class="block">
+        <h3 class="block-heading">צפוי מול בפועל</h3>
+        <div class="block-body">
+          <div class="split">
+            <div class="split-col">
+              <h4>צפוי</h4>
+              <ul>
+                <li>נוצר פרויקט חדש עם הנתונים מהפנייה.</li>
+                <li>הפרויקט מופיע בלוח ה-Kanban בשלב המתאים.</li>
+              </ul>
+            </div>
+            <div class="split-col">
+              <h4>בפועל</h4>
+              <ul>
+                <li><strong>Production</strong> (<code>studio-batim.vercel.app</code>): הכפתור ״צור פרויקט״ לא עושה כלום — אין תגובה, אין שגיאה, שום דבר לא קורה.</li>
+                <li><strong>Dev</strong> (<code>localhost:5173</code>): הפעולה <em>נראית</em> מצליחה (אין שגיאה), אבל הפרויקט החדש לא מופיע בלוח ה-Kanban.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Suspicion: Dev/Prod gap -->
+      <div class="block">
+        <h3 class="block-heading">הבדל Dev/Prod — חשוד מבני</h3>
+        <div class="block-body">
+          <p>
+            ההבדל בין הסביבות מרמז על אחד מאלה:
+          </p>
+          <ul>
+            <li><strong>פער deployment / migration</strong> — schema או RLS policy שקיימים ב-Dev ולא ב-Prod, או env-var שונה.</li>
+            <li><strong>Silent failure</strong> — השורה נוצרת באיזשהו מקום אבל לא נראית ב-Kanban (אולי <code>try/catch</code> בולע שגיאה).</li>
+            <li><strong>אי-התאמת <code>stage_id</code> / <code>status</code> / <code>archived</code></strong> — הפרויקט נכנס, אבל שאילתת ה-Kanban מסננת אותו החוצה.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Investigation hints -->
+      <div class="block">
+        <h3 class="block-heading">כיווני חקירה כשלוקחים את זה</h3>
+        <div class="block-body">
+          <ul>
+            <li>
+              ה-handler של ה-confirm במודל ״הפיכת פניה לפרויקט״ — בדקי שהוא באמת קורא ל-<code>supabase.from('projects').insert(...)</code>.
+              נסי לחפש <code>try/catch</code> שבולע <code>error</code> מבלי להציג למשתמש.
+            </li>
+            <li>
+              ודאי שערכי ה-<code>stage</code> / <code>stage_id</code> / <code>archived</code> בשורה שנוצרת תואמים את מה
+              ששאילתת ה-Kanban מצפה לו (לדוגמה <code>archived = false</code>, <code>stage_id</code> חוקי בטבלת <code>stages</code>).
+            </li>
+            <li>
+              השוואת DB בין Dev ל-Prod — RLS policies על <code>projects</code> ועל <code>inquiries</code>,
+              עמודות חדשות שאולי חסרות ב-Prod, default values.
+            </li>
+            <li>
+              ב-Prod: לפתוח <strong>Network</strong> ו-<strong>Console</strong> בדפדפן ולתפוס בקשה שנכשלת בשקט (סטטוס 4xx/5xx)
+              או שגיאה ב-console.
+            </li>
+            <li>
+              בדקי האם <code>converted_to_project</code> ב-<code>inquiries</code> מתעדכן — אם כן, ה-flow מתחיל, אבל ה-insert נכשל.
+              אם לא, ה-flow נחסם מוקדם יותר.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="block">
+        <h3 class="block-heading">עדיפות</h3>
+        <div class="block-body">
+          <p>
+            <strong>גבוהה.</strong> זה ה-entry path הראשי ליצירת פרויקטים חדשים.
+            עד שזה לא יעבוד, פרויקט חדש דורש יצירה ידנית מ-Kanban — תקלה תפעולית רציפה.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section: BUG — "פרטי תיק → אנשי קשר" tab cache stale ────── -->
+    <section class="section" id="bug-contacts-tab-stale-cache">
+      <div class="section-header">
+        <h2 class="section-title">BUG — ״פרטי תיק → אנשי קשר״ cache לא מתעדכן במעבר טאב</h2>
+        <span class="status-chip status-chip--planned">באג · עדיפות בינונית</span>
+      </div>
+
+      <!-- Steps to reproduce -->
+      <div class="block">
+        <h3 class="block-heading">שלבים לשחזור</h3>
+        <div class="block-body">
+          <ol>
+            <li>פתחי תיק לקוח (״פרטי תיק״).</li>
+            <li>בסקציית ״אנשי קשר״, עדכני פרטי איש קשר ושמרי.</li>
+            <li>עברי לטאב אחר באותו תיק (למשל ״משימות״).</li>
+            <li>חזרי לטאב ״אנשי קשר״.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Expected vs Actual -->
+      <div class="block">
+        <h3 class="block-heading">צפוי מול בפועל</h3>
+        <div class="block-body">
+          <div class="split">
+            <div class="split-col">
+              <h4>צפוי</h4>
+              <ul>
+                <li>הפרטים <strong>המעודכנים</strong> מוצגים מיד עם החזרה לטאב.</li>
+              </ul>
+            </div>
+            <div class="split-col">
+              <h4>בפועל</h4>
+              <ul>
+                <li>מוצגים הפרטים ה<strong>ישנים</strong> (מלפני העדכון).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Note -->
+      <div class="block">
+        <h3 class="block-heading">הערה</h3>
+        <div class="block-body">
+          <p>
+            ניווט <strong>החוצה</strong> מהתיק לחלוטין וחזרה אליו <em>כן</em> מציג את הפרטים המעודכנים נכון.
+            הבאג קורה <strong>אך ורק במעבר בין טאבים</strong> בתוך אותו תיק לקוח.
+          </p>
+        </div>
+      </div>
+
+      <!-- Likely cause -->
+      <div class="block">
+        <h3 class="block-heading">סיבה משוערת</h3>
+        <div class="block-body">
+          <p>
+            הטאב ״אנשי קשר״ שומר את ה-<code>fetch</code> הראשוני ב-state מקומי של הקומפוננטה
+            ולא מבצע <code>re-fetch</code> (או לא מסתנכרן מ-state של ה-parent שעודכן)
+            כאשר הטאב נשלף מחדש / mount מחדש.
+          </p>
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="block">
+        <h3 class="block-heading">עדיפות</h3>
+        <div class="block-body">
+          <p>
+            <strong>בינונית.</strong> הנתונים נשמרים נכון ב-DB — רק התצוגה ב-UI של ה-session הנוכחי
+            stale עד ניווט מלא מחוץ לתיק וחזרה.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Section: FEATURE — מרחב קבצים משותף ─────────────────────── -->
+    <section class="section" id="feature-shared-files-workspace">
+      <div class="section-header">
+        <h2 class="section-title">FEATURE — מרחב קבצים משותף (Shared Files Workspace)</h2>
+        <span class="status-chip status-chip--planned">פיצ׳ר · עדיפות בינונית</span>
+      </div>
+
+      <!-- Purpose -->
+      <div class="block">
+        <h3 class="block-heading">מטרה</h3>
+        <div class="block-body">
+          <p>
+            טאב / מסך חדש שבו <strong>הצוות והלקוח שניהם</strong> יכולים להעלות ולהוריד קבצים בחופשיות —
+            נפרד מ-״מסמכים״ הקיים שמבוסס תבנית עם הרשאות per-row של <code>hidden</code> / <code>view</code> / <code>view_edit</code>.
+          </p>
+          <p class="muted">
+            המקום למשחקים שלא נכנסים למבנה: דרפטים, תמונות השראה, סקיצות, תמונות שהלקוח מצלם, הערות אד-הוק.
+            ללא הצורך שהמנהלת תפתח גישה per-file.
+          </p>
+        </div>
+      </div>
+
+      <!-- High-level scope -->
+      <div class="block">
+        <h3 class="block-heading">היקף ראשוני</h3>
+        <div class="block-body">
+          <div class="split">
+            <div class="split-col">
+              <h4>צד מנהלת</h4>
+              <ul>
+                <li>טאב חדש בתוך תיק הלקוח (במקביל ל״מעקב מסמכים״).</li>
+                <li>העלאה + הורדה + רשימת קבצים של הפרויקט הספציפי.</li>
+              </ul>
+            </div>
+            <div class="split-col">
+              <h4>צד לקוח</h4>
+              <ul>
+                <li>פריט חדש ב-drawer (אפשר להפעיל אחד מ״כתב כמויות״ / ״חומרי גמר״ / חדש לגמרי).</li>
+                <li>אותו workspace, מסונן לפרויקט של הלקוח בלבד.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Per-file display -->
+      <div class="block">
+        <h3 class="block-heading">שדות לתצוגה לכל קובץ</h3>
+        <div class="block-body">
+          <ul>
+            <li><code>file_name</code> — שם הקובץ המקורי (כולל עברית)</li>
+            <li><code>uploaded_by</code> — שם המעלה (staff מ-<code>profiles</code> או client מ-<code>client_users</code> / <code>project_contacts</code>)</li>
+            <li><code>uploaded_at</code> — תאריך/שעה</li>
+            <li><code>size</code> — גודל הקובץ</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Storage + paths -->
+      <div class="block">
+        <h3 class="block-heading">אחסון + נתיב</h3>
+        <div class="block-body">
+          <ul>
+            <li>
+              שימוש ב-bucket הקיים <code>project-files</code> (שמשמש את ״מעקב מסמכים״ ואת
+              ה-portal של הלקוח).
+            </li>
+            <li>
+              תיקייה ייעודית per-project: <code>shared/{project_id}/{uuid}.{ext}</code> או דומה.
+              <strong>ה-path עצמו ASCII בלבד</strong> (UUIDs) — שם הקובץ העברי נשמר רק ב-DB metadata.
+            </li>
+            <li>
+              דפוס upload + <code>getPublicUrl</code> ככל הנראה זהה לזה של
+              <code>ClientDocuments.jsx</code> ו-<code>DocumentsTab.jsx</code> — שמותם מועברים ככלי.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- DB schema -->
+      <div class="block">
+        <h3 class="block-heading">שכבת DB</h3>
+        <div class="block-body">
+          <p>טבלה חדשה (סביר):</p>
+          <ul>
+            <li><code>shared_files</code></li>
+            <li>— <code>id</code> (uuid PK)</li>
+            <li>— <code>project_id</code> (uuid FK → projects)</li>
+            <li>— <code>file_url</code> (text)</li>
+            <li>— <code>file_name</code> (text)</li>
+            <li>— <code>uploaded_by</code> (uuid → auth.uid())</li>
+            <li>— <code>uploaded_at</code> (timestamptz default now())</li>
+            <li>— <code>size</code> (bigint, bytes)</li>
+          </ul>
+          <p class="muted">
+            ההחלטות לגבי indices ו-constraints ייקבעו ב-implementation.
+            <strong>DB ו-קוד תמיד נפרדים</strong> — את מטפלת ב-DDL ב-Supabase לפי הצורך.
+          </p>
+        </div>
+      </div>
+
+      <!-- RLS -->
+      <div class="block">
+        <h3 class="block-heading">RLS — הרשאות גישה</h3>
+        <div class="block-body">
+          <ul>
+            <li><strong>Staff</strong> (<code>profiles.role IN ('admin', 'employee')</code>): גישה מלאה — SELECT / INSERT / UPDATE / DELETE על כל פרויקט.</li>
+            <li>
+              <strong>Client</strong> (<code>client_users.id = auth.uid()</code>):
+              <ul>
+                <li>SELECT — רק רשומות שבהן <code>project_id = client_users.project_id</code></li>
+                <li>INSERT — רק לפרויקט שלהם, ועם <code>uploaded_by = auth.uid()</code></li>
+                <li>DELETE — רק על רשומות עם <code>uploaded_by = auth.uid()</code> (uploader's-own)</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Open decisions -->
+      <div class="block">
+        <h3 class="block-heading">החלטות שצריך לקבל ב-implementation</h3>
+        <div class="block-body">
+          <ul>
+            <li>
+              <strong>מחיקה</strong> — uploader-only? staff-only? hybrid (uploader יכול תמיד, staff override)?
+              ההצעה הראשונית: <em>uploader-only ל-client, staff יכול הכל</em>.
+            </li>
+            <li><strong>הגבלת סוגי קבצים</strong> — האם להגביל ל-PDF / images / docs, או כל סוג? + הצגת preview רק לסוגים נתמכים.</li>
+            <li><strong>הגבלת גודל</strong> — מקסימום per-file? (Supabase Storage default = 50MB, אפשר להעלות).</li>
+            <li><strong>סדר</strong> — תצוגה chronological (חדש ביותר ראשון) או alphabetical? סינון לפי uploader?</li>
+            <li>
+              <strong>התראות / badge</strong> — כשהלקוח מעלה קובץ, האם המנהלת רואה התראה במקום אחר במערכת
+              (אדומה בטאב, badge ב-kanban, מייל)?
+            </li>
+            <li><strong>קישור מ-מעקב מסמכים</strong> — האם לאפשר ״העתק לכאן״ מהמרחב המשותף לתבנית של מסמך מובנה?</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="block">
+        <h3 class="block-heading">עדיפות</h3>
+        <div class="block-body">
+          <p>
+            <strong>בינונית.</strong> המבנה הקיים של ״מעקב מסמכים״ עובד טוב לקבצים שמוגדרים מראש,
+            אבל יש פער לתקשורת בלתי-פורמלית בין הצוות ללקוח. ההוספה הזו ממלאת אותו, ומקלה על המנהלת לא להגיב לכל בקשת
+            שיתוף נקודתית. אפשר לבצע אחרי שהפיתוח הנוכחי של ה-portal יציב.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

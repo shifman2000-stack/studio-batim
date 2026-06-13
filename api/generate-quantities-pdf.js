@@ -1,12 +1,34 @@
 // api/generate-quantities-pdf.js — Vercel Serverless Function
-// Accepts POST { projectId }, navigates headless Chrome to /quantities-print/:projectId,
-// and returns a PDF of the project's quantities report.
 //
-// Mirrors api/generate-finishing-pdf.js exactly — same Puppeteer setup, same page options,
-// only the target route and the readiness marker differ.
+// SECURED endpoint. The caller MUST send:
+//   Authorization: Bearer <supabase_access_token>
+//   body: { projectId: <uuid> }
+//
+// Pipeline:
+//   1. Method check (POST only).
+//   2. Extract Bearer token; reject 401 if missing.
+//   3. Build a Supabase server client with the ANON key + the user's
+//      access token in the Authorization header.
+//      Calling supabase.auth.getUser(accessToken) verifies the token
+//      is valid and resolves a user; rejects 401 if not.
+//   4. Validate projectId is a real UUID; reject 400 if not.
+//   5. Authorize via the SECURITY DEFINER RPC `can_access_project_pdf`
+//      (staff via profiles OR client owner via client_users). The token
+//      injected at step 3 makes auth.uid() inside the RPC resolve to the
+//      caller. Reject 403 if it returns false / errors.
+//   6. Only THEN launch Puppeteer and render the PDF.
+//
+// The print routes themselves (/quantities-print/:projectId etc.) and
+// their SECURITY DEFINER fetch RPCs are UNCHANGED — gating happens here.
 
-import chromium from '@sparticuz/chromium'
-import puppeteer from 'puppeteer-core'
+import chromium      from '@sparticuz/chromium'
+import puppeteer     from 'puppeteer-core'
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL      = process.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,15 +36,47 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
-  const { projectId } = body || {}
-
-  if (!projectId) {
-    return res.status(400).json({ error: 'Missing required field: projectId' })
+  // ── 1. Authentication: extract Bearer token ──
+  const authHeader  = req.headers.authorization || req.headers.Authorization
+  const accessToken = authHeader && /^Bearer\s+/i.test(authHeader)
+    ? authHeader.replace(/^Bearer\s+/i, '').trim()
+    : null
+  if (!accessToken) {
+    return res.status(401).json({ error: 'unauthorized' })
   }
 
-  // Build the print URL from the incoming request's host so this works
-  // identically on preview deployments, production, and local dev tunnels.
+  // Supabase server client — anon key + caller's access token in headers.
+  // The same client is used to verify identity AND call the authorization
+  // RPC, so auth.uid() inside the SECURITY DEFINER function resolves to
+  // the caller's user id.
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth:   { persistSession: false, autoRefreshToken: false },
+  })
+
+  const { data: { user }, error: userErr } = await supabase.auth.getUser(accessToken)
+  if (userErr || !user) {
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  // ── 2. Input validation: projectId must be a real UUID ──
+  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
+  const { projectId } = body || {}
+  if (!projectId || typeof projectId !== 'string' || !UUID_REGEX.test(projectId)) {
+    return res.status(400).json({ error: 'bad request' })
+  }
+
+  // ── 3. Authorization: SECURITY DEFINER RPC gates project access ──
+  // Returns true for staff (row in profiles) or client owner (matching
+  // client_users row). Any other case (incl. RPC error) → generic 403,
+  // identical to "wrong project" so we don't leak information.
+  const { data: allowed, error: rpcErr } = await supabase
+    .rpc('can_access_project_pdf', { p_project_id: projectId })
+  if (rpcErr || allowed !== true) {
+    return res.status(403).json({ error: 'forbidden' })
+  }
+
+  // ── 4. Puppeteer flow (unchanged from the original) ──
   const protocol = req.headers['x-forwarded-proto'] || 'https'
   const host     = req.headers.host
   const printUrl = `${protocol}://${host}/quantities-print/${projectId}`

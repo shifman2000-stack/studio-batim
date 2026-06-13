@@ -1301,54 +1301,7 @@ function Hours() {
               </div>
             ))}
         </div>
-      ) : (
-        /* Employee: single row + drill-down toggle. */
-        <div className="hours-summary-group">
-          <div className="hours-monthly-summary">
-            <div className="hours-summary-item">
-              <span className="hours-summary-label">ימי מחלה</span>
-              <span className="hours-summary-value">{monthlySummary.sickDays}</span>
-            </div>
-            <div className="hours-summary-item">
-              <span className="hours-summary-label">ימי חופשה</span>
-              <span className="hours-summary-value">{monthlySummary.vacationDays}</span>
-            </div>
-            <div className="hours-summary-item">
-              <span className="hours-summary-label">ימי עבודה מהבית</span>
-              <span className="hours-summary-value">{monthlySummary.wfhDays}</span>
-            </div>
-            <div className="hours-summary-item">
-              <span className="hours-summary-label">ימי עבודה במשרד</span>
-              <span className="hours-summary-value">{monthlySummary.officeDays}</span>
-            </div>
-            <div className="hours-summary-item">
-              <span className="hours-summary-label">סה״כ שעות</span>
-              <span className="hours-summary-value">
-                {toHHMM(monthlySummary.totalMins)}
-                {(monthlySummary.pendingMins > 0 || monthlySummary.rejectedMins > 0) && (
-                  <span className="hours-summary-sub">
-                    ({[
-                      monthlySummary.pendingMins  > 0 && `${toHHMM(monthlySummary.pendingMins)} ממתינות`,
-                      monthlySummary.rejectedMins > 0 && `${toHHMM(monthlySummary.rejectedMins)} נדחו`,
-                    ].filter(Boolean).join(' | ')})
-                  </span>
-                )}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="hours-drill-toggle"
-              onClick={() => toggleCalendarDrill(userId)}
-              title={calendarDrillExpanded.has(userId) ? 'סגור' : 'הצג ימים פעילים'}
-            >
-              {calendarDrillExpanded.has(userId) ? '−' : '+'}
-            </button>
-          </div>
-          {calendarDrillExpanded.has(userId) && (
-            <div className="hours-drill-list">{renderDrillBody(userId, 'calendar')}</div>
-          )}
-        </div>
-      )}
+      ) : null}
     </>
   )
 

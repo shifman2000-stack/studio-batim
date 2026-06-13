@@ -2,13 +2,21 @@
 //
 // "פרטי תיק" screen — view + edit mode.
 //
-// VIEW MODE (default): five cards as before. The "ערוך" button lives
-// INSIDE the "אנשי קשר" card header (the only editable card).
+// Card order (top → bottom):
+//   1. פרטים אישיים  (was "אנשי קשר" — the ONLY editable card)
+//   2. פרטי הפרויקט   (read-only)
+//   3. בעלי מקצוע    (read-only)
 //
-// EDIT MODE: only the "אנשי קשר" card becomes editable. All four other
-// cards (פרטי הפרויקט, אחראית פרויקט, פרטי רישוי, בעלי מקצוע) stay as
-// read-only display even in edit mode. Two sticky buttons at the bottom
-// of the viewport — "שמור" (sage) and "ביטול" (neutral).
+// "אחראית פרויקט" and "פרטי רישוי" cards are intentionally absent on
+// the client side — they exist on the manager-side ProjectDetail but
+// the client never sees them.
+//
+// VIEW MODE (default): three cards as above. The "ערוך" button lives
+// INSIDE the "פרטים אישיים" card header (the only editable card).
+//
+// EDIT MODE: only "פרטים אישיים" becomes editable. The other two cards
+// stay as read-only display even in edit mode. Two sticky buttons at
+// the bottom of the viewport — "שמור" (sage) and "ביטול" (neutral).
 //
 // On save: only changed project_contacts rows are updated, in parallel
 // via Promise.all. RLS already restricts writes to the client's own
@@ -28,18 +36,6 @@ const PROJECT_DETAIL_FIELDS = [
   { field: 'active_plans', label: 'תוכניות חלות במקום', multiline: true },
 ]
 
-/* ── Section: פרטי רישוי — client_info columns (READ-ONLY) ──────────── */
-const LICENSING_FIELDS = [
-  { field: 'committee',             label: 'ועדה' },
-  { field: 'checker',               label: 'בודקת' },
-  { field: 'info_license_file',     label: 'תיק מידע רישוי זמין' },
-  { field: 'building_file',         label: 'תיק בניין' },
-  { field: 'internal_request_num',  label: 'מספר בקשה פנימי/ועדה' },
-  { field: 'available_license_num', label: 'מספר בקשה רישוי זמין' },
-  { field: 'civil_defense_file',    label: 'תיק הג"א' },
-  { field: 'request_essence',       label: 'מהות הבקשה', multiline: true },
-]
-
 /* Contact fields per row in project_contacts (editable).
    Note: id_number stays default direction (RTL) — values are typed
    numbers but the input/value behaves correctly under the surrounding
@@ -52,7 +48,7 @@ const CONTACT_FIELDS = [
   { field: 'email',      label: 'אימייל', ltr: true },
 ]
 
-/* ── Section: בעלי מקצוע — READ-ONLY even in edit mode ─────────────── */
+/* ── Section: בעלי מקצוע — READ-ONLY ─────────────────────────────── */
 const PROFESSIONAL_ROLES = [
   { key: 'surveyor',          label: 'מודד' },
   { key: 'constructor',       label: 'קונסטרוקטור' },
@@ -86,12 +82,11 @@ export default function ClientFile() {
   const isMounted = useRef(true)
 
   /* ── Loaded data (source of truth, refreshed after save) ─────────── */
-  const [project, setProject]                 = useState(null)
-  const [clientInfo, setClientInfo]           = useState(null)
-  const [contacts, setContacts]               = useState([])
-  const [responsibleName, setResponsibleName] = useState(null)
-  const [profById, setProfById]               = useState({})
-  const [loading, setLoading]                 = useState(true)
+  const [project, setProject]         = useState(null)
+  const [clientInfo, setClientInfo]   = useState(null)
+  const [contacts, setContacts]       = useState([])
+  const [profById, setProfById]       = useState({})
+  const [loading, setLoading]         = useState(true)
 
   /* ── Edit-mode state ─────────────────────────────────────────────
      Only contacts are editable, so the only draft we keep is contactsDraft.
@@ -118,7 +113,7 @@ export default function ClientFile() {
       { data: contactsData },
     ] = await Promise.all([
       supabase.from('projects')
-        .select('name, type, status, current_stage, urgency, intake_date, location, notes, responsible_id')
+        .select('name, type, status, current_stage, urgency, intake_date, location, notes')
         .eq('id', project_id)
         .maybeSingle(),
       supabase.from('client_info')
@@ -136,17 +131,8 @@ export default function ClientFile() {
     setClientInfo(ciData || null)
     setContacts(Array.isArray(contactsData) ? contactsData : [])
 
-    /* Stage 2 — lookups (read-only sections, unaffected by edit mode). */
-    const lookups = []
-    if (projData?.responsible_id) {
-      lookups.push(
-        supabase.from('profiles')
-          .select('first_name, last_name')
-          .eq('id', projData.responsible_id)
-          .maybeSingle()
-          .then(({ data }) => ({ kind: 'responsible', data }))
-      )
-    }
+    /* Stage 2 — professionals lookup (only thing left, since the
+       "אחראית פרויקט" card was removed). */
     const profIds = []
     if (ciData) {
       for (const r of PROFESSIONAL_ROLES) {
@@ -154,27 +140,22 @@ export default function ClientFile() {
         if (id) profIds.push(id)
       }
     }
+
+    let profsResult = null
     if (profIds.length > 0) {
-      lookups.push(
-        supabase.from('professionals')
-          .select('id, first_name, last_name')
-          .in('id', profIds)
-          .then(({ data }) => ({ kind: 'professionals', data: data || [] }))
-      )
+      const { data } = await supabase.from('professionals')
+        .select('id, first_name, last_name')
+        .in('id', profIds)
+      profsResult = data || []
     }
-    const results = lookups.length > 0 ? await Promise.all(lookups) : []
     if (!isMounted.current) return
-    /* Reset both so stale lookups from previous projects don't bleed through. */
-    setResponsibleName(null)
+
+    /* Reset so stale lookups from previous projects don't bleed through. */
     setProfById({})
-    for (const r of results) {
-      if (r.kind === 'responsible') {
-        setResponsibleName(r.data ? fullName(r.data.first_name, r.data.last_name) : null)
-      } else if (r.kind === 'professionals') {
-        const map = {}
-        for (const p of r.data) map[p.id] = fullName(p.first_name, p.last_name)
-        setProfById(map)
-      }
+    if (profsResult) {
+      const map = {}
+      for (const p of profsResult) map[p.id] = fullName(p.first_name, p.last_name)
+      setProfById(map)
     }
     setLoading(false)
   }, [project_id])
@@ -304,7 +285,6 @@ export default function ClientFile() {
   const subtitle      = subtitleParts.join(' · ')
 
   const detailRows    = renderClientInfoFields(PROJECT_DETAIL_FIELDS)
-  const licensingRows = renderClientInfoFields(LICENSING_FIELDS)
 
   /* Professionals — ALWAYS read-only (also in edit mode). */
   const professionalsRows = []
@@ -335,51 +315,19 @@ export default function ClientFile() {
           <div className="cp-save-error" role="alert">{saveError}</div>
         )}
 
-        {/* Page header — project name + subtitle. The edit button now
-            lives inside the "אנשי קשר" card (the only editable card). */}
+        {/* Page header — project name + subtitle. The edit button lives
+            inside the "פרטים אישיים" card (the only editable card). */}
         <header className="cp-header">
           <h1 className="cp-project-name">{projectName}</h1>
           {subtitle && <p className="cp-project-subtitle">{subtitle}</p>}
         </header>
 
-        {/* Card — פרטי הפרויקט (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">פרטי הפרויקט</h2>
-          {detailRows.length > 0
-            ? detailRows
-            : <p className="cp-empty-card">אין פרטים זמינים</p>}
-        </section>
-
-        {/* Card — אחראית פרויקט (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">אחראית פרויקט</h2>
-          {responsibleName
-            ? <p className="cp-responsible-name">{responsibleName}</p>
-            : <p className="cp-empty-card">לא הוקצתה אחראית</p>}
-        </section>
-
-        {/* Card — פרטי רישוי (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">פרטי רישוי</h2>
-          {licensingRows.length > 0
-            ? licensingRows
-            : <p className="cp-empty-card">אין פרטי רישוי זמינים</p>}
-        </section>
-
-        {/* Card — בעלי מקצוע (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">בעלי מקצוע</h2>
-          {professionalsRows.length > 0
-            ? professionalsRows
-            : <p className="cp-empty-card">לא הוזנו בעלי מקצוע</p>}
-        </section>
-
-        {/* Card — אנשי קשר (THE ONLY editable card).
+        {/* Card 1 — פרטים אישיים (THE ONLY editable card; first card on screen).
             Edit button lives in this card's header so the action is
             adjacent to its target. Hidden while in edit mode. */}
         <section className="cp-card">
           <div className="cp-card-header">
-            <h2 className="cp-card-title">אנשי קשר</h2>
+            <h2 className="cp-card-title">פרטים אישיים</h2>
             {!editMode && (
               <button
                 type="button"
@@ -410,7 +358,7 @@ export default function ClientFile() {
                 </div>
               ))
             ) : (
-              <p className="cp-empty-card">לא הוזנו אנשי קשר</p>
+              <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
             )
           ) : (
             contacts.length > 0 ? (
@@ -434,9 +382,25 @@ export default function ClientFile() {
                 )
               })
             ) : (
-              <p className="cp-empty-card">לא הוזנו אנשי קשר</p>
+              <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
             )
           )}
+        </section>
+
+        {/* Card 2 — פרטי הפרויקט (always read-only) */}
+        <section className="cp-card">
+          <h2 className="cp-card-title">פרטי הפרויקט</h2>
+          {detailRows.length > 0
+            ? detailRows
+            : <p className="cp-empty-card">אין פרטים זמינים</p>}
+        </section>
+
+        {/* Card 3 — בעלי מקצוע (always read-only) */}
+        <section className="cp-card">
+          <h2 className="cp-card-title">בעלי מקצוע</h2>
+          {professionalsRows.length > 0
+            ? professionalsRows
+            : <p className="cp-empty-card">לא הוזנו בעלי מקצוע</p>}
         </section>
 
       </div>

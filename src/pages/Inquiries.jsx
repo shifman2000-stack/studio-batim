@@ -922,6 +922,34 @@ export default function Inquiries() {
             },
           ]
 
+      /* ── contact2 row — split contact2_name on the FIRST space into
+            first_name / last_name. Only push a row when at least one of
+            name / phone / email has a value (otherwise the section was
+            untouched on the inquiry form). ── */
+      const contact2Rows = []
+      if (inq.contact2_name || inq.contact2_phone || inq.contact2_email) {
+        const name = (inq.contact2_name ?? '').trim()
+        let c2First = null
+        let c2Last  = null
+        if (name) {
+          const spaceIdx = name.indexOf(' ')
+          if (spaceIdx === -1) {
+            c2First = name
+          } else {
+            c2First = name.slice(0, spaceIdx)
+            const tail = name.slice(spaceIdx + 1).trim()
+            c2Last = tail || null
+          }
+        }
+        contact2Rows.push({
+          project_id: newProject.id,
+          first_name: c2First,
+          last_name:  c2Last,
+          phone:      inq.contact2_phone ?? null,
+          email:      inq.contact2_email ?? null,
+        })
+      }
+
       const contactRows = [
         ...mainContacts,
         ...((Array.isArray(inq.additional_contacts) ? inq.additional_contacts : [])
@@ -934,6 +962,7 @@ export default function Inquiries() {
             email:      null,
           }))
         ),
+        ...contact2Rows,
       ]
       const { error: contactsErr } = await supabase
         .from('project_contacts')

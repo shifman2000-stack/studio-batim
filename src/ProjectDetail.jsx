@@ -798,9 +798,9 @@ function ProjectDetail() {
 
             <div className="pd-info-cards-row">
 
-              {/* Right 50%: אנשי קשר */}
+              {/* Right 50%: פרטים אישיים */}
               <div className="pd-info-card">
-                <div className="pd-card-title">אנשי קשר</div>
+                <div className="pd-card-title">פרטים אישיים</div>
 
                 {contacts.length > 0 && (
                   <div className="pd-contact-header">

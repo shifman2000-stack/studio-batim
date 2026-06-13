@@ -895,15 +895,17 @@ export default function Inquiries() {
       const coupled = splitCoupledFirstName(inq.first_name ?? '')
       const mainContacts = coupled
         ? [
-            // Contact 1: first part + last_name + phone
+            // Contact 1: first part + last_name + phone + email
+            // The inquiry's primary email "lives" on this row only —
+            // contact 2 shares the same address but we don't duplicate it.
             {
               project_id: newProject.id,
               first_name: coupled.part1,
               last_name:  inq.last_name ?? null,
               phone:      inq.phone     ?? null,
-              email:      null,
+              email:      inq.email     ?? null,
             },
-            // Contact 2: second part + last_name, no phone
+            // Contact 2: second part + last_name, no phone, no email
             {
               project_id: newProject.id,
               first_name: coupled.part2,
@@ -918,7 +920,7 @@ export default function Inquiries() {
               first_name: inq.first_name ?? null,
               last_name:  inq.last_name  ?? null,
               phone:      inq.phone      ?? null,
-              email:      null,
+              email:      inq.email      ?? null,
             },
           ]
 

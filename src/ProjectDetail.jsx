@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import ProfessionalModal from './components/professionals/ProfessionalModal'
 import DocumentsTab from './components/documents/DocumentsTab'
+import SharedFilesTab from './components/sharedfiles/SharedFilesTab'
 import TasksTab from './components/tasks/TasksTab'
 import FinishingTab from './components/finishing/FinishingTab'
 import QuantitiesTab from './components/quantities/QuantitiesTab'
@@ -199,6 +200,7 @@ const TABS = [
   { id: 6, label: 'כתב כמויות' },
   { id: 7, label: 'חומרי גמר' },
   { id: 9, label: 'מפרט לקבלן' },
+  { id: 10, label: 'מרחב משותף' },
   { id: 4, label: 'שעות', disabled: true },
   { id: 8, label: 'גאנט' },
 ]
@@ -975,6 +977,11 @@ function ProjectDetail() {
         {/* ── Tab 9 — מפרט לקבלן ── */}
         {activeTab === 9 && (
           <ContractorSpecTab projectId={id} />
+        )}
+
+        {/* ── Tab 10 — מרחב משותף ── */}
+        {activeTab === 10 && (
+          <SharedFilesTab projectId={id} />
         )}
 
         {/* ── Tab 7 — חומרי גמר ── */}

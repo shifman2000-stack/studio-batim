@@ -13,6 +13,7 @@ import { useClient } from '../components/ClientRoute'
 import ClientHome from './client/ClientHome'
 import ClientFile from './client/ClientFile'
 import ClientDocuments from './client/ClientDocuments'
+import ClientSharedFiles from './client/ClientSharedFiles'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
@@ -42,6 +43,7 @@ const MENU_ITEMS = [
   { key: 'home',         label: 'בית',           enabled: true,  Component: ClientHome },
   { key: 'file',         label: 'פרטי תיק',      enabled: true,  Component: ClientFile },
   { key: 'documents',    label: 'מסמכים',        enabled: true,  Component: ClientDocuments },
+  { key: 'shared',       label: 'מרחב משותף',    enabled: true,  Component: ClientSharedFiles },
   { key: 'quantities',   label: 'כתב כמויות',    enabled: false, Component: ClientPlaceholder },
   { key: 'finishing',    label: 'חומרי גמר',     enabled: false, Component: ClientPlaceholder },
   { key: 'contractor',   label: 'מפרט לקבלן',    enabled: false, Component: ClientPlaceholder },

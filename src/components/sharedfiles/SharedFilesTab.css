@@ -1,0 +1,257 @@
+/* src/components/sharedfiles/SharedFilesTab.css
+   Visual feel mirrors DocumentsTab.css (dt-*) — same palette, two-panel
+   split, table rhythm, icon button style. sf- prefix for shared-files.
+   Panel split is 50/50 here (DocumentsTab uses 75/25). */
+
+/* ── Root: 50/50 two-panel layout ── */
+.sf-root {
+  direction: rtl;
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.sf-panel-right {
+  flex: 1;                  /* 50% — table */
+  min-width: 0;
+}
+
+.sf-panel-left {
+  flex: 1;                  /* 50% — preview, sticky */
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
+  min-height: 480px;
+  max-height: calc(100vh - 200px);
+}
+
+.sf-preview-label {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  direction: ltr;
+  text-align: left;
+}
+
+.sf-preview-unsupported {
+  padding: 40px 20px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── Loading + empty states ── */
+.sf-loading {
+  padding: 40px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+.sf-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+/* ── Toolbar (upload button) ── */
+.sf-toolbar {
+  display: flex;
+  justify-content: flex-start;     /* RTL: flex-start = visual right */
+  margin-bottom: 12px;
+}
+
+.sf-upload-btn {
+  background: #fff;
+  border: 1px solid #c8bfb0;        /* sand */
+  color: #7a9478;                   /* sage */
+  border-radius: 6px;
+  padding: 8px 22px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  letter-spacing: 0.03em;
+}
+
+.sf-upload-btn:hover:not(:disabled) {
+  background: rgba(122, 148, 120, 0.08);
+  border-color: #7a9478;
+}
+
+.sf-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Table ── */
+.sf-table {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.sf-table-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: #f7faf9;
+  border-bottom: 1px solid #b2dbd5;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  direction: rtl;
+  gap: 6px;
+}
+
+.sf-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+  border-bottom: 1px solid #f3f4f6;
+  direction: rtl;
+  min-height: 36px;
+  background: #fff;
+  font-size: 13px;
+  color: #1a1a2e;
+}
+
+.sf-row--even {
+  background: #f9fafb;
+}
+
+.sf-row:last-child {
+  border-bottom: none;
+}
+
+/* ── Column widths (4 columns now) ──
+   name = clickable link, uploader = trimmed name, date = DD/MM/YY,
+   actions = 3 icons (or 2 icons + inline delete confirm). */
+.sf-col-name {
+  flex: 2.4;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 6px;
+}
+
+.sf-col-uploader {
+  flex: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 6px;
+}
+
+.sf-col-date {
+  flex: 0 0 80px;
+  text-align: center;
+}
+
+.sf-col-actions {
+  flex: 0 0 210px;          /* fits 3 icons OR 2 icons + delete-confirm widget */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;                 /* matches DocumentsTab's .dt-file-existing spacing */
+}
+
+/* ── File-name link (Hebrew name, opens in new tab) ── */
+.sf-file-link {
+  color: #1a1a18;            /* default: charcoal, no underline — clean table */
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.sf-file-link:hover,
+.sf-file-link:focus-visible {
+  color: #7a9478;            /* sage on hover */
+  text-decoration: underline;
+  outline: none;
+}
+
+/* ── Icon buttons (mirror DocumentsTab's .dt-file-icon-btn exactly) ── */
+.sf-file-icon-btn {
+  background: none;
+  border: none;
+  padding: 2px 3px;
+  cursor: pointer;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  border-radius: 3px;
+  transition: color 0.12s;
+  line-height: 1;
+}
+
+.sf-file-icon-btn:hover {
+  color: #555;
+}
+
+/* ── Inline delete confirm (replaces the trash icon while open) ── */
+.sf-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.sf-delete-confirm-text {
+  font-weight: 500;
+}
+
+.sf-delete-confirm-yes,
+.sf-delete-confirm-no {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.sf-delete-confirm-yes {
+  color: #c0392b;
+  border-color: #f4c8c8;
+}
+
+.sf-delete-confirm-yes:hover {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+
+.sf-delete-confirm-no {
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+
+.sf-delete-confirm-no:hover {
+  background: #f3f4f6;
+}

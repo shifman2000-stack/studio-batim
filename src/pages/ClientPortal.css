@@ -822,6 +822,155 @@
   margin: 0;
 }
 
+/* ── Shared workspace screen (מרחב משותף) ───────────────────────────
+   Mobile-first cards, sage-outlined upload action, optional trash on
+   own uploads only. */
+.cp-shared-upload-row {
+  display: flex;
+  justify-content: flex-start;       /* RTL: flex-start = visual right */
+  margin-top: 4px;
+  margin-bottom: 14px;
+}
+
+.cp-shared-upload-btn {
+  background: #ffffff;
+  border: 1px solid #7a9478;
+  color: #7a9478;
+  border-radius: 8px;
+  padding: 7px 22px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 500;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.cp-shared-upload-btn:hover:not(:disabled),
+.cp-shared-upload-btn:focus-visible {
+  background: #7a9478;
+  color: #ffffff;
+  outline: none;
+}
+
+.cp-shared-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Each file is one card with a tappable inner link + optional trash. */
+.cp-shared-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+
+.cp-shared-card-tap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.cp-shared-card-tap:hover .cp-shared-card-name {
+  color: #7a9478;
+}
+
+.cp-shared-card-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a18;
+  margin: 0 0 4px;
+  line-height: 1.35;
+  word-break: break-word;
+  transition: color 0.15s;
+}
+
+.cp-shared-card-meta {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 12px;
+  color: #8a8680;
+  line-height: 1.5;
+}
+
+.cp-shared-card-meta-sep {
+  color: #c8c4be;
+}
+
+.cp-shared-card-trash {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #a83232;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.cp-shared-card-trash:hover,
+.cp-shared-card-trash:focus-visible {
+  background: rgba(168, 50, 50, 0.08);
+  border-color: rgba(168, 50, 50, 0.25);
+  outline: none;
+}
+
+/* Inline delete confirm — visible on the right edge of the card,
+   replaces the trash icon. */
+.cp-shared-card-confirm {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12.5px;
+}
+
+.cp-shared-card-confirm-text {
+  font-weight: 500;
+  color: #4b5563;
+  margin-inline-end: 2px;
+}
+
+.cp-shared-card-confirm-yes,
+.cp-shared-card-confirm-no {
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #ffffff;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.cp-shared-card-confirm-yes {
+  color: #a83232;
+  border: 1px solid #f4c8c8;
+}
+
+.cp-shared-card-confirm-yes:hover {
+  background: #a83232;
+  color: #ffffff;
+  border-color: #a83232;
+}
+
+.cp-shared-card-confirm-no {
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+}
+
+.cp-shared-card-confirm-no:hover {
+  background: #f3f4f6;
+}
+
 /* ── Tighter spacing on very narrow phones ── */
 @media (max-width: 380px) {
   .cp-topbar { padding: 0 52px; min-height: 52px; }
@@ -844,6 +993,12 @@
   .cp-doc-upload-btn { padding: 5px 10px; font-size: 11.5px; }
   .cp-doc-name { font-size: 13.5px; }
   .cp-doc-meta { font-size: 11.5px; }
+
+  /* Narrow phones: tighten shared workspace cards. */
+  .cp-shared-card { padding: 12px; gap: 8px; }
+  .cp-shared-card-name { font-size: 13.5px; }
+  .cp-shared-card-meta { font-size: 11.5px; }
+  .cp-shared-upload-btn { padding: 6px 16px; font-size: 13px; }
 
   /* Narrow phones: scale the home composition down proportionally so
      the logo + greeting + subtagline still fit comfortably above the fold. */

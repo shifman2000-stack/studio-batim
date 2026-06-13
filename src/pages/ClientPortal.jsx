@@ -55,18 +55,25 @@ export default function ClientPortal() {
   const [activeKey, setActiveKey]   = useState('home')   // default landing screen
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  /* ── Live first_name from project_contacts ───────────────────────
+  /* ── Live identity from project_contacts ─────────────────────────
      The client_users.first_name from useClient() is a SNAPSHOT captured
      on the very first login (by link_client_on_login) and goes stale if
-     the contact name is later edited. To keep the greeting and other
+     the contact name is later edited. To keep the greeting and downstream
      display names current, look the client up live: their auth email
      matched against project_contacts.email for this project, case-
      insensitive and whitespace-trimmed — same matching rule as
      link_client_on_login uses on the server.
 
-     Falls back silently to the snapshot if no contact matches (e.g.
-     after the email was edited but client_users wasn't re-linked). */
-  const [liveFirstName, setLiveFirstName] = useState(null)
+     When 2+ contacts share the same email (partners), we don't try to
+     guess which one is logged in. Instead we expose `isFamily = true`
+     and a representative `lastName` so the UI can switch to a family-
+     scoped greeting ("שלום משפחת {lastName}").
+
+     Falls back silently to the client_users snapshot if no contact
+     matches (e.g. after the email was edited but client_users wasn't
+     re-linked). */
+  const [liveIdentity, setLiveIdentity] = useState(null)
+  /* liveIdentity shape: { firstName, lastName, isFamily } | null */
 
   useEffect(() => {
     let cancelled = false
@@ -77,22 +84,42 @@ export default function ClientPortal() {
       const normalized = rawEmail.trim().toLowerCase()
 
       /* RLS already restricts project_contacts SELECT to the client's
-         project, so this returns at most the few rows for this project. */
+         project, so this returns at most the few rows for this project.
+         No LIMIT — we need to count matches to detect the family case. */
       const { data: contacts } = await supabase
         .from('project_contacts')
-        .select('first_name, email')
+        .select('first_name, last_name, email')
         .eq('project_id', project_id)
         .order('id')                       /* deterministic when multiple rows match */
 
       if (cancelled || !contacts) return
-      const match = contacts.find(c => (c.email || '').trim().toLowerCase() === normalized)
-      if (match?.first_name) setLiveFirstName(match.first_name)
+      const matches = contacts.filter(c =>
+        (c.email || '').trim().toLowerCase() === normalized
+      )
+      if (matches.length === 0) return    /* fall back to ctxFirstName */
+
+      /* first_name: from the first matching row (used for single-contact
+         greeting + for ClientAccount and any future per-person screen). */
+      const firstName = (matches[0]?.first_name || '').trim() || null
+
+      /* last_name: first matching row that HAS a non-empty trimmed
+         last_name. Used as the family name when isFamily is true. */
+      let lastName = null
+      for (const m of matches) {
+        const ln = (m.last_name ?? '').trim()
+        if (ln !== '') { lastName = ln; break }
+      }
+
+      const isFamily = matches.length >= 2
+      setLiveIdentity({ firstName, lastName, isFamily })
     }
     loadLive()
     return () => { cancelled = true }
   }, [project_id])
 
-  const firstName = liveFirstName || ctxFirstName || ''
+  const firstName = liveIdentity?.firstName || ctxFirstName || ''
+  const lastName  = liveIdentity?.lastName  || null
+  const isFamily  = liveIdentity?.isFamily  || false
 
   const activeItem  = MENU_ITEMS.find(m => m.key === activeKey) || MENU_ITEMS[0]
   const ActiveScreen = activeItem.Component
@@ -116,7 +143,11 @@ export default function ClientPortal() {
         >
           <HamburgerIcon />
         </button>
-        <div className="cp-greeting">הי, {firstName}</div>
+        <div className="cp-greeting">
+          {isFamily
+            ? (lastName ? `שלום משפחת ${lastName}` : 'שלום')
+            : `הי, ${firstName}`}
+        </div>
       </header>
 
       {/* ── Drawer overlay (closes drawer on tap) ── */}
@@ -155,10 +186,17 @@ export default function ClientPortal() {
       </aside>
 
       {/* ── Content frame — renders the currently selected screen.
-            firstName is the live name (or snapshot fallback). Screens
-            that don't need it simply ignore the prop. ── */}
+            firstName is the live name (or snapshot fallback); lastName +
+            isFamily are exposed so screens like Home can switch to a
+            family-scoped greeting. Screens that don't need them ignore
+            the props. ── */}
       <main className="cp-content">
-        <ActiveScreen title={activeItem.label} firstName={firstName} />
+        <ActiveScreen
+          title={activeItem.label}
+          firstName={firstName}
+          lastName={lastName}
+          isFamily={isFamily}
+        />
       </main>
 
     </div>

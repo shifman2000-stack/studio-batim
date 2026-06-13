@@ -286,15 +286,20 @@ export default function ClientFile() {
 
   const detailRows    = renderClientInfoFields(PROJECT_DETAIL_FIELDS)
 
-  /* Professionals — ALWAYS read-only (also in edit mode). */
+  /* Professionals — ALWAYS read-only (also in edit mode).
+     Dynamic key lookups off clientInfo are guarded with hasOwnProperty
+     because role.key === 'constructor' would otherwise fall through to
+     Object.prototype.constructor and render "function Object() { [native code] }". */
   const professionalsRows = []
   for (const role of PROFESSIONAL_ROLES) {
-    const id       = clientInfo?.[`${role.key}_id`]
-    const legacy   = clean(clientInfo?.[role.key])
+    const idKey    = `${role.key}_id`
+    const phoneKey = `${role.key}_phone`
+    const id       = clientInfo && Object.prototype.hasOwnProperty.call(clientInfo, idKey)    ? clientInfo[idKey]    : null
+    const legacy   = clean(clientInfo && Object.prototype.hasOwnProperty.call(clientInfo, role.key) ? clientInfo[role.key] : null)
     const lookedUp = id ? profById[id] : null
     const name     = lookedUp || legacy
     if (!name) continue
-    const phone = clean(clientInfo?.[`${role.key}_phone`])
+    const phone = clean(clientInfo && Object.prototype.hasOwnProperty.call(clientInfo, phoneKey) ? clientInfo[phoneKey] : null)
     professionalsRows.push(
       <div key={role.key} className="cp-row">
         <span className="cp-label">{role.label}:</span>

@@ -294,13 +294,49 @@ function ProjectDetail() {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id')
+        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id')
         .eq('id', id)
         .single()
       if (data) setProject(data)
     }
     fetchProject()
   }, [id])
+
+  /* ── Parent / child relationship (2-level rule, mutually exclusive).
+     parentInfo: { id, name } when THIS project is a child.
+     childCount: number of non-archived children when this project is a parent.
+     One of them resolves to a truthy value to drive the subtitle line. ── */
+  const [parentInfo, setParentInfo] = useState(null)
+  const [childCount, setChildCount] = useState(0)
+  useEffect(() => {
+    if (!project) return
+    let cancelled = false
+    const run = async () => {
+      if (project.parent_project_id) {
+        const { data } = await supabase
+          .from('projects')
+          .select('id, name')
+          .eq('id', project.parent_project_id)
+          .single()
+        if (!cancelled) {
+          setParentInfo(data || null)
+          setChildCount(0)
+        }
+      } else {
+        const { count } = await supabase
+          .from('projects')
+          .select('id', { count: 'exact', head: true })
+          .eq('parent_project_id', project.id)
+          .eq('archived', false)
+        if (!cancelled) {
+          setParentInfo(null)
+          setChildCount(count || 0)
+        }
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [project])
 
   /* ── fetch employees (for "אחראית פרויקט") ── */
   const [employees, setEmployees] = useState([])
@@ -611,7 +647,41 @@ function ProjectDetail() {
       {/* ── Header ── */}
       <div className="pd-header">
         <div className="pd-header-left">
-          <h1 className="pd-title">{project ? project.name : '…'}</h1>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <h1 className="pd-title">{project ? project.name : '…'}</h1>
+            {parentInfo && (
+              <span
+                onClick={() => navigate(`/projects/${project.parent_project_id}`)}
+                style={{
+                  color: '#8a8680',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  marginTop: 2,
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
+                onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
+              >
+                פרויקט בן של {parentInfo.name}
+              </span>
+            )}
+            {!parentInfo && childCount > 0 && (
+              <span
+                onClick={() => navigate(`/פרויקטים/אב/${id}`)}
+                style={{
+                  color: '#8a8680',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  marginTop: 2,
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
+                onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
+              >
+                פרויקט אב של {childCount} פרויקטים
+              </span>
+            )}
+          </div>
           {project && !fromArchive && (
             <button className="pd-star-btn" onClick={toggleFavorite} title={project.is_favorite ? 'הסר מהמועדפים' : 'הוסף למועדפים'}>
               {project.is_favorite ? (
@@ -646,7 +716,14 @@ function ProjectDetail() {
             ← חזור לניהול משימות
           </button>
         ) : (
-          <button className="pd-back-btn" onClick={() => navigate('/פרויקטים')}>
+          <button
+            className="pd-back-btn"
+            onClick={() => navigate(
+              project?.parent_project_id
+                ? `/פרויקטים/אב/${project.parent_project_id}`
+                : '/פרויקטים'
+            )}
+          >
             → חזרה לפרויקטים
           </button>
         )}

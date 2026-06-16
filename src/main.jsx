@@ -62,6 +62,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/פרויקטים" element={<ProjectsKanban />} />
+          <Route path="/פרויקטים/אב/:parentId" element={<ProjectsKanban />} />
           <Route path="/professionals" element={<Professionals />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/reports/project-stages" element={<ProjectStagesReport />} />

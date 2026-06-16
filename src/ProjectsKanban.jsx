@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import NewTaskModal from './NewTaskModal'
 import './ProjectsKanban.css'
@@ -39,6 +39,13 @@ const IconCheck = ({ size = 14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
+const IconFolder = ({ size = 12 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24"
+    fill="currentColor" stroke="none">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
   </svg>
 )
 
@@ -83,8 +90,33 @@ function ProjectsKanban() {
   const [archiveStep, setArchiveStep]   = useState(0) // 0=none, 1=dialog1, 2=dialog2
   const [archiveTarget, setArchiveTarget] = useState(null) // project to archive
 
+  // ── Parent-project feature (2-level hierarchy enforced frontend-only).
+  // The Kanban shows only top-level projects (parent_project_id IS NULL).
+  // childCounts maps a top-level project id -> number of non-archived children.
+  // Drives both the "פרויקט בן" checkbox visibility in the context menu
+  // (>0 children → hidden, a parent can't become a child) and the small
+  // folder badge on cards that already have children. ──
+  const [parentOptions, setParentOptions]   = useState([])
+  const [newParentId, setNewParentId]       = useState('')
+  const [showParentPicker, setShowParentPicker] = useState(false)
+  const [childCounts, setChildCounts]       = useState({})
+  const [ctxChildPickerOpen, setCtxChildPickerOpen] = useState(false)
+  const [ctxChildPickedId,   setCtxChildPickedId]   = useState('')
+  const [parentConfirm, setParentConfirm]   = useState(null) // { mode: 'attach'|'detach', project, parentId?, parentName? }
+
+  // ── Parent-view mode (route /פרויקטים/אב/:parentId).
+  // When the URL carries a parentId, this same Kanban renders only the
+  // children of that parent. parentProject holds { id, name } of the URL's
+  // parent (for the header title + back link). parentProjectsList is every
+  // top-level project that has at least one child, populated by
+  // loadChildCounts — used by the parent-view dropdown switcher and by the
+  // "תצוגת פרויקטי אב" toolbar button on the normal board. ──
+  const [parentProject,       setParentProject]       = useState(null)
+  const [parentProjectsList,  setParentProjectsList]  = useState([])
+
   const navigate = useNavigate()
   const location = useLocation()
+  const { parentId } = useParams()    // present only on /פרויקטים/אב/:parentId
 
   // On mount or navigation: open archive view if requested, otherwise exit it
   useEffect(() => {
@@ -122,11 +154,26 @@ function ProjectsKanban() {
         .from('stages').select('*').order('order_index')
       if (stagesData) setStages(stagesData)
 
-      const { data: projectsData } = await supabase
+      let projectsQuery = supabase
         .from('projects')
         .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
         .eq('archived', false)
+      projectsQuery = parentId
+        ? projectsQuery.eq('parent_project_id', parentId)
+        : projectsQuery.is('parent_project_id', null)
+      const { data: projectsData } = await projectsQuery
         .order('created_at', { ascending: false })
+      await loadChildCounts()
+      if (parentId) {
+        const { data: parentRow } = await supabase
+          .from('projects')
+          .select('id, name')
+          .eq('id', parentId)
+          .single()
+        setParentProject(parentRow || null)
+      } else {
+        setParentProject(null)
+      }
       if (projectsData) {
         const today = todayISO()
         const nullIds = projectsData.filter(p => !p.stage_entered_at).map(p => p.id)
@@ -159,7 +206,7 @@ function ProjectsKanban() {
       }
     }
     init()
-  }, [])
+  }, [parentId])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -171,11 +218,16 @@ function ProjectsKanban() {
   }, [contextMenu])
 
   const fetchProjects = async () => {
-    const { data, error } = await supabase
+    let q = supabase
       .from('projects')
       .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
-      .eq('archived', false).order('created_at', { ascending: false })
+      .eq('archived', false)
+    q = parentId
+      ? q.eq('parent_project_id', parentId)
+      : q.is('parent_project_id', null)
+    const { data, error } = await q.order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
+    await loadChildCounts()
   }
 
   // ── Archive view fetch ──
@@ -247,6 +299,14 @@ function ProjectsKanban() {
     setNewName(''); setNewResponsible(''); setModalError('')
     setShowInquirySearch(false); setInquiryQuery(''); setInquiries([])
     setSelectedInquiry(null)
+    // In parent view the parent is fixed by the URL — no manual picker.
+    if (parentId) {
+      setNewParentId(parentId)
+      setShowParentPicker(false)
+    } else {
+      setNewParentId(''); setShowParentPicker(false)
+      loadParentOptions()
+    }
     setShowModal(true)
   }
 
@@ -254,8 +314,19 @@ function ProjectsKanban() {
     if (!newName.trim()) { setModalError('יש להזין שם פרויקט'); return }
     setAdding(true); setModalError('')
     const firstStageId = stages.find(s => s.name === 'קליטת פרויקט')?.id ?? stages[0]?.id ?? null
+    const isChild    = !!newParentId
+    const parentName = isChild ? (parentOptions.find(p => p.id === newParentId)?.name || '') : ''
     const { data, error } = await supabase.from('projects')
-      .insert([{ name: newName.trim(), responsible_id: newResponsible || null, current_stage: 'קליטת פרויקט', stage_id: firstStageId, stage_entered_at: todayISO(), archived: false }])
+      .insert([{
+        name: newName.trim(),
+        responsible_id: newResponsible || null,
+        current_stage: 'קליטת פרויקט',
+        stage_id: firstStageId,
+        stage_entered_at: todayISO(),
+        archived: false,
+        parent_project_id: newParentId || null,
+        urgency: 'רגיל',
+      }])
       .select().single()
     setAdding(false)
     if (error) { setModalError(`שגיאה: ${error.message}`); return }
@@ -287,12 +358,23 @@ function ProjectsKanban() {
       await supabase.from('project_contacts').insert(contactRows)
       await supabase.from('client_info').insert([{ project_id: data.id, city: inq.city ?? null }])
       await supabase.from('inquiries').update({ converted_to_project: true }).eq('id', inq.id)
-      setProjects(prev => [projectToAdd, ...prev])
+      if (!isChild) setProjects(prev => [projectToAdd, ...prev])
+      else if (parentId) setProjects(prev => [projectToAdd, ...prev])  /* parent view: child belongs here */
       setShowModal(false)
-      navigate('/פרויקטים')
+      if (isChild) {
+        await loadChildCounts()
+        if (!parentId) showArchiveToast(`הפרויקט נוצר כבן של "${parentName}"`)
+      } else {
+        navigate('/פרויקטים')
+      }
     } else {
-      setProjects(prev => [projectToAdd, ...prev])
+      if (!isChild) setProjects(prev => [projectToAdd, ...prev])
+      else if (parentId) setProjects(prev => [projectToAdd, ...prev])  /* parent view: child belongs here */
       setShowModal(false)
+      if (isChild) {
+        await loadChildCounts()
+        if (!parentId) showArchiveToast(`הפרויקט נוצר כבן של "${parentName}"`)
+      }
     }
   }
 
@@ -319,6 +401,65 @@ function ProjectsKanban() {
     setInquiries(data ?? [])
   }
 
+  // ── Parent-project helpers ─────────────────────────────────────────
+  // loadParentOptions: top-level non-archived projects, for the "pick a
+  // parent" dropdowns. Shared by the new-project modal and the context-menu
+  // attach flow. ──
+  const loadParentOptions = async () => {
+    const { data } = await supabase
+      .from('projects')
+      .select('id, name')
+      .eq('archived', false)
+      .is('parent_project_id', null)
+      .order('name', { ascending: true })
+    setParentOptions(data || [])
+  }
+
+  // loadChildCounts: map of top-level project id -> number of non-archived
+  // children, used to hide the "פרויקט בן" checkbox on cards that are
+  // already parents and to render the folder badge on those cards. As a
+  // side-effect also rebuilds parentProjectsList — { id, name } of every
+  // project that currently has at least one child — feeding the parent-view
+  // header dropdown and the "תצוגת פרויקטי אב" toolbar button.
+  const loadChildCounts = async () => {
+    const { data } = await supabase
+      .from('projects')
+      .select('parent_project_id')
+      .eq('archived', false)
+      .not('parent_project_id', 'is', null)
+    const counts = {}
+    for (const row of data || []) {
+      const pid = row.parent_project_id
+      if (!pid) continue
+      counts[pid] = (counts[pid] || 0) + 1
+    }
+    setChildCounts(counts)
+
+    const distinctIds = Object.keys(counts)
+    if (distinctIds.length > 0) {
+      const { data: parents } = await supabase
+        .from('projects')
+        .select('id, name')
+        .in('id', distinctIds)
+        .order('name', { ascending: true })
+      setParentProjectsList(parents || [])
+    } else {
+      setParentProjectsList([])
+    }
+  }
+
+  const handleParentConfirm = async () => {
+    if (!parentConfirm) return
+    const { mode, project, parentId } = parentConfirm
+    const nextParent = mode === 'attach' ? parentId : null
+    await supabase.from('projects').update({ parent_project_id: nextParent }).eq('id', project.id)
+    setParentConfirm(null)
+    setCtxChildPickerOpen(false)
+    setCtxChildPickedId('')
+    setContextMenu(null)
+    await fetchProjects()
+  }
+
   const selectInquiry = (inq) => {
     const fullName = [inq.first_name, inq.last_name].filter(Boolean).join(' ')
     setNewName(fullName)
@@ -335,6 +476,8 @@ function ProjectsKanban() {
     const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY
     setCtxResponsible(project.responsible_id || '')
     setCtxRenameValue(project.name || '')
+    setCtxChildPickerOpen(false)
+    setCtxChildPickedId('')
     setContextMenu({ x, y, project })
   }
 
@@ -528,6 +671,48 @@ function ProjectsKanban() {
     <div className="page" dir="rtl">
       <div className="kanban-container">
 
+        {/* ── Parent-view header (only when /פרויקטים/אב/:parentId) ── */}
+        {parentId && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              flexWrap: 'wrap',
+              padding: '8px 4px 14px',
+              borderBottom: '1px solid #ece8df',
+              marginBottom: 10,
+            }}
+          >
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a18', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <IconFolder size={20} />
+              <span>{parentProject?.name || '...'}</span>
+            </h1>
+            <button
+              type="button"
+              onClick={() => navigate(`/projects/${parentId}`)}
+              style={{ background: 'none', border: 'none', color: '#7a9478', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: 0, textDecoration: 'underline' }}
+            >
+              ← לדף הפרויקט של האב
+            </button>
+            {parentProjectsList.length > 0 && (
+              <select
+                value={parentId}
+                onChange={e => { if (e.target.value) navigate(`/פרויקטים/אב/${e.target.value}`) }}
+                style={{ marginInlineStart: 'auto', padding: '6px 10px', border: '1px solid #d6d2c7', borderRadius: 6, background: '#fff', fontFamily: 'inherit', fontSize: 13, color: '#1a1a18' }}
+                title="מעבר לפרויקט אב אחר"
+              >
+                {(parentProjectsList.some(p => p.id === parentId)
+                  ? parentProjectsList
+                  : (parentProject ? [parentProject, ...parentProjectsList] : parentProjectsList)
+                ).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         {/* Topbar */}
         <div className="kanban-topbar">
           <span className="kanban-total">סה״כ פרויקטים: {projects.length}</span>
@@ -590,6 +775,23 @@ function ProjectsKanban() {
             </button>
           </div>
 
+          {/* Parent-view entry (only on the normal board) */}
+          {!parentId && (
+            <button
+              className="kanban-archive-btn"
+              onClick={() => {
+                if (parentProjectsList.length > 0) {
+                  navigate(`/פרויקטים/אב/${parentProjectsList[0].id}`)
+                }
+              }}
+              disabled={parentProjectsList.length === 0}
+              title={parentProjectsList.length === 0 ? 'אין עדיין פרויקטי אב' : 'תצוגת פרויקטי אב'}
+            >
+              <IconFolder size={14} />
+              תצוגת פרויקטי אב
+            </button>
+          )}
+
           {/* Archive button + separator + add button */}
           <button className="kanban-archive-btn" onClick={openArchiveView}>
             <IconArchive size={14} />
@@ -643,7 +845,40 @@ function ProjectsKanban() {
                       }}
                     >
                       <div className="kanban-card-top-row">
-                        <div className="kanban-card-name">{project.name}</div>
+                        <div className="kanban-card-name">
+                          {project.name}
+                          {!parentId && childCounts[project.id] > 0 && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/פרויקטים/אב/${project.id}`)
+                              }}
+                              onDoubleClick={(e) => e.stopPropagation()}   /* don't open the project file too */
+                              onMouseDown={(e) => e.stopPropagation()}     /* don't start a drag from the badge */
+                              onContextMenu={(e) => e.stopPropagation()}   /* keep the card's context menu off the badge */
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.7' }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 2,
+                                color: '#7a9478',
+                                fontSize: 11,
+                                fontWeight: 500,
+                                marginInlineStart: 6,
+                                verticalAlign: 'middle',
+                                cursor: 'pointer',
+                                transition: 'opacity 0.12s',
+                              }}
+                              title={`${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים`}
+                            >
+                              <IconFolder size={12} />
+                              <span>{childCounts[project.id]}</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
                       </div>
                       <div className="kanban-card-meta">
@@ -729,6 +964,67 @@ function ProjectsKanban() {
               ))}
             </select>
           </div>
+          {/* ── "פרויקט בן" — hidden if this project already has children
+              (2-level limit: a parent can't become a child). Checking the
+              box reveals a parent-picker; picking a parent opens the same
+              confirm dialog style as the archive flow. Unchecking (already
+              a child) shows a detach confirm. ── */}
+          {!parentId && !(childCounts[contextMenu.project.id] > 0) && (
+            <>
+              <div className="context-menu-divider" />
+              <div className="context-menu-row">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1, margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!contextMenu.project.parent_project_id || ctxChildPickerOpen}
+                    onChange={e => {
+                      const isCurrentlyChild = !!contextMenu.project.parent_project_id
+                      if (isCurrentlyChild) {
+                        setParentConfirm({ mode: 'detach', project: contextMenu.project })
+                      } else if (e.target.checked) {
+                        setCtxChildPickedId('')
+                        setCtxChildPickerOpen(true)
+                        loadParentOptions()
+                      } else {
+                        setCtxChildPickerOpen(false)
+                        setCtxChildPickedId('')
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span className="context-menu-label" style={{ marginRight: 0 }}>פרויקט בן</span>
+                </label>
+              </div>
+              {!contextMenu.project.parent_project_id && ctxChildPickerOpen && (
+                <div className="context-menu-row">
+                  <select
+                    className="context-menu-input"
+                    value={ctxChildPickedId}
+                    onChange={e => {
+                      const pid = e.target.value
+                      setCtxChildPickedId(pid)
+                      if (pid) {
+                        const parentName = parentOptions.find(p => p.id === pid)?.name || ''
+                        setParentConfirm({
+                          mode: 'attach',
+                          project: contextMenu.project,
+                          parentId: pid,
+                          parentName,
+                        })
+                      }
+                    }}
+                  >
+                    <option value="">בחר אב…</option>
+                    {parentOptions
+                      .filter(p => p.id !== contextMenu.project.id)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
           {isAdmin && (
             <>
               <div className="context-menu-divider" />
@@ -809,6 +1105,44 @@ function ProjectsKanban() {
               )}
             </div>
 
+            {/* ── Parent-project picker — same three-state pattern as the
+                "+ טען פניה" block (pill / select / dashed button). Choosing
+                a parent here makes the new project a child of it. Hidden in
+                parent view where the parent is fixed by the URL. ── */}
+            {!parentId && (
+            <div style={{ marginTop: 10, position: 'relative' }}>
+              {newParentId ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', background: '#F3F4F6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#1a1a2e', fontFamily: 'inherit', minHeight: 38, boxSizing: 'border-box' }}>
+                  <span style={{ flex: 1 }}>
+                    פרויקט אב: {parentOptions.find(p => p.id === newParentId)?.name || '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setNewParentId(''); setShowParentPicker(false) }}
+                    style={{ background: 'none', border: 'none', fontSize: 16, color: '#9ca3af', cursor: 'pointer', padding: '0 2px', lineHeight: 1, fontFamily: 'inherit', flexShrink: 0 }}
+                  >×</button>
+                </div>
+              ) : showParentPicker ? (
+                <select
+                  className="modal-input"
+                  value={newParentId}
+                  onChange={e => setNewParentId(e.target.value)}
+                  style={{ marginBottom: 0 }}
+                  autoFocus
+                >
+                  <option value="">ללא — פרויקט עליון</option>
+                  {parentOptions.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <button type="button" onClick={() => { setShowParentPicker(true); loadParentOptions() }}
+                  style={{ background: 'none', border: '1px dashed #d1d5db', borderRadius: 7, padding: '6px 14px', fontSize: 13, color: '#888', cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}
+                >+ בחר פרויקט אב</button>
+              )}
+            </div>
+            )}
+
             {modalError && <p style={{ color: 'red', fontSize: '13px', margin: '8px 0 0', textAlign: 'right' }}>{modalError}</p>}
             <div className="modal-actions">
               <button className="modal-btn-add" onClick={handleAddProject} disabled={adding}>{adding ? '...' : 'צור פרויקט'}</button>
@@ -839,6 +1173,29 @@ function ProjectsKanban() {
             <div className="kanban-confirm-actions">
               <button className="kanban-confirm-yes" onClick={handleArchiveStep2Confirm}>אשר</button>
               <button className="kanban-confirm-no" onClick={handleArchiveCancel}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Parent-attach / detach confirm dialog (same style as archive) ── */}
+      {parentConfirm && (
+        <div
+          className="modal-overlay"
+          onClick={() => { setParentConfirm(null); setCtxChildPickedId('') }}
+        >
+          <div className="kanban-confirm-dialog" onClick={e => e.stopPropagation()} dir="rtl">
+            <p className="kanban-confirm-text">
+              {parentConfirm.mode === 'attach'
+                ? `להפוך את הפרויקט "${parentConfirm.project?.name ?? ''}" לבן של "${parentConfirm.parentName ?? ''}"?`
+                : 'לנתק את הפרויקט מהאב ולהפוך אותו לפרויקט רגיל?'}
+            </p>
+            <div className="kanban-confirm-actions">
+              <button className="kanban-confirm-yes" onClick={handleParentConfirm}>אשר</button>
+              <button
+                className="kanban-confirm-no"
+                onClick={() => { setParentConfirm(null); setCtxChildPickedId('') }}
+              >ביטול</button>
             </div>
           </div>
         </div>

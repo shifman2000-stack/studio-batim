@@ -14,6 +14,7 @@ import ClientHome from './client/ClientHome'
 import ClientFile from './client/ClientFile'
 import ClientDocuments from './client/ClientDocuments'
 import ClientSharedFiles from './client/ClientSharedFiles'
+import ClientProgress from './client/ClientProgress'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
@@ -47,7 +48,7 @@ const MENU_ITEMS = [
   { key: 'quantities',   label: 'כתב כמויות',    enabled: false, Component: ClientPlaceholder },
   { key: 'finishing',    label: 'חומרי גמר',     enabled: false, Component: ClientPlaceholder },
   { key: 'contractor',   label: 'מפרט לקבלן',    enabled: false, Component: ClientPlaceholder },
-  { key: 'progress',     label: 'שלבי התקדמות',  enabled: false, Component: ClientPlaceholder },
+  { key: 'progress',     label: 'שלבי התקדמות',  enabled: true,  Component: ClientProgress },
   { key: 'contact',      label: 'צור קשר',       enabled: true,  Component: ClientContact },
   { key: 'account',      label: 'פרטי חשבון',    enabled: true,  Component: ClientAccount },
 ]

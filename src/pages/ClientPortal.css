@@ -1007,3 +1007,263 @@
   .cp-home-greeting { font-size: 18px; margin-bottom: 18px; }
   .cp-home-subtagline { font-size: 13.5px; }
 }
+
+/* ============================================================
+   Progress accordion — "שלבי התקדמות" (read-only client mirror
+   of the manager Gantt). 4 collapsible mega-stages
+   (תכנון / רישוי / תוכניות עבודה / בנייה). Current stage emphasized
+   with a 1.5px sage border; done/future use a lighter neutral border.
+   ============================================================ */
+.cp-progress-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cp-progress-block {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e3dd;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cp-progress-block--current {
+  border: 1.5px solid #7a9478;
+  box-shadow: 0 1px 8px rgba(122, 148, 120, 0.10);
+}
+
+.cp-progress-block--done {
+  background: #fbfaf7;
+  border-color: #ece8df;
+}
+
+.cp-progress-block--future {
+  border-color: #ece8df;
+}
+
+/* Header: full-width tap target. Children: node (right in RTL), name,
+   caption, chevron pushed to the visual left via margin-inline-start. */
+.cp-progress-header {
+  width: 100%;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  min-height: 56px;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.cp-progress-header:focus-visible {
+  outline: 2px solid rgba(122, 148, 120, 0.45);
+  outline-offset: -2px;
+}
+
+.cp-progress-header-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a18;
+  white-space: nowrap;
+}
+
+.cp-progress-header-caption {
+  font-size: 12px;
+  color: #8a8680;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.cp-progress-block--current .cp-progress-header-caption {
+  color: #7a9478;
+  font-weight: 600;
+}
+.cp-progress-block--done .cp-progress-header-name    { color: #6e6a64; }
+.cp-progress-block--done .cp-progress-header-caption { color: #1D9E75; font-weight: 500; }
+.cp-progress-block--future .cp-progress-header-name  { color: #6e6a64; }
+
+/* Text column inside the header: stage name on top, mini progress meter
+   below. Takes the available width so the chevron stays anchored on the
+   visual left via the auto-margin below. */
+.cp-progress-header-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Top row of the text column: stage name on the right (first child, RTL)
+   and the status caption pushed to the far left via margin-inline-start. */
+.cp-progress-header-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cp-progress-header-name-row .cp-progress-header-caption {
+  margin-inline-start: auto;
+}
+
+/* Per-stage progress meter — thin rounded bar + "{done} מתוך {total}".
+   The bar's fill is a block child of a dir:rtl container, so it naturally
+   anchors to the visual right edge and grows leftward as progress
+   advances. */
+.cp-progress-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-progress-meter-bar {
+  flex: 1;
+  height: 4px;
+  background: #ece8df;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cp-progress-meter-fill {
+  height: 100%;
+  background: #7a9478;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.cp-progress-block--done .cp-progress-meter-fill {
+  background: #1D9E75;
+}
+
+.cp-progress-meter-text {
+  font-size: 11px;
+  color: #8a8680;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.cp-progress-chevron {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  color: #8a8680;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.cp-progress-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* Points list (visible only when block is open) */
+.cp-progress-points {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid #ece8df;
+}
+
+.cp-progress-point {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+/* Status node — reused by the block header and by every point. */
+.cp-progress-node {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid #c8c4bd;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.18s;
+}
+
+.cp-progress-node--done {
+  width: 18px;
+  height: 18px;
+  background: #1D9E75;
+  border-color: #1D9E75;
+  color: #ffffff;
+}
+
+.cp-progress-node--current {
+  width: 20px;
+  height: 20px;
+  background: #7a9478;
+  border-color: #7a9478;
+  box-shadow: 0 0 0 4px rgba(122, 148, 120, 0.18);
+}
+
+/* The header indicator sits in a flex row of larger items; nudge it
+   up half a pixel so it lines up with the name text baseline. */
+.cp-progress-header .cp-progress-node {
+  margin-top: 0;
+}
+/* Point indicators get a small top nudge so they align with the first
+   line of the label below. */
+.cp-progress-point .cp-progress-node {
+  margin-top: 2px;
+}
+
+/* Body inside a point row */
+.cp-progress-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cp-progress-label {
+  font-size: 14px;
+  color: #1a1a18;
+  line-height: 1.35;
+}
+.cp-progress-label--done    { color: #6e6a64; opacity: 0.65; }
+.cp-progress-label--current { font-weight: 600; color: #4a6a4a; }
+.cp-progress-label--future  { color: #8a8680; }
+
+.cp-progress-here {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7a9478;
+  letter-spacing: 0.03em;
+}
+
+.cp-progress-note {
+  margin-top: 8px;
+  background: #f3efe8;
+  border: 1px solid #ece8df;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #6e6a64;
+}
+
+/* Narrow phones — slight tightening. */
+@media (max-width: 380px) {
+  .cp-progress-header        { padding: 12px; min-height: 52px; gap: 8px; }
+  .cp-progress-header-name   { font-size: 14px; }
+  .cp-progress-header-caption{ font-size: 11.5px; }
+  .cp-progress-meter         { gap: 6px; }
+  .cp-progress-meter-text    { font-size: 10.5px; }
+  .cp-progress-points        { padding: 0 12px 12px; gap: 10px; }
+  .cp-progress-point         { padding-top: 10px; }
+  .cp-progress-label         { font-size: 13.5px; }
+  .cp-progress-note          { font-size: 12px; padding: 7px 10px; }
+}
+

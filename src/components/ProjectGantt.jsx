@@ -1,28 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
-
-// ── Grid layout — 19 rows × 4 columns ──────────────────────────────────────
-const GRID = [
-  { col0: { id: 'programma',      label: 'פרוגרמה' },                                      col1: null, col2: null, col3: null },
-  { col0: { id: 'tikun_rishoni',  label: 'תכנון ראשוני' },                                  col1: null, col2: null, col3: null },
-  { col0: { id: 'bchira_skitsa',  label: 'בחירת סקיצה' },                                   col1: null, col2: null, col3: null },
-  { col0: { id: 'tiyuv_skitsa',   label: 'טיוב סקיצה' },                                    col1: null, col2: null, col3: null },
-  { col0: { id: 'ishur_rishoni',  label: 'אישור ראשוני',          arrowTo: 'col1' },         col1: { id: 'tik_meida',          label: 'תיק מידע' },                         col2: null, col3: null },
-  { col0: { id: 'tlat_meimad',    label: 'תלת מימד' },                                       col1: null, col2: null, col3: null },
-  { col0: { id: 'ishur_skitsa',   label: 'אישור סקיצה סופי',      arrowTo: 'col1' },         col1: { id: 'garmushka',          label: 'הכנת גרמושקה' },                     col2: null, col3: null },
-  { col0: null, col1: { id: 'ishur_yishuv',    label: 'אישור ישוב' },                        col2: null, col3: null },
-  { col0: null, col1: { id: 'ptikha_bakasha',  label: 'פתיחה בקשה להיתר' },                 col2: null, col3: null },
-  { col0: null, col1: { id: 'bkira_merchavit', label: 'בקרה מרחבית' },                       col2: null, col3: null },
-  { col0: null, col1: { id: 'ishur_risuy',     label: 'אישור רישוי',      arrowTo: 'col2' }, col2: { id: 'hachanat_tochniot', label: 'הכנת תוכניות לביצוע' },             col3: null },
-  { col0: null, col1: { id: 'bkarat_techn',    label: 'בקרת תכן' },                          col2: { id: 'pgisha_ishur',       label: 'פגישת אישור' },                      col3: null },
-  { col0: null, col1: { id: 'kabalat_heter',   label: 'קבלת היתר' },                         col2: { id: 'hachanat_yoatzim',   label: 'הכנת תוכניות יועצים' },             col3: null },
-  { col0: null, col1: null, col2: { id: 'hagasha_makhraz', label: 'הגשת תיק פרויקט למכרז', arrowTo: 'col3' }, col3: { id: 'bchira_mefakech', label: 'בחירת מפקח/קבלן' } },
-  { col0: null, col1: null, col2: null,         col3: { id: 'pgisha_biytsuv', label: 'פגישה תכנון-ביצוע' } },
-  { col0: null, col1: { id: 'tofes_2', label: 'טופס 2 – אישור בנייה', arrowTo: 'col3' },    col2: null, col3: { id: 'tchilat_bniya',   label: 'תחילת בנייה' } },
-  { col0: null, col1: null, col2: null,         col3: { id: 'pikuach',        label: 'פיקוח עליון + ליווי פרויקט' } },
-  { col0: null, col1: null, col2: null,         col3: { id: 'pgishat_gmarim', label: 'פגישת גמרים' } },
-  { col0: null, col1: { id: 'tofes_4', label: 'טופס 4 – תעודת גמר' },                       col2: null, col3: { id: 'siyum_bniya', label: 'סיום בנייה', arrowTo: 'col1' } },
-]
+// Grid layout (19 rows × 4 columns) lives in the shared module so the
+// client-portal "שלבי התקדמות" screen reads the same source. Aliased to
+// the original local name to keep this file's rendering logic identical.
+import { GANTT_GRID as GRID } from './gantt/gridDefinition'
 
 const COL_KEYS   = ['col0', 'col1', 'col2', 'col3']
 const COL_LABELS = ['שלב א׳ – תכנון', 'שלב ב׳ – רישוי', 'שלב ג׳ – תוכניות עבודה', 'שלב ד׳ – בניה']

@@ -75,6 +75,29 @@
   text-overflow: ellipsis;
 }
 
+/* ── Topbar studio logo ────────────────────────────────────────────
+   Wraps the shared <Logo /> component (Heebo + Rubik, divider gradient).
+   The Logo's natural size targets a hero placement; here we scale the
+   whole markup down via CSS transform so every part stays proportional
+   (Hebrew name + divider + BY EINAV SHIFMAN). The wrapper has a fixed
+   width that absorbs the scaled visual so the topbar layout doesn't
+   reserve the unscaled (~300px) box. */
+.cp-topbar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 196px;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: visible;
+  pointer-events: none;        /* purely decorative; hamburger sits on top */
+}
+
+.cp-topbar-logo > * {
+  transform: scale(0.62);
+  transform-origin: center center;
+}
+
 /* ── Content frame — the scroll container ── */
 .cp-content {
   flex: 1;
@@ -797,12 +820,6 @@
   text-align: center;
 }
 
-.cp-home-logo-wrap {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 56px;
-}
-
 .cp-home-greeting {
   font-family: 'Heebo', sans-serif;
   font-weight: 500;
@@ -975,6 +992,8 @@
 @media (max-width: 380px) {
   .cp-topbar { padding: 0 52px; min-height: 52px; }
   .cp-greeting { font-size: 14px; }
+  .cp-topbar-logo { width: 174px; }
+  .cp-topbar-logo > * { transform: scale(0.55); }
   .cp-page { padding: 10px 8px 28px; }
   .cp-page--editing { padding-bottom: 88px; }
   .cp-card { padding: 11px 12px; }
@@ -1003,7 +1022,6 @@
   /* Narrow phones: scale the home composition down proportionally so
      the logo + greeting + subtagline still fit comfortably above the fold. */
   .cp-home { padding: 24px 18px; }
-  .cp-home-logo-wrap { margin-bottom: 40px; }
   .cp-home-greeting { font-size: 18px; margin-bottom: 18px; }
   .cp-home-subtagline { font-size: 13.5px; }
 }

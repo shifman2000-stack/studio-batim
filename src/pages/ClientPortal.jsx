@@ -18,6 +18,7 @@ import ClientProgress from './client/ClientProgress'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
+import Logo from '../components/Logo'
 import './ClientPortal.css'
 
 /* ── Hamburger icon ──────────────────────────────────────────────── */
@@ -136,7 +137,14 @@ export default function ClientPortal() {
   return (
     <div className="cp-shell">
 
-      {/* ── Top bar — hamburger on the right, greeting centered ── */}
+      {/* ── Top bar — hamburger on the right, studio logo centered ──
+          The logo here REUSES the shared <Logo /> component (same fonts,
+          weights, letter-spacing, divider gradient). It is wrapped in a
+          fixed-width scaler that scales the original markup via CSS
+          transform so all parts (סטודיו בתים + divider + BY EINAV SHIFMAN)
+          stay intact and proportional, just sized down to fit the topbar
+          height. The greeting that used to live here moved into the home
+          screen body. */}
       <header className="cp-topbar">
         <button
           type="button"
@@ -146,10 +154,8 @@ export default function ClientPortal() {
         >
           <HamburgerIcon />
         </button>
-        <div className="cp-greeting">
-          {isFamily
-            ? (lastName ? `שלום משפחת ${lastName}` : 'שלום')
-            : `הי, ${firstName}`}
+        <div className="cp-topbar-logo" aria-label="סטודיו בתים">
+          <Logo />
         </div>
       </header>
 

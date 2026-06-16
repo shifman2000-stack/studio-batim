@@ -16,7 +16,6 @@
 // returned nothing.
 
 import { useClient } from '../../components/ClientRoute'
-import Logo from '../../components/Logo'
 
 export default function ClientHome({ firstName, lastName, isFamily }) {
   const { first_name: ctxFirstName } = useClient()
@@ -35,12 +34,9 @@ export default function ClientHome({ firstName, lastName, isFamily }) {
     <div className="cp-home">
       <div className="cp-home-content">
 
-        {/* Studio logo lockup — reused from <Logo /> for visual identity. */}
-        <div className="cp-home-logo-wrap">
-          <Logo />
-        </div>
-
-        {/* Greeting — single line (single contact) or family welcome. */}
+        {/* Greeting — single line (single contact) or family welcome.
+            The studio logo lockup that used to sit above this line now
+            lives in the portal top bar (see ClientPortal.jsx). */}
         <p className="cp-home-greeting">{greeting}</p>
 
         {/* Softer line — explains what the space is for. Unchanged in

@@ -53,6 +53,15 @@ function clean(v) {
   return s === '' ? null : s
 }
 
+/* Feather-style chevron — matches the icon used in ClientFile and
+   ClientProgress so all three accordion screens look identical. */
+const IconChevron = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+)
+
 export default function ClientDocuments() {
   const { id: userId, project_id } = useClient()
   const isMounted = useRef(true)
@@ -65,6 +74,10 @@ export default function ClientDocuments() {
   const [uploadingDocId, setUploadingDocId] = useState(null)
   const [uploadErrors, setUploadErrors] = useState({})  // { docId: true }
   const [savedFlash, setSavedFlash]     = useState(false)
+
+  /* Accordion state — Set of currently-open group keys. Default: all
+     blocks collapsed; the user opens whatever they want. */
+  const [openSet, setOpenSet] = useState(new Set())
 
   const fileInputRef     = useRef(null)
   const pickerForDocRef  = useRef(null)  /* which doc the next file pick is for */
@@ -168,6 +181,22 @@ export default function ClientDocuments() {
         groupedDocs.push(g)
       }
       g.docs.push(d)
+    }
+  }
+
+  /* ── Accordion toggle (one block at a time, independent) ── */
+  const toggleOpen = (key) => {
+    setOpenSet(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  const handleHeaderKeyDown = (e, key) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleOpen(key)
     }
   }
 
@@ -346,12 +375,36 @@ export default function ClientDocuments() {
             <p className="cp-empty-card">אין מסמכים זמינים</p>
           </section>
         ) : (
-          groupedDocs.map(group => (
-            <section key={group.key} className="cp-card">
-              <h2 className="cp-card-title">{group.key}</h2>
-              {group.docs.map(renderDocRow)}
-            </section>
-          ))
+          <div className="cp-progress-accordion">
+            {groupedDocs.map(group => {
+              const isOpen = openSet.has(group.key)
+              return (
+                <section key={group.key} className="cp-progress-block">
+                  <div
+                    className="cp-progress-header"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleOpen(group.key)}
+                    onKeyDown={(e) => handleHeaderKeyDown(e, group.key)}
+                  >
+                    <span className="cp-progress-header-name">{group.key}</span>
+                    <span className="cp-progress-header-caption">
+                      {group.docs.length} מסמכים
+                    </span>
+                    <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
+                      <IconChevron size={16} />
+                    </span>
+                  </div>
+                  {isOpen && (
+                    <div className="cp-acc-body">
+                      {group.docs.map(renderDocRow)}
+                    </div>
+                  )}
+                </section>
+              )
+            })}
+          </div>
         )}
 
       </div>

@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
+import { useClientFooter } from './ClientFooter'
 
 /* ── Section: פרטי הפרויקט — client_info columns (READ-ONLY) ────────── */
 const PROJECT_DETAIL_FIELDS = [
@@ -77,6 +78,22 @@ function normalizeForDb(v) {
   return s === '' ? null : s
 }
 
+/* ── Inline SVG icons (Feather-like, stroke="currentColor") ────────── */
+const IconChevron = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+)
+
+const IconPencil = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9"/>
+    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+  </svg>
+)
+
 export default function ClientFile() {
   const { project_id } = useClient()
   const isMounted = useRef(true)
@@ -97,10 +114,25 @@ export default function ClientFile() {
   const [saveError, setSaveError]         = useState('')
   const [savedFlash, setSavedFlash]       = useState(false)
 
+  /* ── Accordion state ─────────────────────────────────────────────
+     Set of currently-open block keys. Default: only 'personal' open;
+     'project' and 'professionals' collapsed. Visual language matches
+     the שלבי התקדמות accordion (.cp-progress-block / .cp-progress-header). */
+  const [openSet, setOpenSet] = useState(new Set(['personal']))
+
   useEffect(() => {
     isMounted.current = true
     return () => { isMounted.current = false }
   }, [])
+
+  /* While editing, hide the portal's sticky contact footer so it
+     doesn't compete with the fixed save/cancel bar at the same edge.
+     Restored when edit mode ends or the screen unmounts. */
+  const { setHidden: setFooterHidden } = useClientFooter()
+  useEffect(() => {
+    setFooterHidden(editMode)
+    return () => setFooterHidden(false)
+  }, [editMode, setFooterHidden])
 
   /* ── Data load (also used by save's refresh) ─────────────────────── */
   const loadData = useCallback(async () => {
@@ -185,6 +217,29 @@ export default function ClientFile() {
     setEditMode(false)
     setSaveError('')
     setContactsDraft([])
+  }
+
+  /* Open/close a block. Collapsing 'personal' while editing exits edit
+     mode (without saving) so the user isn't stuck in a hidden form. */
+  const toggleOpen = (key) => {
+    const wasOpen = openSet.has(key)
+    if (wasOpen && key === 'personal' && editMode) {
+      handleCancel()
+    }
+    setOpenSet(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  /* Keyboard accessibility for the div-based accordion header. */
+  const handleHeaderKeyDown = (e, key) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleOpen(key)
+    }
   }
 
   const updateContactDraft = (idx, field, value) => {
@@ -327,86 +382,156 @@ export default function ClientFile() {
           {subtitle && <p className="cp-project-subtitle">{subtitle}</p>}
         </header>
 
-        {/* Card 1 — פרטים אישיים (THE ONLY editable card; first card on screen).
-            Edit button lives in this card's header so the action is
-            adjacent to its target. Hidden while in edit mode. */}
-        <section className="cp-card">
-          <div className="cp-card-header">
-            <h2 className="cp-card-title">פרטים אישיים</h2>
-            {!editMode && (
-              <button
-                type="button"
-                className="cp-edit-toggle-btn"
-                onClick={handleEnterEdit}
-              >
-                ערוך
-              </button>
-            )}
-          </div>
-          {editMode ? (
-            contactsDraft.length > 0 ? (
-              contactsDraft.map((draft, idx) => (
-                <div key={draft.id ?? idx} className="cp-contact cp-contact--edit">
-                  {CONTACT_FIELDS.map(f => (
-                    <div key={f.field} className="cp-row cp-row--edit">
-                      <span className="cp-label">{f.label}:</span>
-                      <input
-                        type="text"
-                        className={`cp-input${f.ltr ? ' cp-input--ltr' : ''}`}
-                        value={draft[f.field] ?? ''}
-                        onChange={e => updateContactDraft(idx, f.field, e.target.value)}
-                        dir={f.ltr ? 'ltr' : undefined}
-                        disabled={saving}
-                      />
-                    </div>
-                  ))}
+        {/* Accordion — three collapsible blocks. The pencil edit affordance
+            replaces the old "ערוך" button and only appears in the open
+            "פרטים אישיים" header. Clicking the header toggles open/closed;
+            clicking the pencil enters edit mode (and does NOT toggle, via
+            stopPropagation). */}
+        <div className="cp-progress-accordion">
+
+          {/* Block 1 — פרטים אישיים (THE ONLY editable block; open by default). */}
+          {(() => {
+            const isOpen = openSet.has('personal')
+            return (
+              <section className="cp-progress-block">
+                <div
+                  className="cp-progress-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleOpen('personal')}
+                  onKeyDown={(e) => handleHeaderKeyDown(e, 'personal')}
+                >
+                  <span className="cp-progress-header-name">פרטים אישיים</span>
+                  {isOpen && !editMode && (
+                    <button
+                      type="button"
+                      className="cp-acc-pencil"
+                      onClick={(e) => { e.stopPropagation(); handleEnterEdit() }}
+                      aria-label="ערוך פרטים אישיים"
+                      title="ערוך"
+                    >
+                      <IconPencil size={16} />
+                    </button>
+                  )}
+                  <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
+                    <IconChevron size={16} />
+                  </span>
                 </div>
-              ))
-            ) : (
-              <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
-            )
-          ) : (
-            contacts.length > 0 ? (
-              contacts.map((c, idx) => {
-                const name     = fullName(c.first_name, c.last_name) || '—'
-                const idNumber = clean(c.id_number)
-                const phone    = clean(c.phone)
-                const email    = clean(c.email)
-                return (
-                  <div key={c.id ?? idx} className="cp-contact">
-                    <p className="cp-contact-name">{name}</p>
-                    {idNumber && (
-                      <div className="cp-row">
-                        <span className="cp-label">ת״ז:</span>
-                        <span className="cp-value">{idNumber}</span>
-                      </div>
+                {isOpen && (
+                  <div className="cp-acc-body">
+                    {editMode ? (
+                      contactsDraft.length > 0 ? (
+                        contactsDraft.map((draft, idx) => (
+                          <div key={draft.id ?? idx} className="cp-contact cp-contact--edit">
+                            {CONTACT_FIELDS.map(f => (
+                              <div key={f.field} className="cp-row cp-row--edit">
+                                <span className="cp-label">{f.label}:</span>
+                                <input
+                                  type="text"
+                                  className={`cp-input${f.ltr ? ' cp-input--ltr' : ''}`}
+                                  value={draft[f.field] ?? ''}
+                                  onChange={e => updateContactDraft(idx, f.field, e.target.value)}
+                                  dir={f.ltr ? 'ltr' : undefined}
+                                  disabled={saving}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
+                      )
+                    ) : (
+                      contacts.length > 0 ? (
+                        contacts.map((c, idx) => {
+                          const name     = fullName(c.first_name, c.last_name) || '—'
+                          const idNumber = clean(c.id_number)
+                          const phone    = clean(c.phone)
+                          const email    = clean(c.email)
+                          return (
+                            <div key={c.id ?? idx} className="cp-contact">
+                              <p className="cp-contact-name">{name}</p>
+                              {idNumber && (
+                                <div className="cp-row">
+                                  <span className="cp-label">ת״ז:</span>
+                                  <span className="cp-value">{idNumber}</span>
+                                </div>
+                              )}
+                              {phone && <p className="cp-contact-line cp-contact-line--ltr">{phone}</p>}
+                              {email && <p className="cp-contact-line cp-contact-line--ltr">{email}</p>}
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
+                      )
                     )}
-                    {phone && <p className="cp-contact-line cp-contact-line--ltr">{phone}</p>}
-                    {email && <p className="cp-contact-line cp-contact-line--ltr">{email}</p>}
                   </div>
-                )
-              })
-            ) : (
-              <p className="cp-empty-card">לא הוזנו פרטים אישיים</p>
+                )}
+              </section>
             )
-          )}
-        </section>
+          })()}
 
-        {/* Card 2 — פרטי הפרויקט (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">פרטי הפרויקט</h2>
-          {detailRows.length > 0
-            ? detailRows
-            : <p className="cp-empty-card">אין פרטים זמינים</p>}
-        </section>
+          {/* Block 2 — פרטי הפרויקט (read-only; no pencil). */}
+          {(() => {
+            const isOpen = openSet.has('project')
+            return (
+              <section className="cp-progress-block">
+                <div
+                  className="cp-progress-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleOpen('project')}
+                  onKeyDown={(e) => handleHeaderKeyDown(e, 'project')}
+                >
+                  <span className="cp-progress-header-name">פרטי הפרויקט</span>
+                  <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
+                    <IconChevron size={16} />
+                  </span>
+                </div>
+                {isOpen && (
+                  <div className="cp-acc-body">
+                    {detailRows.length > 0
+                      ? detailRows
+                      : <p className="cp-empty-card">אין פרטים זמינים</p>}
+                  </div>
+                )}
+              </section>
+            )
+          })()}
 
-        {/* Card 3 — בעלי מקצוע (always read-only) */}
-        <section className="cp-card">
-          <h2 className="cp-card-title">בעלי מקצוע</h2>
-          {professionalsRows.length > 0
-            ? professionalsRows
-            : <p className="cp-empty-card">לא הוזנו בעלי מקצוע</p>}
-        </section>
+          {/* Block 3 — בעלי מקצוע (read-only; no pencil). */}
+          {(() => {
+            const isOpen = openSet.has('professionals')
+            return (
+              <section className="cp-progress-block">
+                <div
+                  className="cp-progress-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleOpen('professionals')}
+                  onKeyDown={(e) => handleHeaderKeyDown(e, 'professionals')}
+                >
+                  <span className="cp-progress-header-name">בעלי מקצוע</span>
+                  <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
+                    <IconChevron size={16} />
+                  </span>
+                </div>
+                {isOpen && (
+                  <div className="cp-acc-body">
+                    {professionalsRows.length > 0
+                      ? professionalsRows
+                      : <p className="cp-empty-card">לא הוזנו בעלי מקצוע</p>}
+                  </div>
+                )}
+              </section>
+            )
+          })()}
+
+        </div>
 
       </div>
 

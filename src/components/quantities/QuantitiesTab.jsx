@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+import { DEFAULT_QUANTITIES_NOTES } from './quantitiesDefaults'
 import '../../QuantitiesTab.css'
 import '../../TasksTab.css'       /* reuse .tt-col-delete, .tt-row-delete-btn, .tt-delete-confirm-*, .tt-add-row-* */
 import '../../FinishingTab.css'   /* reuse .ft-notes-* and .ft-pdf-* visual styles */
@@ -142,22 +143,6 @@ function AddCategoryRow({ onAdd }) {
  * Props:
  *   projectId  uuid — current project id
  * ──────────────────────────────────────────────────────────────── */
-/* Default content pre-filled into the textarea when quantities_notes is NULL
-   (project never had notes yet). NOT auto-saved — saved only when the user
-   blurs / Ctrl+Enters, via the existing save logic. Bullet structure with blank
-   lines between items is preserved by the `white-space: pre-wrap` CSS. */
-const DEFAULT_QUANTITIES_NOTES = `* יש לרשום ברשימה בסעיפים חיפוי/ריצוף גודל אריח סופי וצבע
-
-* תיאום מועד הזמנה מול הקבלן
-
-* על הקבלן לוודא כמויות סופיות בשטח למניעת חוסרים/עודפים
-
-* על הלקוח והקבלן להיות בשטח בזמן ההספקה
-
-* כמויות חיפוי בחדרים רטובים יישתנו בהתאם לתכנון החיפוי בחדרים אלה
-
-* כמויות אינן כוללות פחת`
-
 export default function QuantitiesTab({ projectId }) {
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -190,14 +175,40 @@ export default function QuantitiesTab({ projectId }) {
         .eq('id', projectId)
         .single()
       if (data) {
-        /* If NULL → show the default bullets. Anything else (including '')
-           is treated as the user's deliberate value and shown as-is. */
-        const initialNotes = data.quantities_notes === null
-          ? DEFAULT_QUANTITIES_NOTES
-          : data.quantities_notes
-        setNotes(initialNotes)
-        setNotesSaved(data.quantities_notes ?? null)
         setProjectName(data.name ?? '')
+        if (data.quantities_notes === null) {
+          /* Auto-seed: NULL in the DB means "never set". Persist the
+             default text once so the read-only client portal — which has
+             no synthesis logic — also sees these bullets. The
+             `.is('quantities_notes', null)` clause makes the write
+             atomic: even with two tabs racing, only the row that's still
+             null is updated; the other write is a no-op against an
+             already-seeded row. An explicit empty string ('') is a
+             deliberate "no notes" choice and is NOT seeded. */
+          try {
+            const { error } = await supabase
+              .from('projects')
+              .update({ quantities_notes: DEFAULT_QUANTITIES_NOTES })
+              .eq('id', projectId)
+              .is('quantities_notes', null)
+            if (error) throw error
+            setNotes(DEFAULT_QUANTITIES_NOTES)
+            setNotesSaved(DEFAULT_QUANTITIES_NOTES)   /* state now matches DB */
+          } catch (e) {
+            console.error('QuantitiesTab — auto-seed notes failed:', e)
+            /* Keep the UX intact — the manager still sees the default in
+               the textarea — but leave notesSaved as null so a later
+               onBlur (or the next mount) can retry the seed. */
+            setNotes(DEFAULT_QUANTITIES_NOTES)
+            setNotesSaved(null)
+          }
+        } else {
+          /* Non-null branch — including a deliberate '' empty string —
+             shown as-is. saveNotes' dirty check keeps onBlur a no-op
+             unless the user actually edits. */
+          setNotes(data.quantities_notes)
+          setNotesSaved(data.quantities_notes)
+        }
       }
       setNotesLoading(false)
     }
@@ -427,7 +438,7 @@ export default function QuantitiesTab({ projectId }) {
             <div className="qt-col-qty-sqm">כמות במ"ר</div>
             <div className="qt-col-units">מספר יחידות</div>
             <div className="qt-col-dimensions">מידות בס"מ</div>
-            <div className="qt-col-description">תיאור</div>
+            <div className="qt-col-description">תיאור / הערות</div>
             <div className="qt-col-image">תמונה</div>
             <div className="tt-col-delete" />
           </div>

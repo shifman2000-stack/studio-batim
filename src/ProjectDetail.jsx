@@ -11,7 +11,37 @@ import QuantitiesTab from './components/quantities/QuantitiesTab'
 import ContractorSpecTab from './components/contractorspec/ContractorSpecTab'
 import NewTaskModal from './NewTaskModal'
 import ProjectGantt from './components/ProjectGantt'
+import {
+  CONTROLLABLE_TABS,
+  DEFAULT_CLIENT_TAB_VISIBILITY,
+  isClientTabVisible,
+} from './lib/clientTabVisibility'
 import './ProjectDetail.css'
+
+/* Lookup: manager tab id → CONTROLLABLE_TABS entry (or undefined). Used
+   in the tab bar to know whether a given tab gets the person icon + the
+   right-click "הצג ללקוח" menu, or is non-controllable. */
+const CONTROLLABLE_BY_MANAGER_ID = Object.fromEntries(
+  CONTROLLABLE_TABS.map(t => [t.managerTabId, t])
+)
+
+/* Small Feather-style icons for the tab-bar visibility affordance.
+   The "off" variant is the same user shape with a diagonal slash. */
+const IconUser = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+)
+const IconUserOff = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+    <line x1="3" y1="3" x2="21" y2="21"/>
+  </svg>
+)
 
 const STAGE_COLORS = {
   'קליטת פרויקט':  { bg: '#f0f0f0', text: '#000' },
@@ -261,6 +291,15 @@ function ProjectDetail() {
   const [contacts, setContacts]     = useState([])
   const [clientInfo, setClientInfo] = useState(null)
 
+  /* Per-project client drawer visibility. jsonb on projects, fallback to
+     DEFAULT_CLIENT_TAB_VISIBILITY (see src/lib/clientTabVisibility.js).
+     Toggled via right-click on a controllable tab — saved immediately. */
+  const [clientVisibleTabs, setClientVisibleTabs] = useState(null)
+
+  /* Tab right-click context menu state — { x, y, clientKey } when open. */
+  const [tabContextMenu, setTabContextMenu] = useState(null)
+  const tabMenuRef = useRef(null)
+
   /* professionals list */
   const [profList, setProfList] = useState([])
 
@@ -289,15 +328,63 @@ function ProjectDetail() {
   const [pdShowNewTask, setPdShowNewTask] = useState(false)
   const [pdTaskToast,   setPdTaskToast]   = useState(false)
 
+  /* ── Tab right-click menu — click-outside dismisses, mirrors the
+     pattern used by ProjectsKanban's card context menu. ── */
+  useEffect(() => {
+    if (!tabContextMenu) return
+    const handleClickOutside = (e) => {
+      if (tabMenuRef.current && !tabMenuRef.current.contains(e.target)) {
+        setTabContextMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [tabContextMenu])
+
+  /* Open the right-click menu next to the clicked tab. Only fires on
+     controllable tabs (the caller already filters). Edge-aware: nudges
+     the menu in-bounds at the right/bottom of the viewport. */
+  const handleTabContextMenu = (e, clientKey) => {
+    e.preventDefault()
+    const menuW = 200, menuH = 60
+    const x = e.clientX + menuW > window.innerWidth  ? e.clientX - menuW : e.clientX
+    const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY
+    setTabContextMenu({ x, y, clientKey })
+  }
+
+  /* Toggle a single controllable tab's client visibility. Builds the
+     next jsonb object by merging DEFAULTS with the live state and
+     overriding just the clicked key, then writes it. Optimistic UI: the
+     icon flips immediately; on DB failure we revert. */
+  const handleToggleClientTab = async (clientKey, nextValue) => {
+    const prev = clientVisibleTabs
+    const merged = { ...DEFAULT_CLIENT_TAB_VISIBILITY, ...(clientVisibleTabs || {}) }
+    const nextObj = { ...merged, [clientKey]: nextValue }
+    setClientVisibleTabs(nextObj)
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ client_visible_tabs: nextObj })
+        .eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.error('ProjectDetail — client_visible_tabs save failed:', err)
+      setClientVisibleTabs(prev)   /* revert on failure */
+    }
+  }
+
   /* ── fetch project ── */
   useEffect(() => {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id')
+        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id, client_visible_tabs')
         .eq('id', id)
         .single()
-      if (data) setProject(data)
+      if (data) {
+        setProject(data)
+        setClientVisibleTabs(data.client_visible_tabs || null)
+      }
     }
     fetchProject()
   }, [id])
@@ -738,22 +825,60 @@ function ProjectDetail() {
 
       {/* ── Tabs bar ── */}
       <div className="pd-tabs-bar">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            className={
-              'pd-tab' +
-              (activeTab === tab.id ? ' pd-tab--active' : '') +
-              (tab.disabled ? ' pd-tab--disabled' : '')
-            }
-            onClick={() => { if (!tab.disabled) setActiveTab(tab.id) }}
-            disabled={tab.disabled}
-          >
-            {tab.label}
-            {tab.disabled && <span className="pd-tab-soon">בקרוב</span>}
-          </button>
-        ))}
+        {TABS.map(tab => {
+          const ctrl    = CONTROLLABLE_BY_MANAGER_ID[tab.id]
+          const visible = ctrl ? isClientTabVisible(ctrl.clientKey, clientVisibleTabs) : null
+          return (
+            <button
+              key={tab.id}
+              className={
+                'pd-tab' +
+                (activeTab === tab.id ? ' pd-tab--active' : '') +
+                (tab.disabled ? ' pd-tab--disabled' : '')
+              }
+              onClick={() => { if (!tab.disabled) setActiveTab(tab.id) }}
+              onContextMenu={ctrl ? (e) => handleTabContextMenu(e, ctrl.clientKey) : undefined}
+              disabled={tab.disabled}
+            >
+              {tab.label}
+              {ctrl && (
+                <span
+                  className={'pd-tab-vis-icon' + (visible ? '' : ' pd-tab-vis-icon--off')}
+                  title={visible ? 'מוצג ללקוח (קליק-ימני לשינוי)' : 'מוסתר מהלקוח (קליק-ימני לשינוי)'}
+                >
+                  {visible ? <IconUser size={13} /> : <IconUserOff size={13} />}
+                </span>
+              )}
+              {tab.disabled && <span className="pd-tab-soon">בקרוב</span>}
+            </button>
+          )
+        })}
       </div>
+
+      {/* ── Tab right-click context menu — "הצג ללקוח" toggle. ── */}
+      {tabContextMenu && (() => {
+        const visible = isClientTabVisible(tabContextMenu.clientKey, clientVisibleTabs)
+        return (
+          <div
+            ref={tabMenuRef}
+            className="pd-tab-context-menu"
+            style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+          >
+            <label className="pd-tab-context-row">
+              <input
+                type="checkbox"
+                checked={visible}
+                onChange={async (e) => {
+                  const next = e.target.checked
+                  setTabContextMenu(null)
+                  await handleToggleClientTab(tabContextMenu.clientKey, next)
+                }}
+              />
+              <span>הצג ללקוח</span>
+            </label>
+          </div>
+        )
+      })()}
 
       {/* ── Tab content ── */}
       <div className={`pd-tab-content${activeTab === 5 ? ' pd-tab-content--tasks' : ''}`}>

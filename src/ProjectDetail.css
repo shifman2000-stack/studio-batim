@@ -672,3 +672,52 @@
   width: 140px;
   white-space: nowrap;
 }
+
+/* ── Client visibility affordance on the manager tab bar ─────────────
+   Small Feather user icon next to a controllable tab label. "off"
+   variant carries a diagonal slash drawn inline in the SVG itself.
+   Right-clicking a controllable tab opens .pd-tab-context-menu. ── */
+.pd-tab-vis-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 6px;
+  color: #7a9478;
+  opacity: 0.85;
+  vertical-align: middle;
+}
+.pd-tab-vis-icon--off {
+  color: #b0a99e;
+}
+.pd-tab--active .pd-tab-vis-icon {
+  opacity: 1;
+}
+
+.pd-tab-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #ffffff;
+  border: 1px solid #e5e3dd;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  min-width: 180px;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+}
+.pd-tab-context-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1a1a18;
+  user-select: none;
+}
+.pd-tab-context-row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.pd-tab-context-row input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0;
+}

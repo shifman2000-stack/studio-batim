@@ -14,11 +14,18 @@ import ClientHome from './client/ClientHome'
 import ClientFile from './client/ClientFile'
 import ClientDocuments from './client/ClientDocuments'
 import ClientSharedFiles from './client/ClientSharedFiles'
+import ClientQuantities from './client/ClientQuantities'
 import ClientProgress from './client/ClientProgress'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
+import ClientFooter, { ClientFooterProvider } from './client/ClientFooter'
 import Logo from '../components/Logo'
+import { isClientTabVisible } from '../lib/clientTabVisibility'
+
+/* Drawer keys that are ALWAYS visible regardless of the manager's
+   per-project setting. Everything else flows through isClientTabVisible. */
+const ALWAYS_VISIBLE_KEYS = new Set(['home', 'contact', 'account'])
 import './ClientPortal.css'
 
 /* ── Hamburger icon ──────────────────────────────────────────────── */
@@ -32,6 +39,16 @@ const HamburgerIcon = () => (
   </svg>
 )
 
+/* ── Generic user icon (Feather-style, stroke="currentColor") for the
+   account row pinned at the drawer bottom. ── */
+const IconUser = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+)
+
 /* ── Drawer menu config ──────────────────────────────────────────────
    Each item has:
      key       — internal id used for active-screen switching
@@ -42,16 +59,19 @@ const HamburgerIcon = () => (
      Component — the screen to render when this item is active.
 */
 const MENU_ITEMS = [
-  { key: 'home',         label: 'בית',           enabled: true,  Component: ClientHome },
-  { key: 'file',         label: 'פרטי תיק',      enabled: true,  Component: ClientFile },
-  { key: 'documents',    label: 'מסמכים',        enabled: true,  Component: ClientDocuments },
-  { key: 'shared',       label: 'מרחב משותף',    enabled: true,  Component: ClientSharedFiles },
-  { key: 'quantities',   label: 'כתב כמויות',    enabled: false, Component: ClientPlaceholder },
-  { key: 'finishing',    label: 'חומרי גמר',     enabled: false, Component: ClientPlaceholder },
-  { key: 'contractor',   label: 'מפרט לקבלן',    enabled: false, Component: ClientPlaceholder },
-  { key: 'progress',     label: 'שלבי התקדמות',  enabled: true,  Component: ClientProgress },
-  { key: 'contact',      label: 'צור קשר',       enabled: true,  Component: ClientContact },
-  { key: 'account',      label: 'פרטי חשבון',    enabled: true,  Component: ClientAccount },
+  { key: 'home',         label: 'דף בית',           enabled: true,  Component: ClientHome },
+  { key: 'file',         label: 'פרטי תיק',         enabled: true,  Component: ClientFile },
+  { key: 'documents',    label: 'תיק מסמכים',       enabled: true,  Component: ClientDocuments },
+  { key: 'shared',       label: 'מרחב קבצים משותף', enabled: true,  Component: ClientSharedFiles },
+  { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
+  { key: 'finishing',    label: 'חומרי גמר',        enabled: false, Component: ClientPlaceholder },
+  { key: 'contractor',   label: 'מפרט לקבלן',       enabled: false, Component: ClientPlaceholder },
+  { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgress },
+  { key: 'contact',      label: 'צור קשר',          enabled: true,  Component: ClientContact },
+  /* "פרטי חשבון" — pinned at the drawer bottom as an avatar+name row.
+     Excluded from the main menu loop via the `footer: true` flag, but
+     still found by MENU_ITEMS.find when activeKey === 'account'. */
+  { key: 'account',      label: 'פרטי חשבון',       enabled: true,  Component: ClientAccount, footer: true },
 ]
 
 export default function ClientPortal() {
@@ -78,6 +98,25 @@ export default function ClientPortal() {
      re-linked). */
   const [liveIdentity, setLiveIdentity] = useState(null)
   /* liveIdentity shape: { firstName, lastName, isFamily } | null */
+
+  /* Per-project drawer visibility — projects.client_visible_tabs jsonb.
+     One read on mount; resolved through isClientTabVisible(). */
+  const [clientVisibleTabs, setClientVisibleTabs] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    const loadVisibility = async () => {
+      if (!project_id) return
+      const { data } = await supabase
+        .from('projects')
+        .select('client_visible_tabs')
+        .eq('id', project_id)
+        .maybeSingle()
+      if (cancelled) return
+      setClientVisibleTabs(data?.client_visible_tabs || null)
+    }
+    loadVisibility()
+    return () => { cancelled = true }
+  }, [project_id])
 
   useEffect(() => {
     let cancelled = false
@@ -125,6 +164,13 @@ export default function ClientPortal() {
   const lastName  = liveIdentity?.lastName  || null
   const isFamily  = liveIdentity?.isFamily  || false
 
+  /* Drawer visibility filter — `home`, `contact`, `account` are pinned
+     (always visible); every other item is gated by the per-project
+     `client_visible_tabs` from the manager, resolved via the shared
+     helper so client and manager agree. */
+  const isItemVisible = (item) =>
+    ALWAYS_VISIBLE_KEYS.has(item.key) || isClientTabVisible(item.key, clientVisibleTabs)
+
   const activeItem  = MENU_ITEMS.find(m => m.key === activeKey) || MENU_ITEMS[0]
   const ActiveScreen = activeItem.Component
 
@@ -135,6 +181,7 @@ export default function ClientPortal() {
   }
 
   return (
+    <ClientFooterProvider>
     <div className="cp-shell">
 
       {/* ── Top bar — hamburger on the right, studio logo centered ──
@@ -172,7 +219,7 @@ export default function ClientPortal() {
         aria-hidden={!drawerOpen}
       >
         <nav className="cp-drawer-menu">
-          {MENU_ITEMS.map(item => {
+          {MENU_ITEMS.filter(item => !item.footer && isItemVisible(item)).map(item => {
             const isActive = item.key === activeKey
             const cls = [
               'cp-menu-item',
@@ -192,6 +239,30 @@ export default function ClientPortal() {
             )
           })}
         </nav>
+
+        {/* ── Account footer row, pinned at the drawer bottom.
+              Generic user avatar + the client's name. Clicking selects
+              the 'account' screen exactly like a normal drawer item. ── */}
+        {(() => {
+          const accountItem = MENU_ITEMS.find(m => m.key === 'account')
+          if (!accountItem) return null
+          const isActive    = activeKey === 'account'
+          const displayName = [firstName, lastName].filter(Boolean).join(' ').trim()
+                              || 'פרטי חשבון'
+          return (
+            <button
+              type="button"
+              className={'cp-drawer-account' + (isActive ? ' cp-drawer-account--active' : '')}
+              onClick={() => handleSelect(accountItem)}
+              aria-label={`פרטי חשבון — ${displayName}`}
+            >
+              <span className="cp-drawer-account-avatar">
+                <IconUser size={20} />
+              </span>
+              <span className="cp-drawer-account-name">{displayName}</span>
+            </button>
+          )
+        })()}
       </aside>
 
       {/* ── Content frame — renders the currently selected screen.
@@ -208,6 +279,14 @@ export default function ClientPortal() {
         />
       </main>
 
+      {/* ── Sticky contact footer (Phone / WhatsApp / Email) ──
+          Lives as a flex-shrink:0 sibling of <main>, so .cp-content
+          (the scroll container) is pushed up and the footer doesn't
+          cover content. Hidden in screens that own a competing fixed
+          bottom bar — see ClientFooterProvider + useClientFooter. */}
+      <ClientFooter />
+
     </div>
+    </ClientFooterProvider>
   )
 }

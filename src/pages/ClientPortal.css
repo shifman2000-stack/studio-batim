@@ -135,7 +135,11 @@
   transform: translateX(100%);  /* off-screen to the right */
   transition: transform 220ms ease;
   z-index: 100;
-  overflow-y: auto;
+  /* The drawer is now a flex column so the account footer can pin to
+     the bottom while the menu scrolls above it on tight viewports. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   -webkit-overflow-scrolling: touch;
   direction: rtl;
 }
@@ -145,9 +149,67 @@
 }
 
 .cp-drawer-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   padding: 18px 0;
+}
+
+/* ── Account row — pinned at the bottom of the drawer (flex-shrink:0).
+   Avatar circle (Feather user icon inside) + the client's display name.
+   Behaves like a normal menu item: toggles activeKey to 'account'. ── */
+.cp-drawer-account {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border: none;
+  border-top: 1px solid rgba(26, 26, 24, 0.08);
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  color: #1a1a18;
+  text-align: right;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background 0.12s;
+}
+
+.cp-drawer-account:hover,
+.cp-drawer-account:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+  outline: none;
+}
+
+.cp-drawer-account--active {
+  background: rgba(122, 148, 120, 0.10);
+}
+
+.cp-drawer-account-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #7a9478;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.cp-drawer-account-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a18;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 
 /* ── Menu item ── */
@@ -640,6 +702,67 @@
 .cp-edit-btn-secondary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ── Sticky contact footer (Phone / WhatsApp / Email) ──────────────
+   App-style bottom tab bar. Lives as a flex-shrink:0 sibling of
+   .cp-content inside .cp-shell, so the shell's flex column pushes it
+   to the bottom and the content area shrinks above it — no fixed
+   positioning, no padding-bottom hack. Hidden while ClientFile is in
+   edit mode (.cp-edit-bar takes over that edge). */
+.cp-footer {
+  flex-shrink: 0;
+  display: flex;
+  background: #ffffff;
+  border-top: 1px solid rgba(26, 26, 24, 0.08);
+  box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.04);
+  padding: 6px 4px;
+  /* Respect the iOS home-indicator safe area so the bar doesn't sit
+     under the gesture line on iPhone X-class devices. */
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  direction: rtl;
+  z-index: 5;
+}
+
+.cp-footer-link {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  min-height: 52px;
+  color: #8a8680;
+  font-family: 'Heebo', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cp-footer-link:hover,
+.cp-footer-link:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1a1a18;
+  outline: none;
+}
+
+.cp-footer-link:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.cp-footer-link svg {
+  display: block;
+}
+
+@media (max-width: 380px) {
+  .cp-footer-link { font-size: 10.5px; min-height: 48px; }
 }
 
 /* ── Save error banner (above the project header in edit mode) ── */
@@ -1175,6 +1298,75 @@
 }
 .cp-progress-chevron--open {
   transform: rotate(180deg);
+}
+
+/* ── Generic accordion extras — used by the client-file accordion to
+   share the same .cp-progress-block / .cp-progress-header chrome:
+     .cp-acc-pencil — small inline edit affordance in a block header.
+                      Replaces the old "ערוך" text button on פרטים אישיים.
+     .cp-acc-body   — content slot below a header, with the same internal
+                      padding (13px 14px) the old .cp-card had so existing
+                      child layouts (cp-row / cp-contact) stay tidy. ── */
+.cp-acc-pencil {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #7a9478;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+.cp-acc-pencil:hover,
+.cp-acc-pencil:focus-visible {
+  background: rgba(122, 148, 120, 0.10);
+  outline: none;
+}
+
+.cp-acc-body {
+  padding: 13px 14px;
+  border-top: 1px solid #ece8df;
+}
+
+@media (max-width: 380px) {
+  .cp-acc-body { padding: 11px 12px; }
+}
+
+/* ── Quantities (כתב כמויות) — per-item layout inside an open block.
+   Each item is a small stack: a bold name, then any non-empty fields
+   as cp-row label/value pairs, and an optional image preview. A
+   subtle divider separates consecutive items. ── */
+.cp-qty-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #ece8df;
+}
+.cp-qty-item:first-child { padding-top: 0; }
+.cp-qty-item:last-child  { padding-bottom: 0; border-bottom: none; }
+
+.cp-qty-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a18;
+  margin-bottom: 6px;
+}
+
+.cp-qty-item-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid #ece8df;
+}
+
+.cp-qty-notes {
+  margin: 0;
+  font-size: 13.5px;
+  color: #1a1a18;
+  line-height: 1.6;
+  white-space: pre-wrap;     /* preserve manual line breaks from the manager */
 }
 
 /* Points list (visible only when block is open) */

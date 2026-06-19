@@ -9,10 +9,7 @@
 // formatted via dir="ltr" so digits and the @ in the email don't get
 // reordered by the surrounding RTL paragraph.
 
-const PHONE          = '0529593927'
-const PHONE_DISPLAY  = '052-959-3927'
-const WHATSAPP_URL   = 'https://wa.me/972529593927'
-const EMAIL          = 'einav.studiob@gmail.com'
+import { PHONE, PHONE_DISPLAY, WHATSAPP_URL, EMAIL } from './contactInfo'
 
 export default function ClientContact() {
   return (

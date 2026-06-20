@@ -282,6 +282,40 @@
   white-space: nowrap;
 }
 
+/* Read-only value rendered next to a .context-menu-label (today: the
+   per-project auth_code displayed in the kanban right-click menu). Bold
+   sage so it stands out from the dim label, monospaced so the BATIM####
+   code reads cleanly. */
+.context-menu-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7a9478;
+  letter-spacing: 0.04em;
+}
+
+/* Small WhatsApp glyph button rendered at the end of the auth_code row.
+   Opens the welcome-message popup composer. No background or border —
+   the colour comes from the inline `fill="#25D366"` on the SVG itself. */
+.context-menu-whatsapp-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-inline-start: 4px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  line-height: 1;
+  vertical-align: middle;
+  border-radius: 4px;
+  transition: opacity 0.12s;
+}
+.context-menu-whatsapp-btn:hover,
+.context-menu-whatsapp-btn:focus-visible {
+  opacity: 0.75;
+  outline: none;
+}
+
 .context-menu-item {
   display: block;
   width: 100%;
@@ -411,6 +445,41 @@
   padding: 28px 32px 24px;
   max-width: 420px;
   width: 100%;
+}
+
+/* Welcome-message popup — same overlay + button styles as the confirm
+   dialog, but the dialog is wider and the message block is selectable
+   pre-wrapped text so the manager can review and Copy. */
+.kanban-welcome-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  padding: 22px 22px 18px;
+  width: 92vw;
+  max-width: 560px;
+  max-height: 88vh;
+  overflow-y: auto;
+  direction: rtl;
+}
+
+.kanban-welcome-text {
+  margin: 0 0 16px;
+  padding: 14px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1a1a18;
+  background: #f7f5f2;
+  border: 1px solid #ece8df;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  text-align: right;
+  direction: rtl;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .kanban-confirm-text {

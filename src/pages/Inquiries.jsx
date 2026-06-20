@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { generateUniqueAuthCode } from '../lib/generateAuthCode'
 import './Inquiries.css'
 
 /* ─────────── Status config ─────────── */
@@ -872,6 +873,18 @@ export default function Inquiries() {
       /* ── a. Create project — include stage_id and stage_entered_at so the
             new row is visible on the Kanban (which filters by stage_id). ── */
       const projectName = [inq.first_name, inq.last_name].filter(Boolean).join(' ').trim()
+
+      /* Generate the project's auth code (BATIM####). A null result —
+         from a network error or 15 collisions in a row — must not block
+         the inquiry conversion; the column allows null and can be
+         back-filled later. */
+      let authCode = null
+      try {
+        authCode = await generateUniqueAuthCode(supabase)
+      } catch (e) {
+        console.warn('handleConvert — auth code generation failed:', e)
+      }
+
       const { data: newProject, error: projErr } = await supabase
         .from('projects')
         .insert([{
@@ -883,6 +896,7 @@ export default function Inquiries() {
           urgency:          'רגיל',          /* Prod has NOT NULL on urgency — default to "רגיל" */
           intake_date:      todayISO(),
           archived:         false,
+          auth_code:        authCode,
         }])
         .select('id')
         .single()

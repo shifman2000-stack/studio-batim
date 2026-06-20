@@ -124,20 +124,41 @@ function App() {
 
     setLoading(true)
 
-    // 1. Check authorization code
-    const { data: codeData, error: codeError } = await supabase
-      .from('authorization_codes')
-      .select('role')
-      .eq('code', authCode)
-      .single()
+    // 1. Validate the authorization code against TWO independent sources:
+    //    (a) projects.auth_code — per-project code (BATIM####) for CLIENTS.
+    //        A match implies role='client'. The actual project the client
+    //        ends up linked to is decided later by link_client_on_login,
+    //        which matches their email against project_contacts — the
+    //        code is just a gate, not a project selector.
+    //    (b) authorization_codes.code — legacy staff codes (admin/employee).
+    //    maybeSingle on both so a "no row" response is `data: null`, not
+    //    a thrown error.
+    let role = null
 
-    if (codeError || !codeData) {
+    const { data: projMatch } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('auth_code', authCode)
+      .maybeSingle()
+
+    if (projMatch) {
+      role = 'client'
+    } else {
+      const { data: codeData } = await supabase
+        .from('authorization_codes')
+        .select('role')
+        .eq('code', authCode)
+        .maybeSingle()
+      if (codeData) {
+        role = codeData.role
+      }
+    }
+
+    if (!role) {
       setErrorMsg('קוד הרשאה שגוי')
       setLoading(false)
       return
     }
-
-    const role = codeData.role
 
     // 2. Create user
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({

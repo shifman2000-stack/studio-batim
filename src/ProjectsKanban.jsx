@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import { generateUniqueAuthCode } from './lib/generateAuthCode'
 import NewTaskModal from './NewTaskModal'
 import './ProjectsKanban.css'
 
@@ -103,6 +104,10 @@ function ProjectsKanban() {
   const [ctxChildPickerOpen, setCtxChildPickerOpen] = useState(false)
   const [ctxChildPickedId,   setCtxChildPickedId]   = useState('')
   const [parentConfirm, setParentConfirm]   = useState(null) // { mode: 'attach'|'detach', project, parentId?, parentName? }
+  /* Welcome-message popup opened from the kanban context menu —
+     composes a Hebrew "ברוכים הבאים" message based on the project's
+     contacts + auth_code, with a copy-to-clipboard action. */
+  const [welcomePopup, setWelcomePopup]     = useState(null) // { message, copied } | null
 
   // ── Parent-view mode (route /פרויקטים/אב/:parentId).
   // When the URL carries a parentId, this same Kanban renders only the
@@ -316,6 +321,17 @@ function ProjectsKanban() {
     const firstStageId = stages.find(s => s.name === 'קליטת פרויקט')?.id ?? stages[0]?.id ?? null
     const isChild    = !!newParentId
     const parentName = isChild ? (parentOptions.find(p => p.id === newParentId)?.name || '') : ''
+
+    /* Generate the project's auth code (BATIM####). A null result —
+       from a network error or 15 collisions in a row — must not block
+       creation; the column allows null and can be back-filled later. */
+    let authCode = null
+    try {
+      authCode = await generateUniqueAuthCode(supabase)
+    } catch (e) {
+      console.warn('handleAddProject — auth code generation failed:', e)
+    }
+
     const { data, error } = await supabase.from('projects')
       .insert([{
         name: newName.trim(),
@@ -326,6 +342,7 @@ function ProjectsKanban() {
         archived: false,
         parent_project_id: newParentId || null,
         urgency: 'רגיל',
+        auth_code: authCode,
       }])
       .select().single()
     setAdding(false)
@@ -458,6 +475,104 @@ function ProjectsKanban() {
     setCtxChildPickedId('')
     setContextMenu(null)
     await fetchProjects()
+  }
+
+  /* ── Welcome-message composer ─────────────────────────────────────
+     Triggered from the context menu. Fetches the project's contacts on
+     demand (the kanban fetch doesn't join project_contacts), composes
+     a Hebrew "ברוכים הבאים" message that includes the per-contact
+     emails + the project's auth_code, and opens a popup with a copy
+     button. ── */
+  const handleOpenWelcomeMessage = async () => {
+    if (!contextMenu) return
+    const projectId = contextMenu.project.id
+    const authCode  = contextMenu.project.auth_code
+    setContextMenu(null)
+
+    let contacts = []
+    try {
+      const { data } = await supabase
+        .from('project_contacts')
+        .select('first_name, last_name, email')
+        .eq('project_id', projectId)
+        .order('id')
+      contacts = Array.isArray(data) ? data : []
+    } catch (e) {
+      console.warn('handleOpenWelcomeMessage — contacts fetch failed:', e)
+    }
+
+    /* lastName: first contact with a non-empty trimmed last_name. */
+    let lastName = null
+    for (const c of contacts) {
+      const ln = (c.last_name ?? '').trim()
+      if (ln) { lastName = ln; break }
+    }
+
+    /* Distinct emails, lower-cased for the dedupe key, original case
+       preserved for display. first_name kept alongside for the
+       multi-contact phrasing. */
+    const emailMap = new Map()
+    for (const c of contacts) {
+      const e = (c.email ?? '').trim()
+      if (!e) continue
+      const key = e.toLowerCase()
+      if (!emailMap.has(key)) {
+        emailMap.set(key, {
+          first_name: (c.first_name ?? '').trim(),
+          email:      e,
+        })
+      }
+    }
+    const distinctEntries = Array.from(emailMap.values())
+
+    let emailsBlock
+    if (distinctEntries.length === 0) {
+      emailsBlock = 'חשוב: ההתחברות חייבת להיות עם המייל הרשום אצלנו.'
+    } else if (distinctEntries.length === 1) {
+      emailsBlock = `חשוב: ההתחברות חייבת להיות עם המייל הרשום אצלנו: ${distinctEntries[0].email}`
+    } else {
+      const lines = distinctEntries
+        .map(e => `${e.first_name || '—'} — ${e.email}`)
+        .join('\n')
+      emailsBlock = `חשוב: ההתחברות חייבת להיות עם המייל הרשום אצלנו, כל אחד עם המייל שלו:\n${lines}`
+    }
+
+    const titleLine = lastName
+      ? `ברוכים הבאים משפחת ${lastName} 🏠`
+      : 'ברוכים הבאים 🏠'
+
+    const message = `${titleLine}
+
+שמחה לפתוח עבורכם את המרחב האישי שלכם בסטודיו בתים — מקום אחד שבו תוכלו לעקוב אחר התקדמות הפרויקט, לצפות במסמכים ולשתף איתנו קבצים.
+
+הכניסה למרחב היא דרך האתר שלנו:
+https://batim-es.com/
+דרך כפתור "כניסת משתמשים"
+
+${emailsBlock}
+
+ההמלצה שלנו היא להתחבר עם חשבון Google (הכי פשוט ומאובטח).
+
+אם המייל שלכם אינו חשבון Google, ניתן להירשם עם המייל הזה וסיסמה שתבחרו, באמצעות קוד ההרשאה:
+${authCode || '—'}
+
+אשמח לעמוד לרשותכם בכל שאלה 🤍
+עינב | סטודיו בתים`
+
+    setWelcomePopup({ message, copied: false })
+  }
+
+  const handleCopyWelcomeMessage = async () => {
+    if (!welcomePopup) return
+    try {
+      await navigator.clipboard.writeText(welcomePopup.message)
+      setWelcomePopup(prev => prev ? { ...prev, copied: true } : null)
+      setTimeout(() => {
+        setWelcomePopup(prev => prev ? { ...prev, copied: false } : null)
+      }, 2000)
+    } catch (e) {
+      console.warn('handleCopyWelcomeMessage — clipboard failed:', e)
+    }
   }
 
   const selectInquiry = (inq) => {
@@ -1036,6 +1151,27 @@ function ProjectsKanban() {
               </button>
             </>
           )}
+          {/* ── Read-only: the client's initial authorization code. Shown
+              so the manager can copy it and pass it on. The WhatsApp
+              glyph at the end opens the welcome-message popup composer
+              (same flow as the removed full-width button). ── */}
+          <div className="context-menu-divider" />
+          <div className="context-menu-row">
+            <span className="context-menu-label">קוד הרשאה לחיבור ראשוני:</span>
+            <span className="context-menu-value">{contextMenu.project.auth_code || '—'}</span>
+            <button
+              type="button"
+              className="context-menu-whatsapp-btn"
+              onClick={handleOpenWelcomeMessage}
+              title="הכנת הודעת ברוכים הבאים"
+              aria-label="הכנת הודעת ברוכים הבאים"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="#25D366" stroke="none" aria-hidden="true">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.936.526 3.745 1.438 5.291L2 22l4.842-1.417A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 11.999 2zm0 18a7.958 7.958 0 0 1-4.28-1.244l-.307-.182-3.18.93.972-3.093-.2-.317A7.958 7.958 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1196,6 +1332,36 @@ function ProjectsKanban() {
                 className="kanban-confirm-no"
                 onClick={() => { setParentConfirm(null); setCtxChildPickedId('') }}
               >ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Welcome-message popup — composed in handleOpenWelcomeMessage,
+            shown here with the message inside a pre-wrapped block plus a
+            Copy + Close pair. Reuses the standard modal-overlay; the
+            dialog itself uses a kanban-welcome-* class set so we can
+            give the message block its own styling (pre-wrap, selectable,
+            scrollable). ── */}
+      {welcomePopup && (
+        <div className="modal-overlay" onClick={() => setWelcomePopup(null)}>
+          <div className="kanban-welcome-dialog" onClick={e => e.stopPropagation()} dir="rtl">
+            <pre className="kanban-welcome-text">{welcomePopup.message}</pre>
+            <div className="kanban-confirm-actions">
+              <button
+                type="button"
+                className="kanban-confirm-yes"
+                onClick={handleCopyWelcomeMessage}
+              >
+                {welcomePopup.copied ? 'הועתק ✓' : 'העתק'}
+              </button>
+              <button
+                type="button"
+                className="kanban-confirm-no"
+                onClick={() => setWelcomePopup(null)}
+              >
+                סגור
+              </button>
             </div>
           </div>
         </div>

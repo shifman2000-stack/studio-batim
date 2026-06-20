@@ -1369,6 +1369,26 @@
   white-space: pre-wrap;     /* preserve manual line breaks from the manager */
 }
 
+/* Filled amber lightbulb shown in the "הערות כלליות" header. Lives as
+   a flex sibling — NOT inside cp-progress-header-name — so it can be
+   pushed to the visual LEFT end of the row via margin-inline-start.
+   The header's existing flex `gap: 10px` keeps a comfortable space
+   between the bulb and the chevron right next to it. */
+.cp-qty-notes-tip-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+/* The chevron normally pushes itself to the inline end via its own
+   `margin-inline-start: auto`. When the tip icon precedes it that
+   spring has already been absorbed by the icon, so the chevron must
+   drop its own auto-margin or the two would split the free space and
+   the icon would float into the middle of the row. */
+.cp-qty-notes-tip-icon + .cp-progress-chevron {
+  margin-inline-start: 0;
+}
+
 /* Points list (visible only when block is open) */
 .cp-progress-points {
   list-style: none;

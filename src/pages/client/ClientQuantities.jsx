@@ -21,6 +21,17 @@ const IconChevron = ({ size = 16 }) => (
   </svg>
 )
 
+/* Filled lightbulb — a "tip" affordance shown only on the "הערות
+   כלליות" block header. Solid amber so it reads as a friendly heads-up
+   on the cream palette; no stroke. Two sub-shapes: the bulb body and a
+   small base bar underneath. */
+const IconLightbulb = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="#F6BF26" stroke="none">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C17.81 13.47 19 11.38 19 9c0-3.87-3.13-7-7-7z"/>
+    <path d="M10 20v1c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-1h-4z"/>
+  </svg>
+)
+
 function clean(v) {
   if (v === null || v === undefined) return null
   const s = String(v).trim()
@@ -259,6 +270,9 @@ export default function ClientQuantities() {
                     onKeyDown={(e) => handleHeaderKeyDown(e, NOTES_KEY)}
                   >
                     <span className="cp-progress-header-name">הערות כלליות</span>
+                    <span className="cp-qty-notes-tip-icon" aria-hidden="true">
+                      <IconLightbulb size={16} />
+                    </span>
                     <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
                       <IconChevron size={16} />
                     </span>

@@ -15,6 +15,8 @@ import ClientFile from './client/ClientFile'
 import ClientDocuments from './client/ClientDocuments'
 import ClientSharedFiles from './client/ClientSharedFiles'
 import ClientQuantities from './client/ClientQuantities'
+import ClientFinishing from './client/ClientFinishing'
+import ClientContractorSpec from './client/ClientContractorSpec'
 import ClientProgress from './client/ClientProgress'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
@@ -64,8 +66,8 @@ const MENU_ITEMS = [
   { key: 'documents',    label: 'תיק מסמכים',       enabled: true,  Component: ClientDocuments },
   { key: 'shared',       label: 'מרחב משותף',       enabled: true,  Component: ClientSharedFiles },
   { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
-  { key: 'finishing',    label: 'חומרי גמר',        enabled: false, Component: ClientPlaceholder },
-  { key: 'contractor',   label: 'מפרט לקבלן',       enabled: false, Component: ClientPlaceholder },
+  { key: 'finishing',    label: 'חומרי גמר',        enabled: true,  Component: ClientFinishing },
+  { key: 'contractor',   label: 'מפרט לקבלן',       enabled: true,  Component: ClientContractorSpec },
   { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgress },
   { key: 'contact',      label: 'צור קשר',          enabled: true,  Component: ClientContact },
   /* "פרטי חשבון" — pinned at the drawer bottom as an avatar+name row.

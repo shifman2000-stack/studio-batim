@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+import { DEFAULT_CONTRACTOR_SPEC_NOTES } from '../../lib/projectNotesDefaults'
 import '../../ContractorSpecTab.css'
 import '../../TasksTab.css'       /* reuse .tt-col-delete, .tt-row-delete-btn, .tt-delete-confirm-*, .tt-add-row-* */
 import '../../FinishingTab.css'   /* reuse .ft-notes-* and .ft-pdf-* visual styles */
@@ -129,11 +130,6 @@ function AddCategoryRow({ onAdd }) {
   )
 }
 
-/* Default content pre-filled into the notes textarea when contractor_spec_notes
-   is NULL. NOT auto-saved — saved only when the user blurs / Ctrl+Enters via
-   the existing save logic. */
-const DEFAULT_CONTRACTOR_SPEC_NOTES = '* באחריות הקבלן לוודא כמויות סופיות בשטח למניעת חוסרים/עודפים'
-
 /* ────────────────────────────────────────────────────────────────
  * ContractorSpecTab — Phase 2: inline edit + delete + add (per category /
  * new pending category) + general notes + PDF export.
@@ -170,12 +166,32 @@ export default function ContractorSpecTab({ projectId }) {
         .eq('id', projectId)
         .single()
       if (data) {
-        const initialNotes = data.contractor_spec_notes === null
-          ? DEFAULT_CONTRACTOR_SPEC_NOTES
-          : data.contractor_spec_notes
-        setNotes(initialNotes)
-        setNotesSaved(data.contractor_spec_notes ?? null)
         setProjectName(data.name ?? '')
+        if (data.contractor_spec_notes === null) {
+          /* Auto-seed: NULL means "never set". Persist the default once
+             so the read-only client portal also sees the text. The
+             `.is('contractor_spec_notes', null)` guard makes the write
+             atomic — concurrent tabs race-safely no-op against a row
+             that's already been seeded. An explicit '' is a deliberate
+             "no notes" choice and is NOT seeded. */
+          try {
+            const { error } = await supabase
+              .from('projects')
+              .update({ contractor_spec_notes: DEFAULT_CONTRACTOR_SPEC_NOTES })
+              .eq('id', projectId)
+              .is('contractor_spec_notes', null)
+            if (error) throw error
+            setNotes(DEFAULT_CONTRACTOR_SPEC_NOTES)
+            setNotesSaved(DEFAULT_CONTRACTOR_SPEC_NOTES)
+          } catch (e) {
+            console.error('ContractorSpecTab — auto-seed notes failed:', e)
+            setNotes(DEFAULT_CONTRACTOR_SPEC_NOTES)
+            setNotesSaved(null)
+          }
+        } else {
+          setNotes(data.contractor_spec_notes)
+          setNotesSaved(data.contractor_spec_notes)
+        }
       }
       setNotesLoading(false)
     }

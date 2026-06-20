@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
-import { DEFAULT_QUANTITIES_NOTES } from './quantitiesDefaults'
+import { DEFAULT_QUANTITIES_NOTES } from '../../lib/projectNotesDefaults'
 import '../../QuantitiesTab.css'
 import '../../TasksTab.css'       /* reuse .tt-col-delete, .tt-row-delete-btn, .tt-delete-confirm-*, .tt-add-row-* */
 import '../../FinishingTab.css'   /* reuse .ft-notes-* and .ft-pdf-* visual styles */

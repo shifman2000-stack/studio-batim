@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+import { DEFAULT_FINISHING_NOTES } from '../../lib/projectNotesDefaults'
 import '../../FinishingTab.css'
 import '../../Professionals.css'  /* reuse .prof-autocomplete-* for supplier suggestions */
 import '../../TasksTab.css'       /* reuse .tt-col-delete, .tt-row-delete-btn, .tt-delete-confirm-*, .tt-add-row-* */
@@ -244,11 +245,6 @@ export default function FinishingTab({ projectId }) {
 
   useEffect(() => { loadItems() }, [projectId])
 
-  /* Default disclaimer pre-filled into the textarea when finishing_notes is NULL
-     (project never had notes yet). NOT auto-saved — saved only when the user
-     blurs / Ctrl+Enters, via the existing save logic. */
-  const DEFAULT_FINISHING_NOTES = 'באחריות הלקוח לוודא כמויות סופיות בשטח למניעת חוסרים/עודפים'
-
   /* ── Fetch the project's general finishing notes ── */
   useEffect(() => {
     const fetchNotes = async () => {
@@ -262,14 +258,36 @@ export default function FinishingTab({ projectId }) {
         .eq('id', projectId)
         .single()
       if (data) {
-        /* If NULL → show the default disclaimer. Anything else (including '')
-           is treated as the user's deliberate value and shown as-is. */
-        const initialNotes = data.finishing_notes === null
-          ? DEFAULT_FINISHING_NOTES
-          : data.finishing_notes
-        setNotes(initialNotes)
-        setNotesSaved(data.finishing_notes ?? null)
         setProjectName(data.name ?? '')
+        if (data.finishing_notes === null) {
+          /* Auto-seed: NULL means "never set". Persist the default once
+             so the read-only client portal also sees the text. The
+             `.is('finishing_notes', null)` guard makes the write atomic
+             — concurrent tabs race-safely no-op against a row that's
+             already been seeded. An explicit '' is a deliberate "no
+             notes" choice and is NOT seeded. */
+          try {
+            const { error } = await supabase
+              .from('projects')
+              .update({ finishing_notes: DEFAULT_FINISHING_NOTES })
+              .eq('id', projectId)
+              .is('finishing_notes', null)
+            if (error) throw error
+            setNotes(DEFAULT_FINISHING_NOTES)
+            setNotesSaved(DEFAULT_FINISHING_NOTES)
+          } catch (e) {
+            console.error('FinishingTab — auto-seed notes failed:', e)
+            /* Show the default in the textarea but leave notesSaved as
+               null so a later onBlur (or the next mount) can retry. */
+            setNotes(DEFAULT_FINISHING_NOTES)
+            setNotesSaved(null)
+          }
+        } else {
+          /* Non-null branch — including a deliberate '' — shown as-is.
+             saveNotes' dirty check keeps onBlur a no-op unless edited. */
+          setNotes(data.finishing_notes)
+          setNotesSaved(data.finishing_notes)
+        }
       }
       setNotesLoading(false)
     }

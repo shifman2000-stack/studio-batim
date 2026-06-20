@@ -62,7 +62,7 @@ const MENU_ITEMS = [
   { key: 'home',         label: 'דף בית',           enabled: true,  Component: ClientHome },
   { key: 'file',         label: 'פרטי תיק',         enabled: true,  Component: ClientFile },
   { key: 'documents',    label: 'תיק מסמכים',       enabled: true,  Component: ClientDocuments },
-  { key: 'shared',       label: 'מרחב קבצים משותף', enabled: true,  Component: ClientSharedFiles },
+  { key: 'shared',       label: 'מרחב משותף',       enabled: true,  Component: ClientSharedFiles },
   { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
   { key: 'finishing',    label: 'חומרי גמר',        enabled: false, Component: ClientPlaceholder },
   { key: 'contractor',   label: 'מפרט לקבלן',       enabled: false, Component: ClientPlaceholder },

@@ -86,6 +86,12 @@ function App() {
   }
 
   // ── LOGIN ──
+  // After a successful email+password sign-in we route through
+  // /auth/callback so the SAME router that handles Google decides where
+  // the user lands (staff via profiles → app, client via
+  // link_client_on_login → /client, neither → /no-access). The previous
+  // profiles-only fork would silently send clients to /tasks because
+  // they don't have a profiles row.
   const handleLogin = async (e) => {
     e.preventDefault()
     setErrorMsg('')
@@ -101,17 +107,7 @@ function App() {
     if (error) {
       setErrorMsg('אימייל או סיסמה שגויים')
     } else {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-      if (profile?.role === 'admin') {
-        navigate('/פרויקטים')
-      } else {
-        navigate('/tasks')
-      }
+      navigate('/auth/callback')
     }
   }
 
@@ -157,20 +153,42 @@ function App() {
 
     const userId = signUpData.user?.id
 
-    // 3. Insert into profiles
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({ id: userId, first_name: firstName, last_name: lastName, role })
+    // 3. Branch by role.
+    //    - staff (admin/employee) → profiles row (unchanged legacy path).
+    //    - client                 → NO profiles row; the client_users row
+    //      is created on the next authenticated request by the
+    //      link_client_on_login RPC (Phase B), same path the Google flow
+    //      uses. Inserting into profiles here would create a stale
+    //      legacy "client" profile that breaks the AuthCallback router.
+    if (role !== 'client') {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({ id: userId, first_name: firstName, last_name: lastName, role })
+
+      if (profileError) {
+        setLoading(false)
+        setErrorMsg('שגיאה בשמירת הפרופיל')
+        return
+      }
+    }
 
     setLoading(false)
 
-    if (profileError) {
-      setErrorMsg('שגיאה בשמירת הפרופיל')
-      return
+    // 4. Routing.
+    //    Supabase returns an active session from signUp() only when the
+    //    project's "Confirm email" auth setting is DISABLED. When it is,
+    //    we drive the new session straight through /auth/callback so the
+    //    same router that handles Google decides where the user lands
+    //    (staff → app, client → link_client_on_login → /client).
+    //    When email-confirmation is ENABLED, signUpData.session is null
+    //    and the user must click the verification link first; fall back
+    //    to the legacy "success → switch to login" UX in that case.
+    if (signUpData.session) {
+      navigate('/auth/callback')
+    } else {
+      setSuccessMsg('נרשמת בהצלחה! כעת תוכל להתחבר')
+      setMode('login')
     }
-
-    setSuccessMsg('נרשמת בהצלחה! כעת תוכל להתחבר')
-    setMode('login')
   }
 
   // ── FORGOT PASSWORD ──

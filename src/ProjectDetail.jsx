@@ -25,21 +25,14 @@ const CONTROLLABLE_BY_MANAGER_ID = Object.fromEntries(
   CONTROLLABLE_TABS.map(t => [t.managerTabId, t])
 )
 
-/* Small Feather-style icons for the tab-bar visibility affordance.
-   The "off" variant is the same user shape with a diagonal slash. */
+/* Small Feather-style person icon used in the tab-bar visibility
+   affordance. Rendered ONLY when the controllable tab is currently
+   visible to the client. Hidden tabs show nothing (no off-variant). */
 const IconUser = ({ size = 13 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
-  </svg>
-)
-const IconUserOff = ({ size = 13 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
-    <line x1="3" y1="3" x2="21" y2="21"/>
   </svg>
 )
 
@@ -225,14 +218,14 @@ function PdEditCell({ task, field, className, children,
 const TABS = [
   { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
-  { id: 3, label: 'מעקב שלבי התקדמות' },
+  { id: 3, label: 'מעקב פרויקט' },
   { id: 2, label: 'מעקב מסמכים' },
   { id: 6, label: 'כתב כמויות' },
   { id: 7, label: 'חומרי גמר' },
   { id: 9, label: 'מפרט לקבלן' },
   { id: 10, label: 'מרחב משותף' },
   { id: 4, label: 'שעות', disabled: true },
-  { id: 8, label: 'גאנט' },
+  { id: 8, label: 'שלבי התקדמות' },
 ]
 
 /* ── Professional roles (card 3) ── */
@@ -841,12 +834,12 @@ function ProjectDetail() {
               disabled={tab.disabled}
             >
               {tab.label}
-              {ctrl && (
+              {ctrl && visible && (
                 <span
-                  className={'pd-tab-vis-icon' + (visible ? '' : ' pd-tab-vis-icon--off')}
-                  title={visible ? 'מוצג ללקוח (קליק-ימני לשינוי)' : 'מוסתר מהלקוח (קליק-ימני לשינוי)'}
+                  className="pd-tab-vis-icon"
+                  title="מוצג ללקוח (קליק-ימני לשינוי)"
                 >
-                  {visible ? <IconUser size={13} /> : <IconUserOff size={13} />}
+                  <IconUser size={13} />
                 </span>
               )}
               {tab.disabled && <span className="pd-tab-soon">בקרוב</span>}

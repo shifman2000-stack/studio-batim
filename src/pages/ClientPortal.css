@@ -1389,6 +1389,31 @@
   margin-inline-start: 0;
 }
 
+/* ── Client meetings — rendered HTML body inside an open accordion
+   block. Mirrors the manager's .ms-md-body so bold + ordered lists
+   look the same on both sides. Lists are forced RTL with markers on
+   the visual right; padding-inline-end pushes the text leftward so
+   numbers don't collide with the wrapper. ── */
+.cp-meetings-body {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1a1a18;
+  font-family: 'Heebo', sans-serif;
+}
+.cp-meetings-body p { margin: 0 0 8px; }
+.cp-meetings-body p:last-child { margin-bottom: 0; }
+.cp-meetings-body strong { font-weight: 700; color: #1a1a18; }
+.cp-meetings-body ol,
+.cp-meetings-body ul {
+  margin: 6px 0;
+  direction: rtl;
+  list-style-position: outside;
+  padding-inline-end: 28px;       /* RTL: markers sit on the right */
+  padding-inline-start: 0;
+}
+.cp-meetings-body li { margin: 2px 0; }
+.cp-meetings-body a { color: #7a9478; text-decoration: underline; }
+
 /* Points list (visible only when block is open) */
 .cp-progress-points {
   list-style: none;

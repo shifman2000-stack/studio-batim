@@ -18,6 +18,7 @@ import ClientQuantities from './client/ClientQuantities'
 import ClientFinishing from './client/ClientFinishing'
 import ClientContractorSpec from './client/ClientContractorSpec'
 import ClientProgress from './client/ClientProgress'
+import ClientMeetings from './client/ClientMeetings'
 import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
@@ -69,6 +70,7 @@ const MENU_ITEMS = [
   { key: 'finishing',    label: 'חומרי גמר',        enabled: true,  Component: ClientFinishing },
   { key: 'contractor',   label: 'מפרט לקבלן',       enabled: true,  Component: ClientContractorSpec },
   { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgress },
+  { key: 'meetings',     label: 'סיכומי פגישות',    enabled: true,  Component: ClientMeetings },
   { key: 'contact',      label: 'צור קשר',          enabled: true,  Component: ClientContact },
   /* "פרטי חשבון" — pinned at the drawer bottom as an avatar+name row.
      Excluded from the main menu loop via the `footer: true` flag, but

@@ -9,6 +9,7 @@ import TasksTab from './components/tasks/TasksTab'
 import FinishingTab from './components/finishing/FinishingTab'
 import QuantitiesTab from './components/quantities/QuantitiesTab'
 import ContractorSpecTab from './components/contractorspec/ContractorSpecTab'
+import MeetingSummariesTab from './components/meetings/MeetingSummariesTab'
 import NewTaskModal from './NewTaskModal'
 import ProjectGantt from './components/ProjectGantt'
 import {
@@ -219,6 +220,7 @@ const TABS = [
   { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
   { id: 3, label: 'מעקב פרויקט' },
+  { id: 11, label: 'סיכומי פגישות' },
   { id: 2, label: 'מעקב מסמכים' },
   { id: 6, label: 'כתב כמויות' },
   { id: 7, label: 'חומרי גמר' },
@@ -1162,6 +1164,11 @@ function ProjectDetail() {
         {/* ── Tab 3 — מעקב שלבי התקדמות ── */}
         {activeTab === 3 && (
           <TasksTab projectId={id} />
+        )}
+
+        {/* ── Tab 11 — סיכומי פגישות ── */}
+        {activeTab === 11 && (
+          <MeetingSummariesTab projectId={id} />
         )}
 
         {/* ── Tab 6 — כתב כמויות ── */}

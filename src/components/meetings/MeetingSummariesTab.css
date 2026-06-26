@@ -1,0 +1,384 @@
+/* src/components/meetings/MeetingSummariesTab.css
+   Visual language matches the other manager tabs (quantities/finishing
+   /contractor): cream surface, charcoal text, Heebo, sand borders. */
+
+.ms-root {
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+  color: #1a1a18;
+}
+
+/* ── Top toolbar — "+ סיכום פגישה חדש" ── */
+.ms-toolbar {
+  display: flex;
+  justify-content: flex-start;   /* RTL: visual right */
+  margin-bottom: 14px;
+}
+
+.ms-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #c8bfb0;
+  color: #7a9478;
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.ms-add-btn:hover:not(:disabled) {
+  background: rgba(122, 148, 120, 0.08);
+  border-color: #7a9478;
+}
+.ms-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Error banner ── */
+.ms-error {
+  background: #fff5f5;
+  border: 1px solid #f4c8c8;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #a83232;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* ── Loading + empty ── */
+.ms-loading,
+.ms-empty {
+  font-size: 13.5px;
+  color: #8a8680;
+  padding: 18px 4px;
+  margin: 0;
+}
+
+/* ── Meeting card ── */
+.ms-card {
+  background: #ffffff;
+  border: 1px solid #ece8df;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.ms-card--editing,
+.ms-card--draft {
+  border-color: #c8bfb0;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+}
+
+.ms-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f3efe8;
+}
+
+/* When the header doubles as the accordion toggle: clickable look,
+   keyboard focus ring, and the bottom rule only when the card is
+   currently open (collapsed cards read as a single clean row). */
+.ms-card-header--toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.ms-card-header--toggle:focus-visible {
+  outline: 2px solid rgba(122, 148, 120, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.ms-card-header:not(.ms-card-header--open) {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+/* Chevron at the visual left edge of the header — rotates 180° when
+   the card is open. */
+.ms-card-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: #8a8680;
+  transition: transform 0.2s ease;
+  margin-inline-start: 2px;
+}
+.ms-card-chevron--open {
+  transform: rotate(180deg);
+}
+
+.ms-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: #1a1a18;
+}
+
+.ms-card-date {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-card-sep {
+  color: #c8bfb0;
+}
+
+.ms-card-participants {
+  color: #4a4a48;
+  font-weight: 400;
+}
+
+.ms-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ms-icon-btn {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: #8a8680;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.ms-icon-btn:hover,
+.ms-icon-btn:focus-visible {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1a1a18;
+  outline: none;
+}
+.ms-icon-btn--danger:hover {
+  color: #a83232;
+}
+
+/* ── Inline delete confirm ── */
+.ms-confirm-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #4a4a48;
+}
+.ms-confirm-text { font-weight: 500; }
+.ms-confirm-yes,
+.ms-confirm-no {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  background: #fff;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.ms-confirm-yes {
+  color: #c0392b;
+  border-color: #f4c8c8;
+}
+.ms-confirm-yes:hover {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+.ms-confirm-no {
+  color: #4a4a48;
+  border-color: #d1d5db;
+}
+.ms-confirm-no:hover { background: #f3f4f6; }
+
+/* ── View-mode body — renders the editor's stored HTML verbatim.
+   Container class is .ms-md-body inside the card; .ms-card-body kept
+   for layout/wrapping niceties. ── */
+.ms-card-body {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1a1a18;
+}
+.ms-md-body {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1a1a18;
+}
+.ms-md-body p { margin: 0 0 8px; }
+.ms-md-body p:last-child { margin-bottom: 0; }
+.ms-md-body strong { font-weight: 700; color: #1a1a18; }
+.ms-md-body ol,
+.ms-md-body ul {
+  margin: 6px 0;
+  padding-inline-start: 28px;
+  list-style-position: outside;
+}
+.ms-md-body li { margin: 2px 0; }
+.ms-md-body a { color: #7a9478; text-decoration: underline; }
+
+.ms-card-empty {
+  color: #8a8680;
+  margin: 0;
+}
+
+/* ── Edit form ── */
+.ms-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ms-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ms-edit-row--md {
+  gap: 6px;
+}
+
+.ms-edit-label {
+  font-size: 12px;
+  color: #8a8680;
+  font-weight: 500;
+}
+
+.ms-edit-input {
+  background: #fff;
+  border: 1px solid #d6d2c7;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13.5px;
+  color: #1a1a18;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.ms-edit-input:focus { border-color: #7a9478; }
+
+/* ── Rich-text (TipTap) editor — toolbar + ProseMirror surface ── */
+.rte-root {
+  direction: rtl;
+}
+
+.rte-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.rte-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f7f5f2;
+  border: 1px solid #d6d2c7;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  color: #1a1a18;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.rte-tool-btn:hover,
+.rte-tool-btn:focus-visible {
+  background: rgba(122, 148, 120, 0.10);
+  border-color: #7a9478;
+  outline: none;
+}
+.rte-tool-btn--active {
+  background: #7a9478;
+  border-color: #7a9478;
+  color: #ffffff;
+}
+.rte-tool-btn--active .rte-tool-label { color: #ffffff; }
+.rte-tool-label {
+  font-size: 11.5px;
+  color: #4a4a48;
+}
+
+/* The editable surface itself (ProseMirror). attributes.class on the
+   editor sets `.rte-content` on the contenteditable root. */
+.rte-content {
+  background: #fff;
+  border: 1px solid #d6d2c7;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13.5px;
+  color: #1a1a18;
+  line-height: 1.6;
+  min-height: 140px;
+  outline: none;
+  transition: border-color 0.12s;
+  direction: rtl;
+  text-align: right;
+}
+.rte-content:focus { border-color: #7a9478; }
+.rte-content p { margin: 0 0 8px; }
+.rte-content p:last-child { margin-bottom: 0; }
+.rte-content strong { font-weight: 700; }
+.rte-content ol,
+.rte-content ul {
+  margin: 6px 0;
+  padding-inline-start: 28px;        /* RTL: list markers sit on the right; padding pushes text leftward */
+  list-style-position: outside;
+}
+.rte-content ol li,
+.rte-content ul li { margin: 2px 0; }
+
+/* ── Save/cancel actions ── */
+.ms-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;   /* RTL: visual right */
+  margin-top: 4px;
+}
+
+.ms-btn-primary,
+.ms-btn-secondary {
+  border-radius: 6px;
+  padding: 7px 18px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.ms-btn-primary {
+  background: #7a9478;
+  border: 1px solid #7a9478;
+  color: #fff;
+}
+.ms-btn-primary:hover:not(:disabled) {
+  background: #5d7259;
+  border-color: #5d7259;
+}
+
+.ms-btn-secondary {
+  background: #fff;
+  border: 1px solid #C1BCAF;
+  color: #1a1a18;
+}
+.ms-btn-secondary:hover:not(:disabled) {
+  background: #f7f5f2;
+  border-color: #a8a39a;
+}
+
+.ms-btn-primary:disabled,
+.ms-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

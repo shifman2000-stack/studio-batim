@@ -23,6 +23,7 @@ export const CONTROLLABLE_TABS = [
   { managerTabId: 9,  clientKey: 'contractor',  defaultVisible: false, label: 'מפרט לקבלן' },
   { managerTabId: 10, clientKey: 'shared',      defaultVisible: true,  label: 'מרחב משותף' },
   { managerTabId: 8,  clientKey: 'progress',    defaultVisible: false, label: 'גאנט' },
+  { managerTabId: 11, clientKey: 'meetings',    defaultVisible: false, label: 'סיכומי פגישות' },
 ]
 
 export const DEFAULT_CLIENT_TAB_VISIBILITY = CONTROLLABLE_TABS.reduce((acc, t) => {

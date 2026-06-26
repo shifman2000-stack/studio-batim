@@ -56,6 +56,7 @@ export default function RichTextEditor({ value, onChange, placeholder }) {
 
   const isBold        = editor.isActive('bold')
   const isOrderedList = editor.isActive('orderedList')
+  const isBulletList  = editor.isActive('bulletList')
 
   return (
     <div className="rte-root" dir="rtl">
@@ -79,6 +80,16 @@ export default function RichTextEditor({ value, onChange, placeholder }) {
         >
           <span style={{ fontWeight: 600 }}>1.</span>
           <span className="rte-tool-label">רשימה ממוספרת</span>
+        </button>
+        <button
+          type="button"
+          className={'rte-tool-btn' + (isBulletList ? ' rte-tool-btn--active' : '')}
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          title="רשימה (כוכביות)"
+          aria-pressed={isBulletList}
+        >
+          <span style={{ fontWeight: 700, fontSize: 14, lineHeight: 1 }}>*</span>
+          <span className="rte-tool-label">רשימה</span>
         </button>
       </div>
 

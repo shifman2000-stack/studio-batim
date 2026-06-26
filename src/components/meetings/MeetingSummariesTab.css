@@ -117,22 +117,91 @@
 
 .ms-card-meta {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   font-size: 13.5px;
   color: #1a1a18;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Primary line: date + optional topic. When a topic exists, the topic
+   carries the visual weight and the date drops to small/muted metadata. */
+.ms-card-primary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .ms-card-date {
   font-weight: 600;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
+  color: #1a1a18;
+}
+
+/* Date demoted when a topic is alongside it on the same row. */
+.ms-card-date--with-topic {
+  font-weight: 400;
+  font-size: 12.5px;
+  color: #8a8680;
+}
+
+.ms-card-topic {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1a1a18;
+}
+
+/* ── 2-line clamp on the meeting topic in the collapsed card header.
+   The parent .ms-card-primary already has `flex-wrap: wrap` and the
+   surrounding .ms-card-meta is `min-width: 0; flex: 1`, so the topic
+   already has room to wrap onto its own line beneath the date when
+   needed. This rule caps that wrap at two lines and adds an ellipsis,
+   plus word-break so a single long unbroken string still wraps instead
+   of overflowing the card. Applied only to .ms-meeting-topic so the
+   non-meeting reuse of .ms-card-topic (none today, but the class is
+   generic) stays unaffected. ── */
+.ms-meeting-topic {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Participants line at the top of the expanded view-mode card body —
+   small, muted, sits above .ms-md-body. Hidden entirely when the field
+   is empty (controlled by the JSX, not CSS). */
+.ms-meeting-participants {
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a8680;
+  margin: 0 0 10px;
+  line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .ms-card-sep {
   color: #c8bfb0;
 }
 
+/* Secondary line: participants, smaller and muted so the title dominates. */
+.ms-card-secondary {
+  font-size: 12px;
+  color: #8a8680;
+  font-weight: 400;
+}
+
+/* Legacy class kept for any external reference; not used after the
+   refactor. */
 .ms-card-participants {
   color: #4a4a48;
   font-weight: 400;
@@ -213,17 +282,46 @@
   font-size: 14px;
   line-height: 1.65;
   color: #1a1a18;
+  /* RTL: inline-start = right edge. Small breathing room so text and
+     list markers don't sit flush against the card's right edge. */
+  padding-inline-start: 10px;
 }
 .ms-md-body p { margin: 0 0 8px; }
 .ms-md-body p:last-child { margin-bottom: 0; }
 .ms-md-body strong { font-weight: 700; color: #1a1a18; }
-.ms-md-body ol,
-.ms-md-body ul {
+
+/* Numbered list — markers stay native, padding pushes text leftward
+   so the digits sit on the right (inline-start in RTL). */
+.ms-md-body ol {
   margin: 6px 0;
   padding-inline-start: 28px;
   list-style-position: outside;
 }
-.ms-md-body li { margin: 2px 0; }
+.ms-md-body ol li { margin: 2px 0; }
+
+/* Bullet (asterisk) list — no native marker; an absolutely-positioned
+   ::before draws the asterisk at the inline-start edge of each li.
+   Same approach mirrored in .rte-content and .cp-meetings-body. */
+.ms-md-body ul {
+  margin: 6px 0;
+  padding-inline-start: 0;
+  list-style: none;
+}
+.ms-md-body ul li {
+  position: relative;
+  padding-inline-start: 18px;
+  margin: 2px 0;
+}
+.ms-md-body ul li::before {
+  content: '*';
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 0;
+  font-weight: 700;
+  color: #1a1a18;
+  line-height: 1.65;
+}
+
 .ms-md-body a { color: #7a9478; text-decoration: underline; }
 
 .ms-card-empty {
@@ -315,6 +413,10 @@
   border: 1px solid #d6d2c7;
   border-radius: 6px;
   padding: 10px 12px;
+  /* RTL: same inline-start breathing room as the rendered bodies, so
+     the editor and view modes look identical. Overrides the 12px from
+     the shorthand on the start side only. */
+  padding-inline-start: 10px;
   font-family: 'Heebo', sans-serif;
   font-size: 13.5px;
   color: #1a1a18;
@@ -329,14 +431,38 @@
 .rte-content p { margin: 0 0 8px; }
 .rte-content p:last-child { margin-bottom: 0; }
 .rte-content strong { font-weight: 700; }
-.rte-content ol,
-.rte-content ul {
+
+/* Numbered list — native marker, padding pushes text leftward so the
+   digits sit on the right (inline-start in RTL). */
+.rte-content ol {
   margin: 6px 0;
-  padding-inline-start: 28px;        /* RTL: list markers sit on the right; padding pushes text leftward */
+  padding-inline-start: 28px;
   list-style-position: outside;
 }
-.rte-content ol li,
-.rte-content ul li { margin: 2px 0; }
+.rte-content ol li { margin: 2px 0; }
+
+/* Bullet (asterisk) list — no native marker; ::before draws a "*" at
+   the inline-start edge of each li. Mirrors the rendered .ms-md-body
+   and .cp-meetings-body so the editor matches the saved view. */
+.rte-content ul {
+  margin: 6px 0;
+  padding-inline-start: 0;
+  list-style: none;
+}
+.rte-content ul li {
+  position: relative;
+  padding-inline-start: 18px;
+  margin: 2px 0;
+}
+.rte-content ul li::before {
+  content: '*';
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 0;
+  font-weight: 700;
+  color: #1a1a18;
+  line-height: 1.6;
+}
 
 /* ── Save/cancel actions ── */
 .ms-edit-actions {

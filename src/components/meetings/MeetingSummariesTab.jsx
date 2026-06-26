@@ -70,6 +70,7 @@ function MeetingEditForm({
   onCancel,
   saving,
 }) {
+  const [topicValue,   setTopicValue]   = useState(initial.topic        ?? '')
   const [meetingDate,  setMeetingDate]  = useState(initial.meeting_date ?? todayISO())
   const [participants, setParticipants] = useState(initial.participants ?? '')
   const [summaryHtml,  setSummaryHtml]  = useState(initial.summary_md   ?? '')
@@ -77,6 +78,7 @@ function MeetingEditForm({
   const handleSubmit = (e) => {
     e.preventDefault()
     onSave({
+      topic:        topicValue.trim() || null,
       meeting_date: meetingDate || todayISO(),
       participants: participants.trim() || null,
       summary_md:   summaryHtml,
@@ -85,6 +87,18 @@ function MeetingEditForm({
 
   return (
     <form className="ms-edit-form" onSubmit={handleSubmit} dir="rtl">
+      <div className="ms-edit-row">
+        <label className="ms-edit-label">נושא הפגישה</label>
+        <input
+          type="text"
+          className="ms-edit-input"
+          value={topicValue}
+          onChange={e => setTopicValue(e.target.value)}
+          placeholder="נושא הפגישה"
+          dir="rtl"
+        />
+      </div>
+
       <div className="ms-edit-row">
         <label className="ms-edit-label">תאריך הפגישה</label>
         <input
@@ -170,7 +184,7 @@ export default function MeetingSummariesTab({ projectId }) {
     setLoading(true)
     const { data, error } = await supabase
       .from('meeting_summaries')
-      .select('*')
+      .select('id, project_id, meeting_date, topic, participants, summary_md, source, created_by, created_at, updated_at')
       .eq('project_id', projectId)
       .order('meeting_date', { ascending: false })
       .order('created_at',   { ascending: false })
@@ -198,6 +212,7 @@ export default function MeetingSummariesTab({ projectId }) {
         .from('meeting_summaries')
         .insert({
           project_id:   projectId,
+          topic:        payload.topic,
           meeting_date: payload.meeting_date,
           participants: payload.participants,
           summary_md:   payload.summary_md,
@@ -222,6 +237,7 @@ export default function MeetingSummariesTab({ projectId }) {
     setErrorMsg('')
     try {
       const patch = {
+        topic:        payload.topic,
         meeting_date: payload.meeting_date,
         participants: payload.participants,
         summary_md:   payload.summary_md,
@@ -284,7 +300,7 @@ export default function MeetingSummariesTab({ projectId }) {
       {draftNew && (
         <section className="ms-card ms-card--draft">
           <MeetingEditForm
-            initial={{ meeting_date: todayISO(), participants: '', summary_md: '' }}
+            initial={{ topic: '', meeting_date: todayISO(), participants: '', summary_md: '' }}
             onSave={handleCreate}
             onCancel={() => setDraftNew(false)}
             saving={savingRow}
@@ -324,15 +340,24 @@ export default function MeetingSummariesTab({ projectId }) {
                     onClick={() => toggleOpen(s.id)}
                     onKeyDown={(e) => handleHeaderKeyDown(e, s.id)}
                   >
-                    <div className="ms-card-meta">
-                      <span className="ms-card-date">{formatDate(s.meeting_date)}</span>
-                      {s.participants && (
-                        <>
-                          <span className="ms-card-sep">·</span>
-                          <span className="ms-card-participants">{s.participants}</span>
-                        </>
-                      )}
-                    </div>
+                    {(() => {
+                      const topic = (s.topic ?? '').trim()
+                      return (
+                        <div className="ms-card-meta">
+                          <div className="ms-card-primary">
+                            <span className={'ms-card-date' + (topic ? ' ms-card-date--with-topic' : '')}>
+                              {formatDate(s.meeting_date)}
+                            </span>
+                            {topic && (
+                              <>
+                                <span className="ms-card-sep">·</span>
+                                <span className="ms-card-topic ms-meeting-topic">{topic}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                     <div className="ms-card-actions">
                       {isOpen && (
                         isConfirming ? (
@@ -386,20 +411,29 @@ export default function MeetingSummariesTab({ projectId }) {
                     </div>
                   </div>
 
-                  {isOpen && (
-                    <div className="ms-card-body">
-                      {s.summary_md && s.summary_md.trim() ? (
-                        /* Trusted, staff-authored HTML from our own
-                           TipTap editor. Rendered as-is. */
-                        <div
-                          className="ms-md-body"
-                          dangerouslySetInnerHTML={{ __html: s.summary_md }}
-                        />
-                      ) : (
-                        <p className="ms-card-empty">—</p>
-                      )}
-                    </div>
-                  )}
+                  {isOpen && (() => {
+                    const participants = (s.participants ?? '').trim()
+                    const hasSummary   = !!(s.summary_md && s.summary_md.trim())
+                    return (
+                      <div className="ms-card-body">
+                        {participants && (
+                          <p className="ms-meeting-participants">
+                            משתתפים: {participants}
+                          </p>
+                        )}
+                        {hasSummary ? (
+                          /* Trusted, staff-authored HTML from our own
+                             TipTap editor. Rendered as-is. */
+                          <div
+                            className="ms-md-body"
+                            dangerouslySetInnerHTML={{ __html: s.summary_md }}
+                          />
+                        ) : (
+                          <p className="ms-card-empty">—</p>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </>
               )}
             </section>

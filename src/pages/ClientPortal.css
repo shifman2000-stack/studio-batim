@@ -104,6 +104,91 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   min-height: 0;               /* allows flex child to actually shrink */
+  position: relative;          /* anchor for .cp-screen-back */
+}
+
+/* ── SHARED SCREEN HEADER (single source of truth) ──────────────────
+   One header pattern, used in TWO places so they look identical:
+     * ClientPortal.jsx <main className="cp-content cp-content--with-header">
+       — for every content screen (file, documents, shared, quantities,
+         finishing, contractor, progress, meetings).
+     * ClientHome.jsx — for the group sub-screen.
+
+   Layout: a single flex row at the TOP of the screen area. In RTL the
+   first DOM child paints on the visual RIGHT and the last on the
+   visual LEFT, so DOM order `[title, back]` renders as:
+
+       [ group / screen title ─────────────  (←) ]
+              right (RTL start)              visual LEFT edge
+
+   The title takes the remaining row width (flex: 1 + text-align: right
+   + nowrap+ellipsis). The back button is a fixed-footprint circle. */
+.cp-screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 12px 10px;
+  background: transparent;
+  margin: 0;
+}
+
+.cp-screen-header-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: 'Heebo', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a18;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+/* Curved back button — a regular flex item at the visual LEFT slot of
+   .cp-screen-header. No fixed/absolute positioning; the row owns the
+   layout. Same 40×40 sage-circle look in every place it appears. */
+.cp-screen-back {
+  position: static;
+  top: auto;
+  left: auto;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d9d6cd;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 50%;
+  color: #5d7259;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  z-index: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.cp-screen-back:hover,
+.cp-screen-back:focus-visible {
+  background: #ffffff;
+  border-color: #7a9478;
+  color: #3f5a3e;
+  outline: none;
+}
+.cp-screen-back:active {
+  transform: scale(0.96);
+}
+
+/* When the wrapper renders the shared title (.cp-content--with-header),
+   suppress each screen's own .cp-screen-title to avoid duplication.
+   Screens like ClientFile that use a different element (.cp-header /
+   .cp-project-name) are unaffected — they keep their project-name row
+   below the shared header, which is the intended layout. */
+.cp-content--with-header .cp-screen-title {
+  display: none;
 }
 
 /* ── Drawer overlay (dim layer) ── */
@@ -254,6 +339,108 @@
   background: #f3efe7;
   border-right-color: #7a9478; /* sage accent on the start edge (RTL right) */
   color: #1a1a18;
+}
+
+/* ── Drawer group accordion (PART B) ──────────────────────────────────
+   A "group" with 2+ visible children renders as a header row that toggles
+   an indented sub-list. Single-child groups still use plain .cp-menu-item.
+
+   .cp-menu-group           — wraps header + children list
+   .cp-menu-group-header    — same height/typography as .cp-menu-item,
+                              with a chevron pinned on the visual LEFT
+                              (RTL: inline-end = visual left)
+   .cp-menu-group-chevron   — rotates 180° when the group is expanded
+   .cp-menu-group-children  — the indented sub-list
+   .cp-menu-subitem         — a single child row inside a group
+*/
+.cp-menu-group {
+  display: block;
+}
+
+.cp-menu-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 22px;
+  border: none;
+  background: transparent;
+  font-family: 'Heebo', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a18;
+  text-align: right;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-right: 3px solid transparent;     /* matches .cp-menu-item alignment */
+}
+.cp-menu-group-header:hover,
+.cp-menu-group-header:focus-visible {
+  background: #f7f5f2;
+  outline: none;
+}
+.cp-menu-group-header--active {
+  border-right-color: #7a9478;             /* sage accent when group contains active screen */
+}
+.cp-menu-group-header--open {
+  background: #fbf9f4;
+}
+.cp-menu-group-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-menu-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a8680;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-inline-start: 8px;                /* RTL: visual LEFT side gap */
+}
+.cp-menu-group-chevron--open {
+  transform: rotate(180deg);
+  color: #5d7259;
+}
+
+.cp-menu-group-children {
+  display: flex;
+  flex-direction: column;
+  background: #fbf9f4;                     /* subtle separation from parent rows */
+  padding-block: 4px;
+}
+
+.cp-menu-subitem {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding-block: 10px;
+  padding-inline-start: 38px;              /* RTL: visual RIGHT — indents text from the start edge */
+  padding-inline-end: 22px;                /* RTL: visual LEFT — matches parent gutter */
+  border: none;
+  background: transparent;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #3a3a36;
+  text-align: right;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cp-menu-subitem:hover,
+.cp-menu-subitem:focus-visible {
+  background: #f3efe7;
+  outline: none;
+}
+.cp-menu-subitem--active {
+  color: #1a1a18;
+  background: #ece5d6;
+  font-weight: 500;
 }
 
 /* ── Page container (used by every screen inside .cp-content) ── */
@@ -931,10 +1118,32 @@
   justify-content: center;       /* horizontal centering preserved */
   background: #F7F5F2;
   direction: rtl;
-  padding: 72px 24px 32px;       /* comfortable top space, ~10-12% on mobile */
+  /* Greeting is raised — less top space so the tile grid sits inside
+     the viewport without scrolling on a typical mobile. */
+  padding: 36px 24px 32px;
   box-sizing: border-box;
-  overflow-y: auto;              /* allow content to scroll if a very short viewport */
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* When the home is showing a group SUB-screen, drop top + side padding
+   so the shared .cp-screen-header sits flush against the top-left of
+   .cp-content — same position as the per-content-screen wrapper's
+   header. The header brings its own 12px side padding, so the back
+   arrow ends up at the SAME x-offset as on every content screen. */
+.cp-home--subgroup {
+  padding: 0 0 32px;
+}
+
+/* The cp-home--subgroup parent dropped its 24px side padding so the
+   shared header could sit flush at the top-LEFT. Restore the same 24px
+   horizontal inset on the TILE GRID ONLY — without touching the header
+   — so the child tiles get the same comfortable breathing room they
+   have on the main groups grid. box-sizing: border-box keeps the inner
+   grid columns the right width despite the added padding. */
+.cp-home--subgroup .cp-home-tiles {
+  padding-inline: 24px;
+  box-sizing: border-box;
 }
 
 .cp-home-content {
@@ -960,6 +1169,86 @@
   line-height: 1.65;
   color: #8a8680;
   margin: 0;
+}
+
+/* ── Home tiles — 2-column responsive grid of group cards. Used both
+   for the top-level groups grid and (with --child variant) for a
+   group's sub-tiles after the user taps an expandable group. ── */
+.cp-home-tiles {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.cp-home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 22px 14px;
+  min-height: 120px;
+  background: #ffffff;
+  border: 1px solid #e5e3dd;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  font-family: 'Heebo', sans-serif;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s, box-shadow 0.12s, background 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cp-home-tile:hover,
+.cp-home-tile:focus-visible {
+  border-color: #7a9478;
+  box-shadow: 0 2px 10px rgba(122, 148, 120, 0.14);
+  outline: none;
+}
+.cp-home-tile:active {
+  transform: scale(0.98);
+}
+
+.cp-home-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(122, 148, 120, 0.10);
+  color: #7a9478;
+}
+
+.cp-home-tile-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1a1a18;
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* Child tile (inside a sub-group view) — slimmer, no icon, label
+   centred. The shared .cp-home-tile padding still applies; we just
+   tighten the look since icons aren't shown for children. */
+.cp-home-tile--child {
+  min-height: 80px;
+  padding: 18px 14px;
+}
+
+/* Sub-group screen wrapper (shared header + child tiles). The wrapper
+   itself is just a plain block — geometry comes from .cp-screen-header. */
+.cp-home-subgroup {
+  width: 100%;
+}
+
+
+/* Narrow phones — tighten the tile grid so two columns still fit. */
+@media (max-width: 380px) {
+  .cp-home-tiles { gap: 10px; margin-top: 22px; }
+  .cp-home-tile  { padding: 18px 10px; min-height: 108px; }
+  .cp-home-tile-icon { width: 50px; height: 50px; }
+  .cp-home-tile-label { font-size: 13.5px; }
 }
 
 /* ── Shared workspace screen (מרחב משותף) ───────────────────────────
@@ -1399,20 +1688,110 @@
   line-height: 1.65;
   color: #1a1a18;
   font-family: 'Heebo', sans-serif;
+  /* RTL: inline-start = right edge. Small breathing room so text and
+     list markers don't sit flush against the body's right edge —
+     matches the manager view + the TipTap editor. */
+  padding-inline-start: 10px;
 }
 .cp-meetings-body p { margin: 0 0 8px; }
 .cp-meetings-body p:last-child { margin-bottom: 0; }
 .cp-meetings-body strong { font-weight: 700; color: #1a1a18; }
-.cp-meetings-body ol,
+
+/* Numbered list — native marker, padding pushes text leftward so the
+   digits sit on the right (inline-start in RTL). */
+.cp-meetings-body ol {
+  margin: 6px 0;
+  direction: rtl;
+  padding-inline-start: 28px;
+  list-style-position: outside;
+}
+.cp-meetings-body ol li { margin: 2px 0; }
+
+/* Bullet (asterisk) list — no native marker; ::before draws a "*" at
+   the inline-start edge of each li. Mirrors .ms-md-body / .rte-content
+   so the client view matches the editor and the manager view. */
 .cp-meetings-body ul {
   margin: 6px 0;
   direction: rtl;
-  list-style-position: outside;
-  padding-inline-end: 28px;       /* RTL: markers sit on the right */
   padding-inline-start: 0;
+  list-style: none;
 }
-.cp-meetings-body li { margin: 2px 0; }
+.cp-meetings-body ul li {
+  position: relative;
+  padding-inline-start: 18px;
+  margin: 2px 0;
+}
+.cp-meetings-body ul li::before {
+  content: '*';
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 0;
+  font-weight: 700;
+  color: #1a1a18;
+  line-height: 1.65;
+}
+
 .cp-meetings-body a { color: #7a9478; text-decoration: underline; }
+
+/* Header of a meeting accordion block. Two-tier title inside the
+   .cp-progress-header-name span: the topic carries the visual weight
+   (inherits the parent's 600-weight + size), while the date drops to
+   a smaller, muted prefix. When no topic exists the date is rendered
+   plain (no inner spans) and stays at the default header-name style. */
+.cp-meetings-header-date {
+  font-weight: 400;
+  font-size: 12.5px;
+  color: #8a8680;
+  font-variant-numeric: tabular-nums;
+}
+.cp-meetings-header-sep {
+  color: #c8c4bd;
+}
+.cp-meetings-header-topic {
+  font-weight: 700;
+  color: #1a1a18;
+}
+
+/* ── Meeting-card title line ──────────────────────────────────────
+   The shared .cp-progress-header-name (used by every accordion screen —
+   quantities, finishing, contractor, documents, file, progress) is
+   `white-space: nowrap`, which mid-word clips long meeting topics with
+   no ellipsis. This dedicated class — only applied in ClientMeetings.jsx
+   when a topic is present — overrides nowrap and lets the title slot
+   shrink properly inside the flex header so the topic clamp below works.
+
+   The line-clamp lives on the nested `.cp-meeting-topic` span; the date
+   sits inline before it (RTL: at the visual RIGHT, the start of the
+   inline flow) and is never truncated — only the topic, at the end of
+   the flow, picks up the … ellipsis when it overflows two lines. */
+.cp-meeting-title-line {
+  white-space: normal;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cp-meeting-topic {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Participants line at the top of an expanded meeting block — small,
+   muted, sits above the rendered TipTap HTML body. Hidden entirely when
+   the field is empty (controlled by the JSX, not CSS). */
+.cp-meeting-participants {
+  font-family: 'Heebo', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a8680;
+  margin: 0 0 10px;
+  line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 
 /* Points list (visible only when block is open) */
 .cp-progress-points {

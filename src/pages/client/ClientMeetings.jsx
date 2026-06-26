@@ -41,7 +41,7 @@ export default function ClientMeetings() {
       if (!project_id) { setLoading(false); return }
       const { data, error } = await supabase
         .from('meeting_summaries')
-        .select('id, meeting_date, participants, summary_md')
+        .select('id, meeting_date, topic, participants, summary_md')
         .eq('project_id', project_id)
         .order('meeting_date', { ascending: false })
         .order('created_at',   { ascending: false })
@@ -96,9 +96,10 @@ export default function ClientMeetings() {
         ) : (
           <div className="cp-progress-accordion">
             {items.map(s => {
-              const isOpen      = openSet.has(s.id)
-              const dateLabel   = formatDate(s.meeting_date)
-              const hasContent  = s.summary_md && s.summary_md.trim() !== ''
+              const isOpen       = openSet.has(s.id)
+              const dateLabel    = formatDate(s.meeting_date)
+              const hasContent   = s.summary_md && s.summary_md.trim() !== ''
+              const topic        = (s.topic ?? '').trim()
               const participants = (s.participants ?? '').trim()
               return (
                 <section key={s.id} className="cp-progress-block">
@@ -110,16 +111,33 @@ export default function ClientMeetings() {
                     onClick={() => toggleOpen(s.id)}
                     onKeyDown={(e) => handleHeaderKeyDown(e, s.id)}
                   >
-                    <span className="cp-progress-header-name">{dateLabel}</span>
-                    {participants && (
-                      <span className="cp-progress-header-caption">{participants}</span>
-                    )}
+                    <span
+                      className={
+                        'cp-progress-header-name'
+                        + (topic ? ' cp-meeting-title-line' : '')
+                      }
+                    >
+                      {topic ? (
+                        <>
+                          <span className="cp-meetings-header-date">{dateLabel}</span>
+                          <span className="cp-meetings-header-sep"> · </span>
+                          <span className="cp-meetings-header-topic cp-meeting-topic">{topic}</span>
+                        </>
+                      ) : (
+                        dateLabel
+                      )}
+                    </span>
                     <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
                       <IconChevron size={16} />
                     </span>
                   </div>
                   {isOpen && (
                     <div className="cp-acc-body">
+                      {participants && (
+                        <p className="cp-meeting-participants">
+                          משתתפים: {participants}
+                        </p>
+                      )}
                       {hasContent ? (
                         /* Staff-authored HTML from our own TipTap editor,
                            safe to render verbatim. */

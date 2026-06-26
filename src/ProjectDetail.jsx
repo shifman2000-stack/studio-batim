@@ -226,7 +226,6 @@ const TABS = [
   { id: 7, label: 'חומרי גמר' },
   { id: 9, label: 'מפרט לקבלן' },
   { id: 10, label: 'מרחב משותף' },
-  { id: 4, label: 'שעות', disabled: true },
   { id: 8, label: 'שלבי התקדמות' },
 ]
 

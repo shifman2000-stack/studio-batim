@@ -6,8 +6,18 @@
 //
 // The original "פרטי תיק" content now lives in ./client/ClientFile.jsx;
 // this file holds only the layout + navigation.
+//
+// Navigation model (PART B):
+//   * Home screen shows 4 parent-group tiles (see clientPortalGroups.js).
+//   * Tap a group → either jumps straight to the only child screen
+//     (direct mode) or expands a sub-grid of its children (expand mode).
+//   * Tap a child → navigate to that screen, REMEMBERING the group it
+//     came from (currentOrigin). The screen shows a curved IconBack at
+//     the top; tapping it returns to the home sub-screen of that group.
+//   * Drawer mirrors the same group structure: single-child groups are
+//     flat buttons, multi-child groups expand inline as an accordion.
 
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { useClient } from '../components/ClientRoute'
 import ClientHome from './client/ClientHome'
@@ -19,16 +29,26 @@ import ClientFinishing from './client/ClientFinishing'
 import ClientContractorSpec from './client/ClientContractorSpec'
 import ClientProgress from './client/ClientProgress'
 import ClientMeetings from './client/ClientMeetings'
-import ClientContact from './client/ClientContact'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
 import ClientFooter, { ClientFooterProvider } from './client/ClientFooter'
 import Logo from '../components/Logo'
-import { isClientTabVisible } from '../lib/clientTabVisibility'
+import { GROUPS, resolveGroup } from '../lib/clientPortalGroups'
+import { IconChevron, IconBack } from '../components/icons/PortalIcons'
 
 /* Drawer keys that are ALWAYS visible regardless of the manager's
-   per-project setting. Everything else flows through isClientTabVisible. */
-const ALWAYS_VISIBLE_KEYS = new Set(['home', 'contact', 'account'])
+   per-project setting. Everything else flows through isClientTabVisible.
+   PART B: 'contact' removed — that info lives in the sticky ClientFooter. */
+const ALWAYS_VISIBLE_KEYS = new Set(['home', 'account'])
+
+/* ── Navigation context — exposes navigate(key, originGroupKey=null)
+   and goBack() so descendant screens (home tiles, sub-screens, content
+   screens) can switch the active screen and walk back without prop-
+   drilling. ── */
+const ClientNavContext = createContext({ navigate: () => {}, goBack: () => {} })
+export function useClientNav() {
+  return useContext(ClientNavContext)
+}
 import './ClientPortal.css'
 
 /* ── Hamburger icon ──────────────────────────────────────────────── */
@@ -53,13 +73,15 @@ const IconUser = ({ size = 20 }) => (
 )
 
 /* ── Drawer menu config ──────────────────────────────────────────────
-   Each item has:
+   The MAIN drawer menu is now built from GROUPS (see clientPortalGroups.js).
+   MENU_ITEMS still maps each child key → the screen Component + label, so
+   ActiveScreen + the drawer can resolve labels uniformly.
+
+   Fields:
      key       — internal id used for active-screen switching
      label     — Hebrew text shown in the drawer + as the screen title
-     enabled   — false = grayed out, not tappable, but the wiring still
-                 points to ClientPlaceholder so it's a clean one-line
-                 flip to enable later.
-     Component — the screen to render when this item is active.
+     enabled   — false = grayed out, not tappable
+     Component — the screen to render when this item is active
 */
 const MENU_ITEMS = [
   { key: 'home',         label: 'דף בית',           enabled: true,  Component: ClientHome },
@@ -71,17 +93,28 @@ const MENU_ITEMS = [
   { key: 'contractor',   label: 'מפרט לקבלן',       enabled: true,  Component: ClientContractorSpec },
   { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgress },
   { key: 'meetings',     label: 'סיכומי פגישות',    enabled: true,  Component: ClientMeetings },
-  { key: 'contact',      label: 'צור קשר',          enabled: true,  Component: ClientContact },
   /* "פרטי חשבון" — pinned at the drawer bottom as an avatar+name row.
      Excluded from the main menu loop via the `footer: true` flag, but
      still found by MENU_ITEMS.find when activeKey === 'account'. */
   { key: 'account',      label: 'פרטי חשבון',       enabled: true,  Component: ClientAccount, footer: true },
 ]
 
+/* Quick key → label lookup used by the drawer's group sub-items. */
+const LABEL_BY_KEY = MENU_ITEMS.reduce((acc, m) => { acc[m.key] = m.label; return acc }, {})
+
 export default function ClientPortal() {
   const { first_name: ctxFirstName, project_id } = useClient()
-  const [activeKey, setActiveKey]   = useState('home')   // default landing screen
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [activeKey, setActiveKey]                = useState('home')   // default landing screen
+  const [drawerOpen, setDrawerOpen]              = useState(false)
+  /* Group this screen was navigated FROM (or null if entered from the
+     home grid / a direct group / the account footer). Drives goBack. */
+  const [currentOrigin, setCurrentOrigin]        = useState(null)
+  /* One-shot: when goBack lands on an expandable group, ClientHome reads
+     this on its next render and opens the matching sub-screen. ClientHome
+     calls clearPendingHomeGroup once consumed. */
+  const [pendingHomeGroup, setPendingHomeGroup]  = useState(null)
+  /* Drawer accordion state — Set of group keys currently expanded. */
+  const [drawerExpanded, setDrawerExpanded]      = useState(() => new Set())
 
   /* ── Live identity from project_contacts ─────────────────────────
      The client_users.first_name from useClient() is a SNAPSHOT captured
@@ -168,24 +201,64 @@ export default function ClientPortal() {
   const lastName  = liveIdentity?.lastName  || null
   const isFamily  = liveIdentity?.isFamily  || false
 
-  /* Drawer visibility filter — `home`, `contact`, `account` are pinned
-     (always visible); every other item is gated by the per-project
-     `client_visible_tabs` from the manager, resolved via the shared
-     helper so client and manager agree. */
-  const isItemVisible = (item) =>
-    ALWAYS_VISIBLE_KEYS.has(item.key) || isClientTabVisible(item.key, clientVisibleTabs)
+  /* Resolve all 4 groups once per render. Hidden groups become null. */
+  const resolvedGroups = useMemo(
+    () => GROUPS.map(g => ({ group: g, resolved: resolveGroup(g, clientVisibleTabs) })),
+    [clientVisibleTabs]
+  )
+
+  /* ── Navigation primitives shared via context ───────────────────── */
+  const navValue = useMemo(() => ({
+    /* Navigate to a screen, optionally remembering which group we came
+       from (so goBack() can return to the home sub-screen of that group). */
+    navigate: (key, originGroupKey = null) => {
+      setActiveKey(key)
+      setCurrentOrigin(originGroupKey)
+      setDrawerOpen(false)
+      setPendingHomeGroup(null)            /* clear any stale request */
+    },
+    /* Walk back from the current screen:
+         * if currentOrigin points to an expandable group → land on the
+           home sub-screen of that group (activeKey='home' + ClientHome
+           opens it from pendingHomeGroup);
+         * otherwise → land on the home groups grid. */
+    goBack: () => {
+      let landOnGroup = null
+      if (currentOrigin) {
+        const g = GROUPS.find(x => x.key === currentOrigin)
+        if (g) {
+          const r = resolveGroup(g, clientVisibleTabs)
+          if (r && r.mode === 'expand') landOnGroup = currentOrigin
+        }
+      }
+      setPendingHomeGroup(landOnGroup)
+      setActiveKey('home')
+      setCurrentOrigin(null)
+      setDrawerOpen(false)
+    },
+  }), [currentOrigin, clientVisibleTabs])
+
+  /* Drawer accordion — toggle a group's expanded state. */
+  const toggleDrawerGroup = (groupKey) => {
+    setDrawerExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
 
   const activeItem  = MENU_ITEMS.find(m => m.key === activeKey) || MENU_ITEMS[0]
   const ActiveScreen = activeItem.Component
 
-  const handleSelect = (item) => {
-    if (!item.enabled) return         // belt + suspenders alongside the disabled attr
-    setActiveKey(item.key)
-    setDrawerOpen(false)
-  }
+  /* The floating back arrow appears on every content screen except the
+     home grid itself and the account screen (account is reached via the
+     drawer footer, not via group navigation, so it has no origin). */
+  const showBackArrow = activeKey !== 'home' && activeKey !== 'account'
 
   return (
     <ClientFooterProvider>
+    <ClientNavContext.Provider value={navValue}>
     <div className="cp-shell">
 
       {/* ── Top bar — hamburger on the right, studio logo centered ──
@@ -223,23 +296,81 @@ export default function ClientPortal() {
         aria-hidden={!drawerOpen}
       >
         <nav className="cp-drawer-menu">
-          {MENU_ITEMS.filter(item => !item.footer && isItemVisible(item)).map(item => {
-            const isActive = item.key === activeKey
-            const cls = [
-              'cp-menu-item',
-              !item.enabled && 'cp-menu-item--disabled',
-              isActive      && 'cp-menu-item--active',
-            ].filter(Boolean).join(' ')
+          {/* "דף בית" — pinned at the top of the drawer above the group
+              rows. Treated as a normal top-level item: navigates to the
+              home screen and closes the drawer. Active highlight matches
+              other .cp-menu-item rows when activeKey === 'home'. */}
+          <button
+            type="button"
+            className={'cp-menu-item' + (activeKey === 'home' ? ' cp-menu-item--active' : '')}
+            onClick={() => navValue.navigate('home', null)}
+          >
+            דף בית
+          </button>
+
+          {/* Group-based main menu. Each GROUPS entry → one row (direct
+              button) or one accordion (header + indented sub-buttons). */}
+          {resolvedGroups.map(({ group, resolved }) => {
+            if (!resolved) return null
+
+            if (resolved.mode === 'direct') {
+              const isActive = activeKey === resolved.target
+              return (
+                <button
+                  key={group.key}
+                  type="button"
+                  className={'cp-menu-item' + (isActive ? ' cp-menu-item--active' : '')}
+                  onClick={() => navValue.navigate(resolved.target, null)}
+                >
+                  {group.label}
+                </button>
+              )
+            }
+
+            /* expand mode — accordion */
+            const isExpanded   = drawerExpanded.has(group.key)
+            const containsActive = resolved.children.includes(activeKey)
             return (
-              <button
-                key={item.key}
-                type="button"
-                className={cls}
-                onClick={() => handleSelect(item)}
-                disabled={!item.enabled}
-              >
-                {item.label}
-              </button>
+              <div key={group.key} className="cp-menu-group">
+                <button
+                  type="button"
+                  className={
+                    'cp-menu-group-header'
+                    + (isExpanded     ? ' cp-menu-group-header--open'   : '')
+                    + (containsActive ? ' cp-menu-group-header--active' : '')
+                  }
+                  onClick={() => toggleDrawerGroup(group.key)}
+                  aria-expanded={isExpanded}
+                >
+                  <span className="cp-menu-group-label">{group.label}</span>
+                  <span
+                    className={
+                      'cp-menu-group-chevron'
+                      + (isExpanded ? ' cp-menu-group-chevron--open' : '')
+                    }
+                    aria-hidden="true"
+                  >
+                    <IconChevron size={14} />
+                  </span>
+                </button>
+                {isExpanded && (
+                  <div className="cp-menu-group-children">
+                    {resolved.children.map(childKey => {
+                      const isChildActive = activeKey === childKey
+                      return (
+                        <button
+                          key={childKey}
+                          type="button"
+                          className={'cp-menu-subitem' + (isChildActive ? ' cp-menu-subitem--active' : '')}
+                          onClick={() => navValue.navigate(childKey, group.key)}
+                        >
+                          {LABEL_BY_KEY[childKey] || childKey}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </nav>
@@ -257,7 +388,7 @@ export default function ClientPortal() {
             <button
               type="button"
               className={'cp-drawer-account' + (isActive ? ' cp-drawer-account--active' : '')}
-              onClick={() => handleSelect(accountItem)}
+              onClick={() => navValue.navigate('account', null)}
               aria-label={`פרטי חשבון — ${displayName}`}
             >
               <span className="cp-drawer-account-avatar">
@@ -270,16 +401,38 @@ export default function ClientPortal() {
       </aside>
 
       {/* ── Content frame — renders the currently selected screen.
-            firstName is the live name (or snapshot fallback); lastName +
-            isFamily are exposed so screens like Home can switch to a
-            family-scoped greeting. Screens that don't need them ignore
-            the props. ── */}
-      <main className="cp-content">
+            For every screen except 'home' and 'account' we render the
+            SHARED .cp-screen-header row at the very top: title text on
+            the right (RTL start), curved IconBack pinned at the visual
+            LEFT. The same .cp-screen-header is used by ClientHome on
+            its group sub-screen, so both surfaces share one geometry.
+            When the wrapper renders a title, the cp-content--with-header
+            modifier hides each screen's own .cp-screen-title to avoid
+            duplication. ── */}
+      <main className={'cp-content' + (showBackArrow ? ' cp-content--with-header' : '')}>
+        {showBackArrow && (
+          <div className="cp-screen-header">
+            <h2 className="cp-screen-header-title">{activeItem.label}</h2>
+            <button
+              type="button"
+              className="cp-screen-back"
+              onClick={() => navValue.goBack()}
+              aria-label="חזרה"
+            >
+              <IconBack size={20} />
+            </button>
+          </div>
+        )}
         <ActiveScreen
           title={activeItem.label}
           firstName={firstName}
           lastName={lastName}
           isFamily={isFamily}
+          clientVisibleTabs={clientVisibleTabs}
+          /* Home-only props: lets ClientHome auto-open a group's sub-
+             screen after goBack lands here, then clear it once consumed. */
+          pendingHomeGroup={activeKey === 'home' ? pendingHomeGroup : null}
+          clearPendingHomeGroup={() => setPendingHomeGroup(null)}
         />
       </main>
 
@@ -291,6 +444,7 @@ export default function ClientPortal() {
       <ClientFooter />
 
     </div>
+    </ClientNavContext.Provider>
     </ClientFooterProvider>
   )
 }

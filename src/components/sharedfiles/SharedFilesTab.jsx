@@ -2,16 +2,25 @@
 //
 // "מרחב משותף" tab on the manager's client file (תיק לקוח).
 //
-// Flat list of files in `shared_files` for the current project — both
-// staff and the project's client (linked via client_users) upload here.
-// Two-panel split: 50% table on the right, 50% preview panel on the left.
+// Flat list of BOTH file uploads (`shared_files`) AND free-text notes /
+// requests (`project_notes`) for the current project — merged into ONE
+// chronologically-sorted list, newest first. Each row carries a
+// `kind: 'file' | 'note'` discriminator. Files render with the
+// existing eye / download / trash action set; notes render with their
+// body inline and only the trash action (no preview, no download).
 //
-// Columns: שם קובץ (clickable link) | מי העלה | תאריך העלאה | פעולות
-//   actions column = 3 icons (eye / download / trash), trash inline-confirms.
+// Two-panel split: 50% table on the right, 50% preview panel on the
+// left. The left preview pane is FILES-only — clicking a note row
+// doesn't touch the preview.
 //
-// RLS is already in place on the DB. The staff_full_access policy lets
-// the manager SELECT / INSERT / DELETE everything; we don't need any
-// special auth handling beyond the standard supabase client.
+// Columns: שם קובץ / הערה | מי העלה / הוסף | תאריך | פעולות
+//   actions column for files = eye / download / trash (inline confirm)
+//   actions column for notes = trash (inline confirm) only.
+//
+// RLS is already in place on the DB. staff_full_access lets the manager
+// SELECT / INSERT / DELETE everything on both shared_files and
+// project_notes; no special auth handling beyond the standard supabase
+// client.
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
@@ -116,39 +125,92 @@ const IconTrash2 = () => (
 
 /* ── Main component ──────────────────────────────────────────────── */
 export default function SharedFilesTab({ projectId }) {
-  const [files,           setFiles]           = useState([])
+  /* `items` is the MERGED list (files + notes), uniform shape, sorted
+     by date desc. Each entry has a `kind` discriminator so the row
+     render can pick the right cell layout. */
+  const [items,           setItems]           = useState([])
   const [namesByUserId,   setNamesByUserId]   = useState({})
   const [loading,         setLoading]         = useState(true)
   const [uploading,       setUploading]       = useState(false)
   const [previewFile,     setPreviewFile]     = useState(null) // { url, name } | null
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
+  /* Note-add form state — toggled open by the "+ הוסף הערה/בקשה" button
+     in the toolbar. Save is blocked for blank / whitespace-only bodies. */
+  const [noteFormOpen,    setNoteFormOpen]    = useState(false)
+  const [noteText,        setNoteText]        = useState('')
+  const [savingNote,      setSavingNote]      = useState(false)
+
+  /* Per-note expand/collapse state — a Set of note ids that are
+     currently expanded. Collapsed (default): the note cell clips to
+     one line with an ellipsis. Expanded: the cell wraps to however
+     many lines the body needs and the row grows to fit. Clicking the
+     note text toggles. */
+  const [expandedNotes,   setExpandedNotes]   = useState(() => new Set())
+
+  const toggleNoteExpanded = (id) => {
+    setExpandedNotes(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleNoteBodyKeyDown = (e, id) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleNoteExpanded(id)
+    }
+  }
+
   const fileInputRef = useRef(null)
 
-  /* ── Load files + uploader names ────────────────────────────────── */
-  const loadFiles = async () => {
+  /* ── Load files + notes + uploader names ──────────────────────────
+     Same parallel-fetch + merged-name-resolution pattern as the client
+     screen. Names dance runs once across the union of uploader ids. ── */
+  const loadItems = async () => {
     if (!projectId) return
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('shared_files')
-      .select('id, file_url, file_name, uploaded_by, uploaded_at')
-      .eq('project_id', projectId)
-      .order('uploaded_at', { ascending: false })
+    const [filesRes, notesRes] = await Promise.all([
+      supabase
+        .from('shared_files')
+        .select('id, file_url, file_name, uploaded_by, uploaded_at')
+        .eq('project_id', projectId)
+        .order('uploaded_at', { ascending: false }),
+      supabase
+        .from('project_notes')
+        .select('id, body, uploaded_by, uploaded_at')
+        .eq('project_id', projectId)
+        .order('uploaded_at', { ascending: false }),
+    ])
 
-    if (error) {
-      console.error('shared_files load error:', error)
-      setFiles([])
-      setNamesByUserId({})
-      setLoading(false)
-      return
-    }
+    if (filesRes.error) console.error('shared_files load error:', filesRes.error)
+    if (notesRes.error) console.error('project_notes load error:', notesRes.error)
 
-    const rows = Array.isArray(data) ? data : []
-    setFiles(rows)
+    const fileRows = Array.isArray(filesRes.data) ? filesRes.data : []
+    const noteRows = Array.isArray(notesRes.data) ? notesRes.data : []
 
-    /* ── Names lookup ────────────────────────────────────────────
-       Up to THREE queries (regardless of row count):
+    const merged = [
+      ...fileRows.map(f => ({
+        kind: 'file', id: f.id, date: f.uploaded_at, uploaded_by: f.uploaded_by,
+        file_url: f.file_url, file_name: f.file_name,
+      })),
+      ...noteRows.map(n => ({
+        kind: 'note', id: n.id, date: n.uploaded_at, uploaded_by: n.uploaded_by,
+        body: n.body,
+      })),
+    ].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
+    setItems(merged)
+
+    /* ── Names lookup over MERGED uploader ids ──────────────────
+       Same up-to-three-query dance as before, but the input id set now
+       spans both files and notes — so it runs exactly once regardless
+       of how many rows of each kind there are.
+
+       Order:
          1) profiles      — staff uploaders.
          2) client_users  — leftover uuids; pulls project_id + email
                             + the (stale!) first_name snapshot.
@@ -158,9 +220,8 @@ export default function SharedFilesTab({ projectId }) {
        client_users.first_name is a one-time snapshot from
        link_client_on_login; project_contacts is the source of truth
        after any rename. We only fall back to the snapshot when no live
-       contact row matches (e.g. the contact's email was edited and no
-       longer matches client_users.email). */
-    const uploaderIds = Array.from(new Set(rows.map(r => r.uploaded_by).filter(Boolean)))
+       contact row matches. */
+    const uploaderIds = Array.from(new Set(merged.map(r => r.uploaded_by).filter(Boolean)))
     const nameMap = {}
     if (uploaderIds.length > 0) {
       /* 1. Staff via profiles */
@@ -187,10 +248,7 @@ export default function SharedFilesTab({ projectId }) {
 
         const clientList = clientRows || []
 
-        /* 3. project_contacts for the involved project_ids — pulls
-              the LIVE name. Fetching by project_id (one .in()) avoids
-              the case-sensitivity trap of `.in('email', ...)` and lets
-              us match in JS with lower(trim()) on both sides. */
+        /* 3. project_contacts for the involved project_ids — LIVE name. */
         const projectIds = Array.from(new Set(
           clientList.map(c => c.project_id).filter(Boolean)
         ))
@@ -203,9 +261,6 @@ export default function SharedFilesTab({ projectId }) {
           liveContacts = contactRows || []
         }
 
-        /* Pair each client_user with its matching project_contacts row
-           by (project_id + normalized email). Fall back to the
-           client_users snapshot when no live row matches. */
         for (const cu of clientList) {
           const cuEmail = (cu.email || '').trim().toLowerCase()
           let liveName = null
@@ -228,9 +283,9 @@ export default function SharedFilesTab({ projectId }) {
     setLoading(false)
   }
 
-  useEffect(() => { loadFiles() }, [projectId])
+  useEffect(() => { loadItems() }, [projectId])
 
-  /* ── Upload flow ────────────────────────────────────────────────── */
+  /* ── Upload flow (files) ────────────────────────────────────────── */
   const handlePickFile = () => {
     if (uploading) return
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -268,7 +323,7 @@ export default function SharedFilesTab({ projectId }) {
         })
       if (insErr) throw insErr
 
-      await loadFiles()
+      await loadItems()
     } catch (err) {
       console.error('shared_files upload error:', err)
       alert('שגיאה בהעלאת הקובץ. נסה שוב.')
@@ -276,30 +331,69 @@ export default function SharedFilesTab({ projectId }) {
     setUploading(false)
   }
 
-  /* ── Delete flow ────────────────────────────────────────────────── */
-  const handleDelete = async (row) => {
+  /* ── Save note ──────────────────────────────────────────────────── */
+  const handleSaveNote = async () => {
+    const body = noteText.trim()
+    if (!body || savingNote) return
+    setSavingNote(true)
     try {
-      /* Storage first — if it fails the DB row stays and we can retry.
-         If storage succeeds but DB delete fails, the row is orphaned
-         but harmless (links to a missing object that returns 404). */
-      const path = storagePath(row.file_url)
-      if (path) {
-        const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path])
-        if (rmErr) console.warn('storage remove warning:', rmErr) /* non-fatal */
-      }
-      const { error: delErr } = await supabase
-        .from('shared_files')
-        .delete()
-        .eq('id', row.id)
-      if (delErr) throw delErr
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('no authenticated user')
 
-      /* Clear preview if it was showing the deleted file. */
-      if (previewFile && previewFile.url === row.file_url) setPreviewFile(null)
-      setConfirmDeleteId(null)
-      await loadFiles()
+      const { error } = await supabase
+        .from('project_notes')
+        .insert({
+          project_id:  projectId,
+          body:        body,
+          uploaded_by: user.id,
+        })
+      if (error) throw error
+
+      setNoteText('')
+      setNoteFormOpen(false)
+      await loadItems()
     } catch (err) {
-      console.error('shared_files delete error:', err)
-      alert('שגיאה במחיקת הקובץ. נסה שוב.')
+      console.error('project_notes insert error:', err)
+      alert('שגיאה בשמירת ההערה. נסה שוב.')
+    }
+    setSavingNote(false)
+  }
+
+  /* ── Delete (files: storage + db; notes: db only) ────────────────
+     Manager-side has NO isOwn gate — RLS staff_full_access lets the
+     manager delete any row regardless of who uploaded it. ── */
+  const handleDelete = async (item) => {
+    try {
+      if (item.kind === 'file') {
+        /* Storage first — if it fails the DB row stays and we can retry.
+           If storage succeeds but DB delete fails, the row is orphaned
+           but harmless (links to a missing object that returns 404). */
+        const path = storagePath(item.file_url)
+        if (path) {
+          const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path])
+          if (rmErr) console.warn('storage remove warning:', rmErr) /* non-fatal */
+        }
+        const { error: delErr } = await supabase
+          .from('shared_files')
+          .delete()
+          .eq('id', item.id)
+        if (delErr) throw delErr
+
+        /* Clear preview if it was showing the deleted file. */
+        if (previewFile && previewFile.url === item.file_url) setPreviewFile(null)
+      } else {
+        const { error: delErr } = await supabase
+          .from('project_notes')
+          .delete()
+          .eq('id', item.id)
+        if (delErr) throw delErr
+      }
+
+      setConfirmDeleteId(null)
+      await loadItems()
+    } catch (err) {
+      console.error('shared workspace delete error:', err)
+      alert(item.kind === 'file' ? 'שגיאה במחיקת הקובץ. נסה שוב.' : 'שגיאה במחיקת ההערה. נסה שוב.')
     }
   }
 
@@ -322,7 +416,9 @@ export default function SharedFilesTab({ projectId }) {
       {/* Right panel — toolbar + table (50% of available width) */}
       <div className="sf-panel-right">
 
-        <div className="sf-toolbar">
+        {/* Two siblings sit in the same toolbar — gap:10 keeps them
+            comfortably apart in the RTL flex container. */}
+        <div className="sf-toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
           <button
             type="button"
             className="sf-upload-btn"
@@ -330,6 +426,14 @@ export default function SharedFilesTab({ projectId }) {
             disabled={uploading}
           >
             {uploading ? 'מעלה...' : '+ הוסף מסמך'}
+          </button>
+          <button
+            type="button"
+            className="sf-upload-btn"
+            onClick={() => setNoteFormOpen(o => !o)}
+            disabled={savingNote}
+          >
+            + הוסף הערה/בקשה
           </button>
         </div>
 
@@ -340,68 +444,171 @@ export default function SharedFilesTab({ projectId }) {
           onChange={handleFileSelected}
         />
 
+        {/* Inline note-add form, between the toolbar and the table. */}
+        {noteFormOpen && (
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <textarea
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="הערה או בקשה..."
+              dir="rtl"
+              style={{
+                width: '100%', minHeight: 80, padding: 8, fontFamily: 'inherit',
+                fontSize: 14, border: '1px solid #d9d6cd', borderRadius: 6,
+                resize: 'vertical', boxSizing: 'border-box', textAlign: 'right',
+                outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="sf-upload-btn"
+                onClick={handleSaveNote}
+                disabled={savingNote || !noteText.trim()}
+              >
+                {savingNote ? 'שומר...' : 'שמור'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNoteFormOpen(false); setNoteText('') }}
+                disabled={savingNote}
+                style={{
+                  background: 'none', border: '1px solid #d9d6cd', borderRadius: 6,
+                  padding: '6px 16px', cursor: savingNote ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', fontSize: 14, color: '#4a4a48',
+                }}
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
-          <div className="sf-loading">טוען קבצים...</div>
-        ) : files.length === 0 ? (
-          <div className="sf-empty">אין עדיין קבצים במרחב המשותף</div>
+          <div className="sf-loading">טוען...</div>
+        ) : items.length === 0 ? (
+          <div className="sf-empty">אין עדיין קבצים או הערות במרחב המשותף</div>
         ) : (
           <div className="sf-table">
 
             {/* Table header */}
             <div className="sf-table-header">
-              <div className="sf-col-name">שם קובץ</div>
+              <div className="sf-col-name">שם קובץ / הערה</div>
               <div className="sf-col-uploader">הועלה על ידי</div>
-              <div className="sf-col-date">תאריך העלאה</div>
+              <div className="sf-col-date">תאריך</div>
               <div className="sf-col-actions">פעולות</div>
             </div>
 
-            {/* Rows */}
-            {files.map((row, idx) => {
-              const uploaderName = row.uploaded_by ? (namesByUserId[row.uploaded_by] || '') : ''
+            {/* Rows — branch on item.kind */}
+            {items.map((item, idx) => {
+              const uploaderName = item.uploaded_by ? (namesByUserId[item.uploaded_by] || '') : ''
+              const rowClass     = 'sf-row' + (idx % 2 === 1 ? ' sf-row--even' : '')
+
+              if (item.kind === 'file') {
+                return (
+                  <div key={`file-${item.id}`} className={rowClass}>
+                    {/* שם קובץ — clickable link that opens the file in a new tab */}
+                    <a
+                      className="sf-col-name sf-file-link"
+                      href={openableUrl(item.file_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={item.file_name}
+                    >
+                      {item.file_name}
+                    </a>
+
+                    <div className="sf-col-uploader" title={uploaderName}>{uploaderName}</div>
+                    <div className="sf-col-date">{formatDate(item.date)}</div>
+
+                    {/* פעולות — eye / download / trash */}
+                    <div className="sf-col-actions">
+                      <button
+                        type="button"
+                        className="sf-file-icon-btn"
+                        onClick={() => setPreviewFile({ url: item.file_url, name: item.file_name })}
+                        title="תצוגה מקדימה"
+                      >
+                        <IconEye />
+                      </button>
+                      <button
+                        type="button"
+                        className="sf-file-icon-btn"
+                        onClick={() => handleDownload(item)}
+                        title="הורד"
+                      >
+                        <IconDownload />
+                      </button>
+                      {confirmDeleteId === item.id ? (
+                        <div className="sf-delete-confirm">
+                          <span className="sf-delete-confirm-text">למחוק את הקובץ?</span>
+                          <button
+                            type="button"
+                            className="sf-delete-confirm-yes"
+                            onClick={() => handleDelete(item)}
+                          >כן</button>
+                          <button
+                            type="button"
+                            className="sf-delete-confirm-no"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >לא</button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="sf-file-icon-btn"
+                          onClick={() => setConfirmDeleteId(item.id)}
+                          title="מחק"
+                        >
+                          <IconTrash2 />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
+
+              /* kind === 'note' — same row chrome, body in the name
+                 column, actions column = trash only. The note cell is
+                 the only tappable surface in the row (toggles expand
+                 in place); the uploader / date / trash cells stay
+                 non-interactive aside from their own existing
+                 affordances. */
+              const isExpanded = expandedNotes.has(item.id)
               return (
-                <div
-                  key={row.id}
-                  className={'sf-row' + (idx % 2 === 1 ? ' sf-row--even' : '')}
-                >
-                  {/* שם קובץ — clickable link that opens the file in a new tab */}
-                  <a
-                    className="sf-col-name sf-file-link"
-                    href={openableUrl(row.file_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={row.file_name}
+                <div key={`note-${item.id}`} className={rowClass}>
+                  <div
+                    className="sf-col-name"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleNoteExpanded(item.id)}
+                    onKeyDown={(e) => handleNoteBodyKeyDown(e, item.id)}
+                    /* Collapsed = one line + ellipsis. Expanded = full
+                       body wraps and the row grows to fit. cursor:pointer
+                       on both states so the affordance reads as tappable. */
+                    style={isExpanded
+                      ? { whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', color: '#1a1a18', cursor: 'pointer' }
+                      : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#1a1a18', cursor: 'pointer' }
+                    }
+                    title={item.body}
                   >
-                    {row.file_name}
-                  </a>
+                    <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, marginInlineEnd: 6 }}>הערה</span>
+                    {item.body}
+                  </div>
 
                   <div className="sf-col-uploader" title={uploaderName}>{uploaderName}</div>
-                  <div className="sf-col-date">{formatDate(row.uploaded_at)}</div>
+                  <div className="sf-col-date">{formatDate(item.date)}</div>
 
-                  {/* פעולות — eye / download / trash (RTL: first child = visual right) */}
+                  {/* פעולות — trash only (no preview / no download). */}
                   <div className="sf-col-actions">
-                    <button
-                      type="button"
-                      className="sf-file-icon-btn"
-                      onClick={() => setPreviewFile({ url: row.file_url, name: row.file_name })}
-                      title="תצוגה מקדימה"
-                    >
-                      <IconEye />
-                    </button>
-                    <button
-                      type="button"
-                      className="sf-file-icon-btn"
-                      onClick={() => handleDownload(row)}
-                      title="הורד"
-                    >
-                      <IconDownload />
-                    </button>
-                    {confirmDeleteId === row.id ? (
+                    {confirmDeleteId === item.id ? (
                       <div className="sf-delete-confirm">
-                        <span className="sf-delete-confirm-text">למחוק את הקובץ?</span>
+                        <span className="sf-delete-confirm-text">למחוק את ההערה?</span>
                         <button
                           type="button"
                           className="sf-delete-confirm-yes"
-                          onClick={() => handleDelete(row)}
+                          onClick={() => handleDelete(item)}
                         >כן</button>
                         <button
                           type="button"
@@ -413,7 +620,7 @@ export default function SharedFilesTab({ projectId }) {
                       <button
                         type="button"
                         className="sf-file-icon-btn"
-                        onClick={() => setConfirmDeleteId(row.id)}
+                        onClick={() => setConfirmDeleteId(item.id)}
                         title="מחק"
                       >
                         <IconTrash2 />
@@ -427,7 +634,9 @@ export default function SharedFilesTab({ projectId }) {
         )}
       </div>
 
-      {/* Left panel — preview (50% of available width, sticky) */}
+      {/* Left panel — preview (50% of available width, sticky). FILES
+          only — note rows don't have a previewable artefact and they
+          don't touch this pane. */}
       <div className="sf-panel-left">
         {previewFile && (
           <>

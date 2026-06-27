@@ -82,7 +82,7 @@ export default function ClientFooter() {
       </a>
       <a
         className="cp-footer-link"
-        href={WHATSAPP_URL}
+        href="https://chat.whatsapp.com/FapsVnOHafBHXOeLfuxqBF?mode=gi_t"
         target="_blank"
         rel="noopener noreferrer"
         aria-label="פתח שיחת WhatsApp"

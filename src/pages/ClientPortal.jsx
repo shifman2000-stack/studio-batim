@@ -136,22 +136,44 @@ export default function ClientPortal() {
   const [liveIdentity, setLiveIdentity] = useState(null)
   /* liveIdentity shape: { firstName, lastName, isFamily } | null */
 
-  /* Per-project drawer visibility — projects.client_visible_tabs jsonb.
-     One read on mount; resolved through isClientTabVisible(). */
+  /* Per-project drawer visibility — projects.client_visible_tabs jsonb —
+     PLUS the optional per-project whatsapp_group_url that swaps the
+     sticky-footer WhatsApp button's href when set. One combined read on
+     mount, with a graceful fallback to the visibility-only SELECT if
+     the whatsapp_group_url column doesn't exist yet (e.g. a prod that
+     hasn't been migrated). When the column is missing OR the value is
+     null/empty, whatsappGroupUrl stays null and ClientFooter falls
+     back to WHATSAPP_URL (the default wa.me link). */
   const [clientVisibleTabs, setClientVisibleTabs] = useState(null)
+  const [whatsappGroupUrl,  setWhatsappGroupUrl]  = useState(null)
   useEffect(() => {
     let cancelled = false
-    const loadVisibility = async () => {
+    const loadProjectMeta = async () => {
       if (!project_id) return
-      const { data } = await supabase
+      let row = null
+      const tryBoth = await supabase
         .from('projects')
-        .select('client_visible_tabs')
+        .select('client_visible_tabs, whatsapp_group_url')
         .eq('id', project_id)
         .maybeSingle()
+      if (tryBoth.error) {
+        /* Most likely: prod row, column not yet migrated. Re-run the
+           visibility-only SELECT so the rest of the portal keeps
+           working; the whatsapp link silently stays at the default. */
+        const fallback = await supabase
+          .from('projects')
+          .select('client_visible_tabs')
+          .eq('id', project_id)
+          .maybeSingle()
+        row = fallback.data || null
+      } else {
+        row = tryBoth.data || null
+      }
       if (cancelled) return
-      setClientVisibleTabs(data?.client_visible_tabs || null)
+      setClientVisibleTabs(row?.client_visible_tabs || null)
+      setWhatsappGroupUrl(row?.whatsapp_group_url ?? null)
     }
-    loadVisibility()
+    loadProjectMeta()
     return () => { cancelled = true }
   }, [project_id])
 
@@ -257,7 +279,7 @@ export default function ClientPortal() {
   const showBackArrow = activeKey !== 'home' && activeKey !== 'account'
 
   return (
-    <ClientFooterProvider>
+    <ClientFooterProvider whatsappGroupUrl={whatsappGroupUrl}>
     <ClientNavContext.Provider value={navValue}>
     <div className="cp-shell">
 

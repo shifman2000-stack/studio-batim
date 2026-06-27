@@ -11,8 +11,15 @@
 // ClientFile's edit mode (which renders the .cp-edit-bar save/cancel
 // strip at the same screen edge).
 //
-// Provider lives at the portal shell; useClientFooter() exposes the
-// setter to any descendant.
+// The context ALSO carries the per-project whatsapp_group_url (or null).
+// When set, the WhatsApp button opens that group invite link instead of
+// the default wa.me link to Einav's number. When null / empty /
+// undefined / the DB column is missing entirely, the button falls back
+// to WHATSAPP_URL unchanged.
+//
+// Provider lives at the portal shell (ClientPortal.jsx passes the value
+// in); useClientFooter() exposes both the visibility setter and the
+// link to any descendant.
 
 import { createContext, useCallback, useContext, useState } from 'react'
 import { PHONE, WHATSAPP_URL, EMAIL } from './contactInfo'
@@ -20,17 +27,18 @@ import { PHONE, WHATSAPP_URL, EMAIL } from './contactInfo'
 const FooterContext = createContext({
   hidden: false,
   setHidden: () => {},
+  whatsappGroupUrl: null,
 })
 
 export function useClientFooter() {
   return useContext(FooterContext)
 }
 
-export function ClientFooterProvider({ children }) {
+export function ClientFooterProvider({ children, whatsappGroupUrl = null }) {
   const [hidden, setHiddenState] = useState(false)
   const setHidden = useCallback((v) => setHiddenState(!!v), [])
   return (
-    <FooterContext.Provider value={{ hidden, setHidden }}>
+    <FooterContext.Provider value={{ hidden, setHidden, whatsappGroupUrl }}>
       {children}
     </FooterContext.Provider>
   )
@@ -68,8 +76,20 @@ const IconMail = ({ size = 22 }) => (
 )
 
 export default function ClientFooter() {
-  const { hidden } = useClientFooter()
+  const { hidden, whatsappGroupUrl } = useClientFooter()
   if (hidden) return null
+
+  /* WhatsApp button href:
+       * if the project has a non-empty whatsapp_group_url → use it
+         (opens the group invite in chat.whatsapp.com);
+       * otherwise → fall back to WHATSAPP_URL (the default wa.me link
+         to Einav's number, exactly the pre-existing behaviour).
+     `whatsappGroupUrl` may be null / undefined (column not yet on prod
+     / no value set) or a string with surrounding whitespace; the
+     `|| ''` + `.trim()` chain handles all of those without throwing. */
+  const groupUrl     = (whatsappGroupUrl || '').trim()
+  const whatsappHref = groupUrl ? groupUrl : WHATSAPP_URL
+
   return (
     <footer className="cp-footer" dir="rtl">
       <a
@@ -82,7 +102,7 @@ export default function ClientFooter() {
       </a>
       <a
         className="cp-footer-link"
-        href={WHATSAPP_URL}
+        href={whatsappHref}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="פתח שיחת WhatsApp"

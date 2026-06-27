@@ -50,6 +50,27 @@ const IconFolder = ({ size = 12 }) => (
   </svg>
 )
 
+/* Feather-style floppy-disk save glyph — used by the "הגדרות פרויקט"
+   modal footer save button. */
+const IconSave = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+    <polyline points="17 21 17 13 7 13 7 21"/>
+    <polyline points="7 3 7 8 15 8"/>
+  </svg>
+)
+
+/* Feather-style X glyph — used by the "הגדרות פרויקט" modal footer
+   cancel button. Caller sets the stroke color (we render it red there). */
+const IconX = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = iso.slice(0, 10)
@@ -70,8 +91,6 @@ function ProjectsKanban() {
   const [modalError, setModalError]         = useState('')
   const [dragId, setDragId]                 = useState(null)
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
-  const [ctxResponsible, setCtxResponsible] = useState('')
-  const [ctxRenameValue, setCtxRenameValue] = useState('')
   const [filterResponsible, setFilterResponsible] = useState('')
   const [tasksByProject, setTasksByProject]       = useState({})
   const menuRef                             = useRef(null)
@@ -108,6 +127,32 @@ function ProjectsKanban() {
      composes a Hebrew "ברוכים הבאים" message based on the project's
      contacts + auth_code, with a copy-to-clipboard action. */
   const [welcomePopup, setWelcomePopup]     = useState(null) // { message, copied } | null
+
+  /* ── "הגדרות פרויקט" modal ─────────────────────────────────────────
+     The right-click context menu is now just two items — "+ פתח משימה
+     חדשה" and "הגדרות פרויקט". Picking the latter sets settingsTarget
+     to the project the user right-clicked, which opens a Pattern-A
+     modal containing every per-project setting that used to live in
+     the context menu (rename, favorite, responsible, parent, archive,
+     auth code + welcome message) plus the new whatsapp_group_url field.
+
+     Draft/save model — the modal holds a LOCAL DRAFT of the editable
+     fields. Typing into an input mutates the draft only; the DB write
+     happens ONCE, on שמור, with a single UPDATE that carries only the
+     fields that actually changed. ביטול / סגור / overlay-click drop
+     the draft. settingsTarget is the original project row (kept around
+     for the diff comparison and for read-only fields like auth_code,
+     parent_project_id).
+
+     Draft fields = the editable ones:
+       name, is_favorite, responsible_id, whatsapp_group_url.
+
+     whatsapp_group_url is null-safe: rows loaded from a not-yet-migrated
+     prod don't carry the property, so the seed uses `?? ''` and the
+     diff treats missing/null/'' as the same baseline. ── */
+  const [settingsTarget, setSettingsTarget] = useState(null) // project | null
+  const [settingsDraft,  setSettingsDraft]  = useState(null) // { name, is_favorite, responsible_id, whatsapp_group_url } | null
+  const [settingsSaving, setSettingsSaving] = useState(false)
 
   // ── Parent-view mode (route /פרויקטים/אב/:parentId).
   // When the URL carries a parentId, this same Kanban renders only the
@@ -282,6 +327,13 @@ function ProjectsKanban() {
   const startArchiveFlow = (project) => {
     setArchiveTarget(project)
     setContextMenu(null)
+    /* Close the settings modal too — the archive confirm dialogs
+       overlay everything, and once the project is archived it leaves
+       the kanban view entirely, so there's nothing for the settings
+       modal to point at anymore. Cancel just drops you back to the
+       kanban. Draft is dropped along with the modal. */
+    setSettingsTarget(null)
+    setSettingsDraft(null)
     setArchiveStep(1)
   }
 
@@ -474,6 +526,13 @@ function ProjectsKanban() {
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
     setContextMenu(null)
+    /* Same reasoning as startArchiveFlow — once the parent flips, the
+       project either disappears from the top-level board or jumps to
+       a different parent view, so the settings modal pointing at the
+       old row no longer makes sense. Draft is dropped along with the
+       modal. */
+    setSettingsTarget(null)
+    setSettingsDraft(null)
     await fetchProjects()
   }
 
@@ -484,10 +543,13 @@ function ProjectsKanban() {
      emails + the project's auth_code, and opens a popup with a copy
      button. ── */
   const handleOpenWelcomeMessage = async () => {
-    if (!contextMenu) return
-    const projectId = contextMenu.project.id
-    const authCode  = contextMenu.project.auth_code
-    setContextMenu(null)
+    if (!settingsTarget) return
+    const projectId = settingsTarget.id
+    const authCode  = settingsTarget.auth_code
+    /* The welcome popup overlays the settings modal (both use
+       .modal-overlay). We INTENTIONALLY keep settingsTarget open so
+       that closing the welcome popup drops the user back into the
+       settings modal — no need to right-click and re-enter. */
 
     let contacts = []
     try {
@@ -586,49 +648,107 @@ ${authCode || '—'}
   const handleCardRightClick = (e, project) => {
     if (!isAdmin) return
     e.preventDefault()
-    const menuW = 180, menuH = 300
+    /* Two-item menu now → height shrank from ~300px to ~120px. The
+       boundary check uses the smaller value so the menu still opens
+       in the right quadrant near a viewport edge. */
+    const menuW = 180, menuH = 120
     const x = e.clientX + menuW > window.innerWidth  ? e.clientX - menuW : e.clientX
     const y = e.clientY + menuH > window.innerHeight ? e.clientY - menuH : e.clientY
-    setCtxResponsible(project.responsible_id || '')
-    setCtxRenameValue(project.name || '')
-    setCtxChildPickerOpen(false)
-    setCtxChildPickedId('')
     setContextMenu({ x, y, project })
   }
 
-  const handleRename = async () => {
-    if (!contextMenu) return
-    const trimmed = ctxRenameValue.trim()
-    const current = contextMenu.project.name || ''
-    if (!trimmed || trimmed === current) {
-      setContextMenu(null)
+  /* Open the per-project settings modal. Seeds the local DRAFT from
+     the project's current values (so cancelling has somewhere to
+     revert to), pre-warms the parent-options dropdown so it's ready
+     when the user ticks "פרויקט בן", and closes the context menu in
+     the same gesture. The parent-picker UI flags
+     (ctxChildPickerOpen / ctxChildPickedId) are NOT part of the draft —
+     parent change has its own two-step confirm flow. */
+  const openSettings = (project) => {
+    setSettingsTarget(project)
+    setSettingsDraft({
+      name:               project.name               || '',
+      is_favorite:        !!project.is_favorite,
+      responsible_id:     project.responsible_id     || '',
+      whatsapp_group_url: project.whatsapp_group_url ?? '',   // null-safe for not-yet-migrated prod
+    })
+    setCtxChildPickerOpen(false)
+    setCtxChildPickedId('')
+    setContextMenu(null)
+    if (!parentId && !(childCounts[project.id] > 0)) {
+      loadParentOptions()
+    }
+  }
+
+  /* ── Settings-modal: save / cancel ────────────────────────────────
+     handleSettingsSave diffs settingsDraft against the original
+     settingsTarget row and runs ONE supabase UPDATE with only the
+     columns that actually changed. Empty strings on nullable columns
+     (responsible_id, whatsapp_group_url) become NULL so the column
+     doesn't fill with junk. After the write we patch the local
+     `projects` array so the kanban card refreshes; the modal closes
+     unconditionally on success (and on no-change).
+
+     handleSettingsCancel drops the draft and closes the modal — no
+     DB write, no local-state mutation. Same handler is wired to the
+     ביטול and סגור buttons and to the overlay-click. ── */
+
+  const handleSettingsSave = async () => {
+    if (!settingsTarget || !settingsDraft || settingsSaving) return
+
+    const patch = {}
+
+    /* name — trim. Blank reverts to original (no-op); unchanged also no-op. */
+    const nameTrim = settingsDraft.name.trim()
+    const nameOrig = settingsTarget.name || ''
+    if (nameTrim && nameTrim !== nameOrig) patch.name = nameTrim
+
+    /* is_favorite — boolean diff. */
+    if (settingsDraft.is_favorite !== !!settingsTarget.is_favorite) {
+      patch.is_favorite = settingsDraft.is_favorite
+    }
+
+    /* responsible_id — empty → null. Compare normalised. */
+    const respDraft = settingsDraft.responsible_id || null
+    const respOrig  = settingsTarget.responsible_id || null
+    if (respDraft !== respOrig) patch.responsible_id = respDraft
+
+    /* whatsapp_group_url — trim, empty → null. Original may be
+       null/undefined/'' on prod-loaded rows; the baseline normalises
+       all three to '' so a not-yet-set row stays untouched on save. */
+    const waDraft = (settingsDraft.whatsapp_group_url || '').trim() || null
+    const waOrig  = ((settingsTarget.whatsapp_group_url ?? '') || '').trim() || null
+    if (waDraft !== waOrig) patch.whatsapp_group_url = waDraft
+
+    /* No-op shortcut. */
+    if (Object.keys(patch).length === 0) {
+      setSettingsTarget(null)
+      setSettingsDraft(null)
       return
     }
-    await supabase.from('projects').update({ name: trimmed }).eq('id', contextMenu.project.id)
-    setProjects(prev => prev.map(p => p.id === contextMenu.project.id
-      ? { ...p, name: trimmed }
-      : p
-    ))
-    setContextMenu(null)
+
+    setSettingsSaving(true)
+    await supabase.from('projects').update(patch).eq('id', settingsTarget.id)
+
+    /* Local-state patch carries the joined profiles row if the
+       responsible changed — same shape the kanban list uses. */
+    const localPatch = { ...patch }
+    if ('responsible_id' in patch) {
+      const user = users.find(u => u.id === patch.responsible_id)
+      localPatch.profiles = user ? { first_name: user.first_name } : null
+    }
+    setProjects(prev => prev.map(p => p.id === settingsTarget.id ? { ...p, ...localPatch } : p))
+
+    setSettingsSaving(false)
+    setSettingsTarget(null)
+    setSettingsDraft(null)
   }
 
-  const handleToggleFavorite = async () => {
-    if (!contextMenu) return
-    const next = !contextMenu.project.is_favorite
-    await supabase.from('projects').update({ is_favorite: next }).eq('id', contextMenu.project.id)
-    setProjects(prev => prev.map(p => p.id === contextMenu.project.id ? { ...p, is_favorite: next } : p))
-    setContextMenu(null)
-  }
-
-  const handleResponsibleChange = async (value) => {
-    if (!contextMenu) return
-    const user = users.find(u => u.id === value)
-    await supabase.from('projects').update({ responsible_id: value || null }).eq('id', contextMenu.project.id)
-    setProjects(prev => prev.map(p => p.id === contextMenu.project.id
-      ? { ...p, responsible_id: value || null, profiles: user ? { first_name: user.first_name } : null }
-      : p
-    ))
-    setContextMenu(null)
+  const handleSettingsCancel = () => {
+    setSettingsTarget(null)
+    setSettingsDraft(null)
+    setCtxChildPickerOpen(false)
+    setCtxChildPickedId('')
   }
 
   const handleDragStart = (e, projectId) => {
@@ -1031,147 +1151,31 @@ ${authCode || '—'}
 
       </div>
 
-      {/* Context Menu */}
+      {/* ── Right-click context menu — slim, two items only.
+            "פתח משימה חדשה" goes straight to NewTaskModal.
+            "הגדרות פרויקט" hands off to the settings modal below.
+            Everything else that used to live here (rename / favorite /
+            responsible / parent / archive / auth code + welcome msg)
+            now lives in that modal. ── */}
       {contextMenu && (
         <div
           ref={menuRef}
           className="context-menu"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
-          <button className="context-menu-favorite-btn" onClick={() => openTaskModal(contextMenu.project)}>
+          <button
+            className="context-menu-favorite-btn"
+            onClick={() => openTaskModal(contextMenu.project)}
+          >
             ＋ פתח משימה חדשה
           </button>
           <div className="context-menu-divider" />
-          <div className="context-menu-row">
-            <span className="context-menu-label">שנה שם</span>
-            <input
-              type="text"
-              className="context-menu-input"
-              value={ctxRenameValue}
-              onChange={e => setCtxRenameValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleRename() }}
-              dir="rtl"
-            />
-            <button
-              type="button"
-              onClick={handleRename}
-              title="שמור שם"
-              style={{ background: 'none', border: 'none', padding: '2px 4px', cursor: 'pointer', color: '#374151', display: 'flex', alignItems: 'center' }}
-            >
-              <IconCheck />
-            </button>
-          </div>
-          <div className="context-menu-divider" />
-          <button className="context-menu-favorite-btn" onClick={handleToggleFavorite}>
-            {contextMenu.project.is_favorite ? '☆ הסר ממועדפים' : '★ הוסף למועדפים'}
+          <button
+            className="context-menu-favorite-btn"
+            onClick={() => openSettings(contextMenu.project)}
+          >
+            ⚙ הגדרות פרויקט
           </button>
-          <div className="context-menu-divider" />
-          <div className="context-menu-row">
-            <span className="context-menu-label">אחראית</span>
-            <select
-              className="context-menu-input"
-              value={ctxResponsible}
-              onChange={e => handleResponsibleChange(e.target.value)}
-            >
-              <option value="">ללא</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.first_name}</option>
-              ))}
-            </select>
-          </div>
-          {/* ── "פרויקט בן" — hidden if this project already has children
-              (2-level limit: a parent can't become a child). Checking the
-              box reveals a parent-picker; picking a parent opens the same
-              confirm dialog style as the archive flow. Unchecking (already
-              a child) shows a detach confirm. ── */}
-          {!parentId && !(childCounts[contextMenu.project.id] > 0) && (
-            <>
-              <div className="context-menu-divider" />
-              <div className="context-menu-row">
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1, margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!contextMenu.project.parent_project_id || ctxChildPickerOpen}
-                    onChange={e => {
-                      const isCurrentlyChild = !!contextMenu.project.parent_project_id
-                      if (isCurrentlyChild) {
-                        setParentConfirm({ mode: 'detach', project: contextMenu.project })
-                      } else if (e.target.checked) {
-                        setCtxChildPickedId('')
-                        setCtxChildPickerOpen(true)
-                        loadParentOptions()
-                      } else {
-                        setCtxChildPickerOpen(false)
-                        setCtxChildPickedId('')
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <span className="context-menu-label" style={{ marginRight: 0 }}>פרויקט בן</span>
-                </label>
-              </div>
-              {!contextMenu.project.parent_project_id && ctxChildPickerOpen && (
-                <div className="context-menu-row">
-                  <select
-                    className="context-menu-input"
-                    value={ctxChildPickedId}
-                    onChange={e => {
-                      const pid = e.target.value
-                      setCtxChildPickedId(pid)
-                      if (pid) {
-                        const parentName = parentOptions.find(p => p.id === pid)?.name || ''
-                        setParentConfirm({
-                          mode: 'attach',
-                          project: contextMenu.project,
-                          parentId: pid,
-                          parentName,
-                        })
-                      }
-                    }}
-                  >
-                    <option value="">בחר אב…</option>
-                    {parentOptions
-                      .filter(p => p.id !== contextMenu.project.id)
-                      .map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                  </select>
-                </div>
-              )}
-            </>
-          )}
-          {isAdmin && (
-            <>
-              <div className="context-menu-divider" />
-              <button
-                className="context-menu-archive-btn"
-                onClick={() => startArchiveFlow(contextMenu.project)}
-              >
-                העבר לארכיון
-              </button>
-            </>
-          )}
-          {/* ── Read-only: the client's initial authorization code. Shown
-              so the manager can copy it and pass it on. The WhatsApp
-              glyph at the end opens the welcome-message popup composer
-              (same flow as the removed full-width button). ── */}
-          <div className="context-menu-divider" />
-          <div className="context-menu-row">
-            <span className="context-menu-label">קוד הרשאה לחיבור ראשוני:</span>
-            <span className="context-menu-value">{contextMenu.project.auth_code || '—'}</span>
-            <button
-              type="button"
-              className="context-menu-whatsapp-btn"
-              onClick={handleOpenWelcomeMessage}
-              title="הכנת הודעת ברוכים הבאים"
-              aria-label="הכנת הודעת ברוכים הבאים"
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="#25D366" stroke="none" aria-hidden="true">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                <path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.936.526 3.745 1.438 5.291L2 22l4.842-1.417A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 11.999 2zm0 18a7.958 7.958 0 0 1-4.28-1.244l-.307-.182-3.18.93.972-3.093-.2-.317A7.958 7.958 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
-              </svg>
-            </button>
-          </div>
         </div>
       )}
 
@@ -1366,6 +1370,272 @@ ${authCode || '—'}
           </div>
         </div>
       )}
+
+      {/* ── "הגדרות פרויקט" — per-project settings modal ────────────────
+            Draft/save model: typing into any field mutates the local
+            `settingsDraft` object only; the DB write happens ONCE on
+            "שמור" via handleSettingsSave, which diffs draft vs original
+            and runs a single UPDATE with just the changed columns.
+            ביטול / סגור / overlay-click all drop the draft (handleSettingsCancel).
+
+            Independent sections (NOT part of draft/save):
+              * פרויקט בן — its own two-step parentConfirm flow.
+              * קוד הרשאה — read-only, plus a green WhatsApp button that
+                            opens the welcome-message popup composer.
+              * העבר לארכיון — its own two-step archive flow.
+
+            Design notes:
+              * Every section is a `pdSettingsRow` block (label above
+                input, full-width input, even vertical rhythm).
+              * Border-radius dropped from the global 12px to 8px on
+                inputs and buttons (override of .modal-input + inline
+                styles on the footer buttons).
+              * Subtle full-width divider above the destructive archive
+                button so it visually separates from the editable rows.
+              * Favorite icon now reflects the DRAFT state — ★ filled
+                when is_favorite=true, ☆ outline when false (matches
+                actual state, not the action).
+            ── */}
+      {settingsTarget && settingsDraft && (() => {
+        /* Inline style constants — shared across all rows so every
+           field has identical alignment, width, and border-radius.
+           Field grouping (separated by .pdGroupDivider):
+             Group A — input fields    (name, responsible, whatsapp link)
+             Group B — toggles/markers (favorite star, parent project)
+             Group C — read-only       (auth code + welcome message)
+             Group D — destructive     (archive — admin-only)
+        */
+        const pdSettingsRow   = { marginBottom: 14 }
+        const pdInputBorder   = { borderRadius: 8 }
+        const pdGroupDivider  = { borderTop: '1px solid #ececec', margin: '4px 0 14px' }
+        /* Frameless icon-button base for the footer — no border, no
+           background, just the icon over a comfortable tap area with a
+           small text label beside it. Matches the spirit of the app's
+           other small icon buttons. */
+        const pdFooterIconBtn = {
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none', padding: '6px 10px',
+          fontFamily: 'inherit', fontSize: 14, cursor: 'pointer',
+          color: '#1a1a2e',
+        }
+        return (
+          <div className="modal-overlay" onClick={handleSettingsCancel}>
+            <div
+              className="modal-box"
+              onClick={e => e.stopPropagation()}
+              dir="rtl"
+              style={{ width: 380, borderRadius: 10, gap: 0 }}
+            >
+              <h3 className="modal-title" style={{ marginBottom: 16 }}>הגדרות פרויקט</h3>
+
+              {/* ── Group A: input fields ────────────────────────────── */}
+
+              {/* 1. שם פרויקט */}
+              <div style={pdSettingsRow}>
+                <label className="modal-label">שם פרויקט</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  style={pdInputBorder}
+                  value={settingsDraft.name}
+                  onChange={e => setSettingsDraft(d => ({ ...d, name: e.target.value }))}
+                  dir="rtl"
+                />
+              </div>
+
+              {/* 2. אחראית */}
+              <div style={pdSettingsRow}>
+                <label className="modal-label">אחראית</label>
+                <select
+                  className="modal-input"
+                  style={pdInputBorder}
+                  value={settingsDraft.responsible_id}
+                  onChange={e => setSettingsDraft(d => ({ ...d, responsible_id: e.target.value }))}
+                >
+                  <option value="">ללא</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.first_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. קישור קבוצת WhatsApp */}
+              <div style={pdSettingsRow}>
+                <label className="modal-label">קישור קבוצת WhatsApp</label>
+                <input
+                  type="text"
+                  className="modal-input"
+                  style={pdInputBorder}
+                  value={settingsDraft.whatsapp_group_url}
+                  onChange={e => setSettingsDraft(d => ({ ...d, whatsapp_group_url: e.target.value }))}
+                  placeholder="קישור הזמנה לקבוצת וואטסאפ של הפרויקט"
+                  dir="rtl"
+                />
+              </div>
+
+              <div style={pdGroupDivider} />
+
+              {/* ── Group B: toggles / markers ───────────────────────── */}
+
+              {/* 4. מועדפים — frameless star + text, clickable as one unit.
+                  No checkbox. Star icon matches the CURRENT draft state
+                  (★ filled when true, ☆ outline when false). */}
+              <div style={pdSettingsRow}>
+                <button
+                  type="button"
+                  onClick={() => setSettingsDraft(d => ({ ...d, is_favorite: !d.is_favorite }))}
+                  aria-pressed={settingsDraft.is_favorite}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    background: 'none', border: 'none', padding: 0,
+                    fontFamily: 'inherit', fontSize: 14,
+                    color: '#1a1a2e', cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1, color: settingsDraft.is_favorite ? '#f5a623' : '#9ca3af' }}>
+                    {settingsDraft.is_favorite ? '★' : '☆'}
+                  </span>
+                  <span>{settingsDraft.is_favorite ? 'פרויקט מועדף' : 'לא מועדף'}</span>
+                </button>
+              </div>
+
+              {/* 5. פרויקט בן — independent (its own two-step parentConfirm
+                  flow). Hidden in parent view and on projects that already
+                  have children. The picker opens parentConfirm; that
+                  handler closes this modal entirely on success. */}
+              {!parentId && !(childCounts[settingsTarget.id] > 0) && (
+                <div style={pdSettingsRow}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0, fontSize: 14, color: '#1a1a2e' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!settingsTarget.parent_project_id || ctxChildPickerOpen}
+                      onChange={e => {
+                        const isCurrentlyChild = !!settingsTarget.parent_project_id
+                        if (isCurrentlyChild) {
+                          setParentConfirm({ mode: 'detach', project: settingsTarget })
+                        } else if (e.target.checked) {
+                          setCtxChildPickedId('')
+                          setCtxChildPickerOpen(true)
+                          loadParentOptions()
+                        } else {
+                          setCtxChildPickerOpen(false)
+                          setCtxChildPickedId('')
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>הפוך לפרויקט בן</span>
+                  </label>
+                  {!settingsTarget.parent_project_id && ctxChildPickerOpen && (
+                    <select
+                      className="modal-input"
+                      style={{ ...pdInputBorder, marginTop: 8 }}
+                      value={ctxChildPickedId}
+                      onChange={e => {
+                        const pid = e.target.value
+                        setCtxChildPickedId(pid)
+                        if (pid) {
+                          const parentName = parentOptions.find(p => p.id === pid)?.name || ''
+                          setParentConfirm({
+                            mode: 'attach',
+                            project: settingsTarget,
+                            parentId: pid,
+                            parentName,
+                          })
+                        }
+                      }}
+                    >
+                      <option value="">בחר אב…</option>
+                      {parentOptions
+                        .filter(p => p.id !== settingsTarget.id)
+                        .map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div style={pdGroupDivider} />
+
+              {/* ── Group C: read-only ───────────────────────────────── */}
+
+              {/* 6. קוד הרשאה — read-only chip + green WhatsApp button
+                  that opens the welcome-message popup composer. */}
+              <div style={pdSettingsRow}>
+                <label className="modal-label">קוד הרשאה לחיבור ראשוני</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1, padding: '10px 12px', background: '#F3F4F6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#1a1a2e', letterSpacing: '0.5px', fontFamily: 'inherit', boxSizing: 'border-box' }}>
+                    {settingsTarget.auth_code || '—'}
+                  </span>
+                  <button
+                    type="button"
+                    className="context-menu-whatsapp-btn"
+                    onClick={handleOpenWelcomeMessage}
+                    title="הכנת הודעת ברוכים הבאים"
+                    aria-label="הכנת הודעת ברוכים הבאים"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#25D366" stroke="none" aria-hidden="true">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                      <path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.936.526 3.745 1.438 5.291L2 22l4.842-1.417A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 11.999 2zm0 18a7.958 7.958 0 0 1-4.28-1.244l-.307-.182-3.18.93.972-3.093-.2-.317A7.958 7.958 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Group D: destructive (admin-only) ────────────────── */}
+
+              {isAdmin && (
+                <>
+                  <div style={pdGroupDivider} />
+                  {/* 7. העבר לארכיון — opens the existing two-step archive
+                      confirm flow. Small archive glyph next to the label. */}
+                  <button
+                    className="context-menu-archive-btn"
+                    style={{ width: '100%', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}
+                    onClick={() => startArchiveFlow(settingsTarget)}
+                  >
+                    <IconArchive size={14} />
+                    <span>העבר לארכיון</span>
+                  </button>
+                </>
+              )}
+
+              {/* ── Footer ──────────────────────────────────────────────
+                  Two frameless icon buttons. שמור is a Feather floppy-disk
+                  glyph; ביטול is a red X. Overlay-click also cancels. ── */}
+              <div className="modal-actions" style={{ marginTop: 18 }}>
+                <button
+                  type="button"
+                  onClick={handleSettingsSave}
+                  disabled={settingsSaving}
+                  aria-label="שמור"
+                  title="שמור"
+                  style={{
+                    ...pdFooterIconBtn,
+                    opacity: settingsSaving ? 0.4 : 1,
+                    cursor: settingsSaving ? 'not-allowed' : 'pointer',
+                    color: '#1a1a2e',
+                  }}
+                >
+                  <IconSave size={18} />
+                  <span>{settingsSaving ? '...' : 'שמור'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSettingsCancel}
+                  aria-label="ביטול"
+                  title="ביטול"
+                  style={{ ...pdFooterIconBtn, color: '#E24B4A' }}
+                >
+                  <IconX size={18} />
+                  <span>ביטול</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── New Task Modal ── */}
       {taskModal && (

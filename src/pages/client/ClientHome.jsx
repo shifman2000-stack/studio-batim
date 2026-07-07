@@ -46,14 +46,14 @@ import { GroupIcon, IconBack } from '../../components/icons/PortalIcons'
    kept inline so the home screen doesn't have to import the whole
    menu config just to render a sub-tile label. */
 const CHILD_LABELS = {
-  file:        'פרטי תיק',
-  documents:   'תיק מסמכים',
-  shared:      'מרחב משותף',
-  quantities:  'כתב כמויות',
-  finishing:   'חומרי גמר',
-  contractor:  'מפרט לקבלן',
-  progress:    'שלבי התקדמות',
-  meetings:    'סיכומי פגישות',
+  file:          'פרטי תיק',
+  documents:     'תיק מסמכים',
+  shared:        'מרחב משותף',
+  quantities:    'כתב כמויות',
+  finishing:     'חומרי גמר',
+  contractor:    'מפרט לקבלן',
+  progress:      'שלבי התקדמות',
+  meetings:      'סיכומי פגישות',
 }
 
 export default function ClientHome({
@@ -124,7 +124,7 @@ export default function ClientHome({
               <p className="cp-home-greeting" style={{ textAlign: 'center' }}>
                 הי {displayName}
                 <br />
-                ברוך הבא למרחב המשותף שלנו
+                ברוך הבא לאזור האישי שלך בסטודיו בתים
               </p>
             )}
 

@@ -25,7 +25,7 @@ export const GROUPS = [
   },
   {
     key:      'progress_group',
-    label:    'התקדמות פרויקט',
+    label:    'התקדמות התהליך',
     icon:     'progress_group',
     children: ['documents', 'progress', 'meetings'],
   },
@@ -38,6 +38,21 @@ export const GROUPS = [
 ]
 
 /**
+ * Client keys that are ALWAYS visible regardless of the per-project
+ * client_visible_tabs jsonb. These are keys that aren't in
+ * clientTabVisibility.js's CONTROLLABLE_TABS at all (so
+ * isClientTabVisible falls through to `false`) but we still want the
+ * tile/drawer entry to render — typically because they're brand-new
+ * screens shipped ahead of their manager-side toggle.
+ *
+ * Currently EMPTY: the questionnaire is temporarily disconnected from
+ * the portal so this bundle can ship without the questionnaire /
+ * house-builder module. When the manager-side lands the questionnaire
+ * key will move back in here (or graduate to CONTROLLABLE_TABS).
+ */
+const ALWAYS_ON_CHILDREN = new Set()
+
+/**
  * Children of a group that the current project allows the client to see.
  * Order is preserved from the group's `children` array.
  * @param {object} group
@@ -45,7 +60,9 @@ export const GROUPS = [
  * @returns {string[]}
  */
 export function getVisibleChildren(group, clientVisibleTabs) {
-  return group.children.filter(k => isClientTabVisible(k, clientVisibleTabs))
+  return group.children.filter(k =>
+    ALWAYS_ON_CHILDREN.has(k) || isClientTabVisible(k, clientVisibleTabs)
+  )
 }
 
 /**

@@ -53,7 +53,7 @@ export const IconFiling = ({ size = 32 }) => (
   </svg>
 )
 
-/* Trending-up — "התקדמות פרויקט". */
+/* Trending-up — "התקדמות התהליך". */
 export const IconProgressGroup = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

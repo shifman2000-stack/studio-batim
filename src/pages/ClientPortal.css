@@ -1901,3 +1901,155 @@
   .cp-progress-note          { font-size: 12px; padding: 7px 10px; }
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   DESKTOP-ONLY visual adjustments (min-width: 769px). Mobile stays
+   exactly as it was; every rule below only fires on desktop widths.
+   Three changes:
+     1) Bottom contact bar — group icons centered with a fixed gap
+        instead of spreading them full width.
+     2) Top brand logo — pin to the visual LEFT edge and scale up
+        ~15% so it reads at a more comfortable desktop size.
+     3) Shared screen header — reinforce the row layout (title on the
+        right, back arrow on the left, above the page content).
+   All three sit LAST in source order, so plain class specificity is
+   enough to beat the base rules — no !important needed (verified:
+   there is no !important anywhere in this file).
+   ══════════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+
+  /* 1. Bottom contact bar — group + center + 48px gap.
+     Base uses `.cp-footer-link { flex: 1 1 0 }` to spread the three
+     icons full width. On desktop we cancel the flex-grow and let each
+     link sit at its natural width, then center them as a group inside
+     the footer with a modest fixed gap (48px) between icons. */
+  .cp-footer {
+    justify-content: center;
+    gap: 48px;
+  }
+  .cp-footer-link {
+    flex: 0 0 auto;         /* stop consuming full row; use natural width */
+    min-width: 72px;         /* keep each icon+label group at a comfortable size */
+  }
+
+  /* 2. Brand logo — pin to visual LEFT (RTL: flex-end = visual LEFT
+        of the main axis) and scale up ~15%. Wrapper width grows to
+        225px (196 × 1.15) so the scaled inner still fits inside the
+        wrapper's layout box; the inner `<Logo />` component scales
+        from 0.62 → 0.713 (also 15% larger). Hamburger stays where it
+        was (position: absolute; right: 8px = visual RIGHT). */
+  .cp-topbar {
+    justify-content: flex-end;
+  }
+  .cp-topbar-logo {
+    width: 225px;
+  }
+  .cp-topbar-logo > * {
+    transform: scale(0.713);
+  }
+
+  /* 3. Shared screen header — reinforce the row.
+        DOM order is `[title, back]`. In an RTL flex row with
+        justify-content: space-between this paints as:
+             [ title ─────────────── (←) ]
+                 visual RIGHT     visual LEFT
+        Every screen that shows the back arrow already uses
+        .cp-screen-header, so this restates the geometry explicitly on
+        desktop so the layout can never regress to a stacked/column
+        variant. .cp-screen-back stays a static flex item (no fixed
+        positioning) so it sits on the SAME row as the title. */
+  .cp-screen-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cp-screen-header-title {
+    flex: 1;
+    text-align: right;
+  }
+  .cp-screen-back {
+    position: static;
+    flex-shrink: 0;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DESKTOP-ONLY — align .cp-screen-header with the WORK-AREA below it
+   (min-width: 769px). Mobile is untouched.
+
+   Problem this fixes: on content screens the header is a direct child
+   of <main>, so at desktop widths it spans the full viewport — the
+   back arrow ends up at the viewport LEFT edge instead of the work-
+   area LEFT edge, and doesn't line up with the page content below
+   (which lives inside .cp-container at max-width 600px, centered).
+
+   Fix: snap the header row to the work-area's own bounds — same
+   max-width and same horizontal edges as .cp-container — so the title
+   sits flush at the work-area's visual RIGHT edge and the back arrow
+   flush at the visual LEFT edge, on ONE row above the page content.
+
+   Two contexts, one identical outcome:
+     (a) Content screens (`.cp-content--with-header`) — header is a
+         direct child of <main>. We cap it to .cp-container's 600px
+         and center it with `margin-inline: auto` so its edges match
+         .cp-container's edges exactly.
+     (b) Home group sub-screens — header lives INSIDE .cp-home-content
+         (max-width 480px, already centered by .cp-home's flex layout).
+         It naturally inherits that container's width, so no extra
+         selector is needed — the shared `padding-inline: 0` rule
+         below is all it needs.
+
+   Both contexts drop the mobile 12px side padding so the row's inner
+   content spans the container edge to edge — NOT the card-grid width,
+   NOT the viewport width. Section 3 of the previous desktop block
+   already enforces the row's flex geometry (row + space-between +
+   static back button); this block only adds the width + padding
+   constraints. Same class specificity + later in source order → wins
+   on desktop without touching mobile.
+   ══════════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+  .cp-screen-header {
+    padding-inline: 0;
+  }
+  .cp-content--with-header .cp-screen-header {
+    max-width: 600px;
+    margin-inline: auto;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DESKTOP-ONLY — align the group-SUB-SCREEN header row with its
+   CARD GRID (min-width: 769px). Mobile is untouched.
+
+   Problem this fixes: on group sub-screens rendered by ClientHome
+   (e.g. "התקדמות התהליך", "מפרטים לשלב ביצוע"), the DOM is:
+       .cp-home--subgroup
+         └── .cp-home-content       ← max-width 480px, centered
+             └── .cp-home-subgroup
+                 ├── .cp-screen-header   ← currently 480px wide, 0 padding
+                 └── .cp-home-tiles      ← 480px wide, `padding-inline: 24px`
+                                            → inner grid = 432px
+   The universal `.cp-screen-header { padding-inline: 0 }` rule above
+   (added for content screens) zeros the header's side padding here
+   too, so the title overflows the tile grid's visual RIGHT edge by
+   24px and the back arrow overflows the visual LEFT edge by 24px.
+
+   Fix (desktop only): scope a 24px `padding-inline` to the header
+   INSIDE `.cp-home--subgroup` so its inner content spans exactly the
+   same 432px as the tile grid's inner content. Now:
+     * Title's visual RIGHT edge = tile grid's inner RIGHT edge.
+     * Back arrow's visual LEFT edge = tile grid's inner LEFT edge.
+   Drawing a vertical line down from each end of the header lands on
+   the outer edges of the card grid — no overflow, no gap.
+
+   Scoping: `.cp-home--subgroup .cp-screen-header` is specificity
+   (0,2,0), beating the universal `.cp-screen-header { padding-inline: 0 }`
+   at (0,1,0). Content-screen headers under `.cp-content--with-header`
+   are UNAFFECTED — they don't live inside `.cp-home--subgroup`.
+   ══════════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+  .cp-home--subgroup .cp-screen-header {
+    padding-inline: 24px;
+  }
+}
+

@@ -691,11 +691,13 @@
   text-align: center;
 }
 
-/* On window.print() (report tab export icon), hide all drill UI so the
-   exported file contains only the monthly summary rows. The existing
-   `@media print` rule in this file hides everything except
-   `.report-table-container`; here we further hide the drill bits inside it,
-   beating `visibility: visible` via `display: none`. */
+/* On window.print() (report tab export icon), hide the on-screen drill
+   affordances so the exported PDF is driven by data, not by whichever
+   rows happen to be expanded. The always-rendered `.hours-drill-print-row`
+   sibling below takes over for print. The existing `@media print` rule
+   in this file hides everything except `.report-table-container`; here
+   we further hide the interactive drill bits, beating `visibility:
+   visible` via `display: none`. */
 @media print {
   .hours-drill-toggle,
   .hours-drill-toggle-header,
@@ -703,6 +705,42 @@
   .hours-drill-row,
   .hours-drill-list {
     display: none !important;
+  }
+}
+
+/* Print-only per-day detail row — rendered in the DOM for every filtered
+   employee regardless of the on-screen expand state, but display:none on
+   screen. Only becomes visible in @media print. The visibility overrides
+   whitelist it against the global "body * { visibility: hidden }" rule
+   further down in this file (same pattern as .report-print-header). */
+.hours-drill-print-row {
+  display: none;
+}
+@media print {
+  .hours-drill-print-row {
+    display: table-row !important;
+    visibility: visible !important;
+  }
+  .hours-drill-print-row td {
+    visibility: visible !important;
+    padding: 6px 24px 12px !important;
+    text-align: right !important;
+    direction: rtl !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .hours-drill-print-list {
+    visibility: visible !important;
+    direction: rtl !important;
+    text-align: right !important;
+  }
+  .hours-drill-print-line {
+    visibility: visible !important;
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+    color: #333 !important;
+    direction: rtl !important;
+    text-align: right !important;
   }
 }
 

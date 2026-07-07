@@ -238,6 +238,87 @@
     box-shadow: none !important;
   }
   .hours-report-export-row { display: none !important; }
+  /* Hide the on-screen drill toggle + expanded row in print — the PDF
+     detail is driven by the always-present print-only row below, not
+     by whichever rows the user happened to expand. */
+  .hours-drill-toggle,
+  .hours-drill-toggle-header,
+  .hours-drill-toggle-cell,
+  .hours-drill-row,
+  .hours-drill-list { display: none !important; }
+}
+
+/* ── Per-employee drill-down ("+" toggle) ── */
+
+.hours-drill-toggle-header,
+.hours-drill-toggle-cell { text-align: center; width: 36px; }
+
+.hours-drill-toggle {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #111;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  font-family: inherit;
+}
+.hours-drill-toggle:hover { background: #f3f4f6; }
+
+.hours-drill-row td {
+  background: #fafafa !important;
+  padding: 8px 24px !important;
+}
+.hours-drill-list {
+  direction: rtl;
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #374151;
+}
+.hours-drill-line { padding: 2px 0; }
+.hours-drill-loading,
+.hours-drill-empty {
+  font-size: 12px;
+  color: #6b7280;
+  padding: 4px 0;
+}
+
+/* Print-only per-day detail row — always rendered in the DOM but
+   invisible on screen. In @media print it's revealed as a table row.
+   Visibility is explicitly re-asserted at every level so the global
+   `body * { visibility: hidden }` rule at the top of this block doesn't
+   swallow it (same pattern already used by `.report-print-header-standalone`). */
+.hours-drill-print-row { display: none; }
+@media print {
+  .hours-drill-print-row {
+    display: table-row !important;
+    visibility: visible !important;
+  }
+  .hours-drill-print-row td {
+    visibility: visible !important;
+    padding: 6px 24px 12px !important;
+    text-align: right !important;
+    direction: rtl !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .hours-drill-print-list {
+    visibility: visible !important;
+    direction: rtl !important;
+    text-align: right !important;
+  }
+  .hours-drill-print-line {
+    visibility: visible !important;
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+    color: #333 !important;
+    direction: rtl !important;
+    text-align: right !important;
+  }
 }
 
 /* Totals row */

@@ -3,6 +3,14 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import GoogleCalendarPanel from './components/hours/GoogleCalendarPanel'
 import EmployeesMultiSelect from './components/EmployeesMultiSelect'
+import {
+  toMins,
+  isoDate,
+  formatDDMMYY,
+  formatTotalHHMM,
+  fetchEmployeeDailyDetails,
+  formatDrillLine,
+} from './lib/hoursDetail'
 import './Hours.css'
 
 // NOTE: Ensure the following columns exist in your Supabase tables:
@@ -40,35 +48,16 @@ const MONTH_NAMES = [
 const DAY_NAMES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 const DAY_TYPE_LABELS = { work: 'עבודה', vacation: 'חופש', sick: 'מחלה' }
 
-const toMins = (hhmm) => {
-  if (!hhmm) return 0
-  const [h, m] = hhmm.split(':').map(Number)
-  return h * 60 + (m || 0)
-}
+/* toMins / isoDate / formatDDMMYY / formatTotalHHMM live in
+   src/lib/hoursDetail.js — imported above so this component and the
+   standalone "דוח שעות עבודה" page share one source of truth for the
+   drill-down math and formatting. */
 
 const toHHMM = (mins) => {
   if (!mins && mins !== 0) return ''
   const h = Math.floor(Math.abs(mins) / 60)
   const m = Math.abs(mins) % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
-const isoDate = (y, m, d) =>
-  `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-
-/* Format ISO YYYY-MM-DD → DD/MM/YY (two-digit year, used in drill-down lines). */
-const formatDDMMYY = (iso) => {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y.slice(2)}`
-}
-
-/* Total hours formatter (non-padded hours): 8:30, 0:45, 12:15. */
-const formatTotalHHMM = (mins) => {
-  if (!mins && mins !== 0) return ''
-  const h = Math.floor(Math.abs(mins) / 60)
-  const m = Math.abs(mins) % 60
-  return `${h}:${String(m).padStart(2, '0')}`
 }
 
 const todayISO = () => {
@@ -153,6 +142,11 @@ function Hours() {
   const [reportDrillExpanded, setReportDrillExpanded] = useState(() => new Set())
   const [reportDrillCache,    setReportDrillCache]    = useState({})
   const [reportDrillLoading,  setReportDrillLoading]  = useState(() => new Set())
+  /* Print-request flag — flipped true by the export button after the
+     drill cache is prewarmed for every filtered employee. The effect
+     below waits one commit so the print-only rows are guaranteed to be
+     in the DOM before window.print() captures it. */
+  const [printPending, setPrintPending] = useState(false)
   const [gcalDots, setGcalDots]           = useState({}) // { 'YYYY-MM-DD': ['#hex',...] }
   const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
   const [employeeTab, setEmployeeTab]     = useState(1) // 1=הזנת שעות 2=דוחות
@@ -467,75 +461,10 @@ function Hours() {
   }
 
   /* ── Drill-down helpers — fetch + toggle + render body ── */
-  const fetchEmployeeDailyDetails = async (uId, year, month) => {
-    const first   = `${year}-${String(month + 1).padStart(2, '0')}-01`
-    const lastDay = new Date(year, month + 1, 0).getDate()
-    const last    = isoDate(year, month, lastDay)
-
-    const [{ data: attData }, { data: repData }] = await Promise.all([
-      supabase.from('attendance').select('date, day_type, arrival_time, departure_time')
-        .eq('user_id', uId).gte('date', first).lte('date', last),
-      supabase.from('hour_reports').select('date, hours, minutes')
-        .eq('user_id', uId).gte('date', first).lte('date', last),
-    ])
-
-    const dayMap = new Map()
-    for (const a of (attData || [])) {
-      const existing = dayMap.get(a.date) || {
-        date: a.date, dayType: null, attMins: 0, repMins: 0,
-        arrivalTime: null, departureTime: null,
-      }
-      if (a.day_type) existing.dayType = a.day_type
-      /* Capture first non-null arrival/departure seen for this date */
-      if (a.arrival_time && !existing.arrivalTime) existing.arrivalTime = a.arrival_time.slice(0, 5)
-      if (a.departure_time && !existing.departureTime) existing.departureTime = a.departure_time.slice(0, 5)
-      if (a.day_type === 'work' && a.arrival_time && a.departure_time) {
-        existing.attMins += toMins(a.departure_time.slice(0, 5)) - toMins(a.arrival_time.slice(0, 5))
-      }
-      dayMap.set(a.date, existing)
-    }
-    for (const r of (repData || [])) {
-      const existing = dayMap.get(r.date) || {
-        date: r.date, dayType: null, attMins: 0, repMins: 0,
-        arrivalTime: null, departureTime: null,
-      }
-      existing.repMins += (r.hours || 0) * 60 + (r.minutes || 0)
-      dayMap.set(r.date, existing)
-    }
-
-    const rows = []
-    for (const day of dayMap.values()) {
-      /* Prefer attendance-diff (actual time at work); fall back to hour_reports sum (admin case) */
-      const totalMins = day.attMins > 0 ? day.attMins : day.repMins
-      /* Include days that are marked vacation/sick OR that have any hours.
-         Skip empty days (no day_type AND no hours). */
-      if (day.dayType === 'vacation' || day.dayType === 'sick' || totalMins > 0) {
-        rows.push({
-          date:          day.date,
-          dayType:       day.dayType,
-          arrivalTime:   day.arrivalTime,
-          departureTime: day.departureTime,
-          totalMins,
-        })
-      }
-    }
-    rows.sort((a, b) => a.date.localeCompare(b.date))
-    return rows
-  }
-
-  const formatDrillLine = (day) => {
-    const date = formatDDMMYY(day.date)
-    /* Vacation / sick days — no times, no total */
-    if (day.dayType === 'vacation') return `${date}  |  יום חופש`
-    if (day.dayType === 'sick')     return `${date}  |  יום מחלה`
-    /* Work day (or any day with hours): "DD/MM/YY  |  HH:MM - HH:MM  |  סה״כ שעות: H:MM".
-       Missing arrival/departure → "—". The "HH:MM - HH:MM" run is left to the browser's
-       natural bidi handling (LTR run inside RTL paragraph) — arrival reads rightmost. */
-    const arrival   = day.arrivalTime   || '—'
-    const departure = day.departureTime || '—'
-    const total     = formatTotalHHMM(day.totalMins)
-    return `${date}  |  ${arrival} - ${departure}  |  סה״כ שעות: ${total}`
-  }
+  /* fetchEmployeeDailyDetails + formatDrillLine live in
+     src/lib/hoursDetail.js — imported at the top of the file so this
+     component and the standalone "דוח שעות עבודה" page share exactly
+     one implementation of the drill-down data pull and line format. */
 
   /* Same as formatDrillLine but WITHOUT the leading "DD/MM/YY  |  " segment.
      Used only in the per-day view below the calendar — the date is already
@@ -601,6 +530,27 @@ function Hours() {
     setReportDrillExpanded(new Set())
     setReportDrillCache({})
   }, [reportYear, reportMonth])
+
+  /* Deferred print — fires after React commits the drill cache into
+     the DOM (so the print-only .hours-drill-print-row for every
+     employee has its content), then calls window.print() on the next
+     paint via requestAnimationFrame. Double-rAF is the safest way to
+     be sure the browser has painted the DOM before the print dialog
+     snapshots it. */
+  useEffect(() => {
+    if (!printPending) return
+    let raf1 = 0, raf2 = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        window.print()
+        setPrintPending(false)
+      })
+    })
+    return () => {
+      if (raf1) cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
+  }, [printPending])
 
   /* Initialize the admin multi-select with ONLY Adi + Inbar (by first_name)
      when allUsers loads. All other employees (including Nir) start UNchecked. */
@@ -1513,6 +1463,27 @@ function Hours() {
     const filteredRows = reportData.filter(row =>
       userIsLocked ? row.id === lockedUserId : selectedEmployeeIds.has(row.id)
     )
+
+    /* PDF-export handler for this report.
+       Pre-fetches per-day details for EVERY visible employee (not just
+       the ones the user happens to have expanded on screen) so the
+       exported PDF always includes each employee's full daily detail.
+       The on-screen expand/collapse state is not consulted here — the
+       print-only .hours-drill-print-row below reads directly from
+       reportDrillCache. */
+    const exportReport = async () => {
+      const missing = filteredRows.filter(r => !reportDrillCache[r.id])
+      if (missing.length > 0) {
+        const additions = {}
+        for (const r of missing) {
+          additions[r.id] = await fetchEmployeeDailyDetails(r.id, reportYear, reportMonth)
+        }
+        /* Batched with setPrintPending so the deferred-print effect fires
+           after this update is committed. */
+        setReportDrillCache(prev => ({ ...prev, ...additions }))
+      }
+      setPrintPending(true)
+    }
     return (
       <div className="hours-reports-tab">
         <div className="hours-reports-controls">
@@ -1602,13 +1573,31 @@ function Hours() {
                           </td>
                         </tr>
                       )}
+                      {/* Print-only per-day detail — ALWAYS rendered in the
+                          DOM, but display:none on screen. Made visible only
+                          inside @media print. Reads its data straight from
+                          reportDrillCache; the export handler above pre-warms
+                          the cache for every filtered employee before print,
+                          so this block has content regardless of whether the
+                          on-screen row is currently expanded. */}
+                      <tr className="hours-drill-print-row" aria-hidden="true">
+                        <td colSpan={7}>
+                          <div className="hours-drill-print-list">
+                            {(reportDrillCache[row.id] || []).map(day => (
+                              <div key={day.date} className="hours-drill-print-line">
+                                {formatDrillLine(day)}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
                     </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
             <div className="hours-reports-export-row">
-              <button className="hours-reports-export-btn" title="ייצוא ל-PDF" onClick={() => window.print()}>
+              <button className="hours-reports-export-btn" title="ייצוא ל-PDF" onClick={exportReport}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>

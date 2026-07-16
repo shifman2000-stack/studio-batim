@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import RichTextEditor from './RichTextEditor'
+import ClientProgrammingQuestionnaire from '../../pages/client/ClientProgrammingQuestionnaire'
 import './MeetingSummariesTab.css'
 
 /* ── Inline icons (Feather-style, stroke="currentColor") ────────── */
@@ -155,6 +156,18 @@ export default function MeetingSummariesTab({ projectId }) {
   /* Accordion state — Set of currently-open summary ids. Default: all
      collapsed; clicking a card header toggles only that card. */
   const [openSet,        setOpenSet]        = useState(new Set())
+  /* Split-screen mode for "סיכום פגישת פרוגרמה".
+       null                → not in split mode (regular list showing).
+       { row: null }       → CREATE a new programming summary.
+       { row: existingRow} → EDIT an existing programming summary
+                             (same row object we render in the list).
+     Rendered as a two-pane layout (meeting editor + embedded
+     questionnaire) that replaces the summaries list. Local UI state,
+     no persistence. The row that gets INSERTed/UPDATEd here is still
+     a normal meeting_summaries row (source='manual') — it flows
+     through every existing path (client view, list, edit, delete)
+     unchanged, no schema/type column added. */
+  const [programMode,    setProgramMode]    = useState(null)
 
   const toggleOpen = (id) => {
     setOpenSet(prev => {
@@ -276,6 +289,126 @@ export default function MeetingSummariesTab({ projectId }) {
     }
   }
 
+  /* Called from the split-screen editor pane's onSave. Reuses the
+     regular create path so the row is indistinguishable from any
+     other summary; on success we drop the split view and land back
+     on the (now longer) list. */
+  const handleProgramCreate = async (payload) => {
+    await handleCreate(payload)
+    if (!errorMsg) setProgramMode(null)
+  }
+
+  /* Same shape as handleProgramCreate, but for editing an existing
+     programming summary. Reuses handleUpdate — same UPDATE path any
+     other summary edit goes through — then drops the split view on
+     success so the newly-updated row shows in the list. */
+  const handleProgramUpdate = async (id, payload) => {
+    await handleUpdate(id, payload)
+    if (!errorMsg) setProgramMode(null)
+  }
+
+  /* Programming-summary detection.
+     TODO: fragile subject-based detection — replace with a dedicated
+           kind/type column on meeting_summaries later.
+
+     A summary counts as "programming" when its topic (trimmed) either
+     equals or CONTAINS the default programming subject. The contains
+     branch lets auto-numbered variants like "סיכום פגישת פרוגרמה 2"
+     (or "עדכון סיכום פגישת פרוגרמה") match too. Hebrew has no case;
+     trim handles leading/trailing whitespace. */
+  const PROGRAM_TOPIC_MARKER = 'סיכום פגישת פרוגרמה'
+  const isProgrammingSummary = (s) => {
+    if (!s || typeof s.topic !== 'string') return false
+    const t = s.topic.trim()
+    if (!t) return false
+    return t.includes(PROGRAM_TOPIC_MARKER)
+  }
+
+  /* ── Split-screen render (early return) ─────────────────────────
+     When "סיכום פגישת פרוגרמה" is active, we hijack the whole tab:
+     one pane holds the meeting-summary editor, the other embeds the
+     project's programming questionnaire in admin-editable mode. The
+     regular list + toolbar reappear after the admin closes this view. */
+  if (programMode) {
+    /* One split-screen component, two modes. `programMode.row` is
+       null for create, an existing summary object for edit — the
+       initial payload + onSave differ; everything else (layout,
+       questionnaire pane, header, close button) is identical. */
+    const editingRow    = programMode.row || null
+    const isEditingProg = !!editingRow
+    return (
+      <div className="ms-root" dir="rtl">
+        <div className="ms-program-toolbar">
+          <h2 className="ms-program-title">
+            {isEditingProg ? 'עריכת סיכום פגישת פרוגרמה' : 'סיכום פגישת פרוגרמה'}
+          </h2>
+          <button
+            type="button"
+            className="ms-btn-secondary"
+            onClick={() => setProgramMode(null)}
+            disabled={savingRow}
+          >
+            סגור
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="ms-error" role="alert">{errorMsg}</div>
+        )}
+
+        <div className="ms-program-split">
+          {/* Visual-RIGHT pane (first child in RTL): editor. */}
+          <section className="ms-program-pane ms-program-pane--editor">
+            <div className="ms-program-pane-header">סיכום הפגישה</div>
+            <div className="ms-program-pane-body">
+              <MeetingEditForm
+                /* Two branches:
+                     * CREATE — default topic ("סיכום פגישת פרוגרמה"),
+                       today's date, empty participants + body.
+                     * EDIT   — pass the saved row verbatim so the four
+                       fields (topic, meeting_date, participants,
+                       summary_md) hydrate from the DB.
+                   The topic is editable in both branches — the create
+                   value is just a starting point. */
+                initial={editingRow ?? {
+                  topic:        'סיכום פגישת פרוגרמה',
+                  meeting_date: todayISO(),
+                  participants: '',
+                  summary_md:   '',
+                }}
+                /* CREATE → INSERT; EDIT → UPDATE the same row id.
+                   Both handlers close the split view on success. */
+                onSave={isEditingProg
+                  ? (payload) => handleProgramUpdate(editingRow.id, payload)
+                  : handleProgramCreate}
+                onCancel={() => setProgramMode(null)}
+                saving={savingRow}
+              />
+            </div>
+          </section>
+
+          {/* Visual-LEFT pane: the questionnaire in admin-edit mode.
+              embeddedProjectId bypasses ClientRoute (we're on the
+              admin side); forceAdminEdit skips the role probe and
+              disables the client-side lock; embedded drops the
+              screen title so this pane's own header carries the
+              context. Save path lives INSIDE the questionnaire —
+              writes to programming_questionnaires by project_id. */}
+          <section className="ms-program-pane ms-program-pane--quest">
+            <div className="ms-program-pane-header">שאלון פרוגרמה + בונה הבית</div>
+            <div className="ms-program-pane-body ms-program-pane-body--flush">
+              <ClientProgrammingQuestionnaire
+                embeddedProjectId={projectId}
+                forceAdminEdit
+                embedded
+              />
+            </div>
+          </section>
+        </div>
+      </div>
+    )
+  }
+
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className="ms-root" dir="rtl">
@@ -289,6 +422,18 @@ export default function MeetingSummariesTab({ projectId }) {
         >
           <IconPlus size={14} />
           סיכום פגישה חדש
+        </button>
+        {/* Programming-meeting variant — same DB row, split-screen UI.
+            Always enabled: independent of questionnaire submitted state.
+            Passing { row: null } routes into the split view's CREATE
+            branch (default topic). */}
+        <button
+          type="button"
+          className="ms-add-btn"
+          onClick={() => setProgramMode({ row: null })}
+        >
+          <IconPlus size={14} />
+          סיכום פגישת פרוגרמה
         </button>
       </div>
 
@@ -385,8 +530,16 @@ export default function MeetingSummariesTab({ projectId }) {
                               className="ms-icon-btn"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                openCard(s.id)        /* defensive: stays open after save/cancel */
-                                setEditingId(s.id)
+                                /* Programming summaries open in the
+                                   split-screen editor pre-loaded with
+                                   this row; regular summaries keep
+                                   their inline expanding editor. */
+                                if (isProgrammingSummary(s)) {
+                                  setProgramMode({ row: s })
+                                } else {
+                                  openCard(s.id)        /* defensive: stays open after save/cancel */
+                                  setEditingId(s.id)
+                                }
                               }}
                               title="ערוך"
                               aria-label="ערוך סיכום פגישה"

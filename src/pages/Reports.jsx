@@ -38,6 +38,11 @@ export default function Reports() {
           <div className="report-card-title">דוח פניות</div>
           <div className="report-card-desc">סיכום פניות לפי שנה, אחוז המרה לפרויקטים וגרף חודשי</div>
         </div>
+        <div className="report-card" onClick={() => navigate('/reports/house-builder-config')}>
+          <div className="report-card-icon">🏠</div>
+          <div className="report-card-title">אפיון מערכת בונה הבית</div>
+          <div className="report-card-desc">טופס עזר למנהל לעריכת הגדרות מערכת בונה הבית - מפלסים, חללים, מאפיינים ומידות</div>
+        </div>
       </div>
     </div>
   )

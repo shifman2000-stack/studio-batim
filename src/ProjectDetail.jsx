@@ -282,6 +282,11 @@ function ProjectDetail() {
   const [project, setProject]       = useState(null)
   const [userRole, setUserRole]     = useState(null)
   const [activeTab, setActiveTab]   = useState(1)
+  /* Sub-header collapse — hides the parent/child subtitle line, the
+     stage/archive badge, and the favorite star to free vertical space
+     while writing a summary. Project name + back link stay visible.
+     Default EXPANDED; local state only, not persisted. */
+  const [subHeaderCollapsed, setSubHeaderCollapsed] = useState(false)
   const [contacts, setContacts]     = useState([])
   const [clientInfo, setClientInfo] = useState(null)
 
@@ -726,11 +731,47 @@ function ProjectDetail() {
     <div className="pd-page" dir="rtl">
 
       {/* ── Header ── */}
-      <div className="pd-header">
+      <div className={'pd-header' + (subHeaderCollapsed ? ' pd-header--collapsed' : '')}>
         <div className="pd-header-left">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <h1 className="pd-title">{project ? project.name : '…'}</h1>
-            {parentInfo && (
+            {/* Title row — chevron toggle + project name. In this RTL
+                flex row, the FIRST child lands on the visual-RIGHT, so
+                putting the chevron first makes it sit to the right of
+                the name (start-of-line in Hebrew reading order). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setSubHeaderCollapsed(v => !v)}
+                title={subHeaderCollapsed ? 'הרחב פרטי פרויקט' : 'כווץ פרטי פרויקט'}
+                aria-expanded={!subHeaderCollapsed}
+                aria-label={subHeaderCollapsed ? 'הרחב פרטי פרויקט' : 'כווץ פרטי פרויקט'}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 4,
+                  cursor: 'pointer',
+                  color: '#7a9478',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg
+                  width="16" height="16" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="2.4"
+                  strokeLinecap="round" strokeLinejoin="round"
+                  style={{
+                    transform: subHeaderCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s',
+                  }}
+                  aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <h1 className="pd-title" style={{ margin: 0 }}>{project ? project.name : '…'}</h1>
+            </div>
+            {!subHeaderCollapsed && parentInfo && (
               <span
                 onClick={() => navigate(`/projects/${project.parent_project_id}`)}
                 style={{
@@ -746,7 +787,7 @@ function ProjectDetail() {
                 פרויקט בן של {parentInfo.name}
               </span>
             )}
-            {!parentInfo && childCount > 0 && (
+            {!subHeaderCollapsed && !parentInfo && childCount > 0 && (
               <span
                 onClick={() => navigate(`/פרויקטים/אב/${id}`)}
                 style={{
@@ -763,7 +804,7 @@ function ProjectDetail() {
               </span>
             )}
           </div>
-          {project && !fromArchive && (
+          {!subHeaderCollapsed && project && !fromArchive && (
             <button className="pd-star-btn" onClick={toggleFavorite} title={project.is_favorite ? 'הסר מהמועדפים' : 'הוסף למועדפים'}>
               {project.is_favorite ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#F6BF26" stroke="#F6BF26" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -776,7 +817,7 @@ function ProjectDetail() {
               )}
             </button>
           )}
-          {fromArchive ? (
+          {!subHeaderCollapsed && (fromArchive ? (
             <span className="pd-stage-badge" style={{ background: '#E24B4A', color: '#fff' }}>
               ארכיון
             </span>
@@ -786,7 +827,7 @@ function ProjectDetail() {
                 {project.current_stage}
               </span>
             )
-          )}
+          ))}
         </div>
         {fromArchive ? (
           <button className="pd-back-btn" onClick={() => navigate('/פרויקטים', { state: { showArchive: true } })}>

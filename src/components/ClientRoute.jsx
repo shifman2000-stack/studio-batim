@@ -18,7 +18,11 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-const ClientContext = createContext(null)
+/* Exported so admin-side wrappers can read the same context shape
+   directly (or pass their own project_id in) — the guard remains the
+   only place that WRITES this context; embedded callers just supply
+   their own project_id and skip the context altogether. */
+export const ClientContext = createContext(null)
 
 /**
  * Hook for any component rendered inside <ClientRoute> to read the

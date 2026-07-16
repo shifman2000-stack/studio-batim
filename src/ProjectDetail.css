@@ -4,7 +4,7 @@
   min-height: 0;           /* required in flex context to allow shrinking */
   background: #ffffff;
   font-family: 'Heebo', sans-serif;
-  padding: 32px 40px 0;
+  padding: 10px 40px 0;
   box-sizing: border-box;
   direction: rtl;
   display: flex;
@@ -31,9 +31,32 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 8px;
   gap: 16px;
   flex-shrink: 0;
+}
+
+/* ── Compact collapsed variant ───────────────────────────────────
+   When the user hits the sub-header chevron, .pd-header gains this
+   class. Everything but the project name + collapse chevron + back
+   button is already hidden by the JSX guard; this rule closes the
+   remaining vertical air so the title sits directly above the tabs
+   bar. Only the collapsed instance is affected — expanded mode
+   keeps the (already-tightened) 8px margin above. */
+.pd-header--collapsed {
+  margin-bottom: 2px;
+  align-items: center;      /* line title + back button on one row */
+  gap: 12px;
+}
+.pd-header--collapsed .pd-header-left {
+  gap: 8px;                 /* tighten inner spacing between title + chevron */
+}
+.pd-header--collapsed .pd-title {
+  font-size: 20px;          /* slim slug instead of the full 28px title */
+  line-height: 1.1;
+}
+.pd-header--collapsed .pd-back-btn {
+  margin-top: 0;            /* the 6px nudge is redundant on a single slim row */
 }
 
 .pd-header-left {

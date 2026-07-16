@@ -1,0 +1,1126 @@
+/* src/components/questionnaire/HouseBuilder.css
+   Scoped styles for the house-builder. Sage/cream palette, mobile-first.
+   All classes are hb-* namespaced so they don't collide with anything
+   else in the app. Media query at 720px switches the split layout from
+   panel-right / house-left → house-top / panel-middle / finish-bottom. */
+
+.hb-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+  color: #1a1a18;
+}
+
+/* ── Live estimate + gentle warning banners ────────────────────
+   Sit above the split, visible in every mode. Sage tint for the
+   estimate (informational); amber tint for the warning (soft
+   caution, not alarming). Both hide when there are zero rooms. */
+.hb-estimate-banner {
+  background: rgba(122, 148, 120, 0.10);
+  color: #4a4a48;
+  border: 1px solid rgba(122, 148, 120, 0.28);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.hb-estimate-banner strong {
+  color: #1a1a18;
+  font-weight: 700;
+}
+.hb-warning-banner {
+  background: rgba(201, 138, 58, 0.10);
+  color: #6b4d1e;
+  border: 1px solid rgba(201, 138, 58, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.hb-warning-banner strong {
+  color: #1a1a18;
+  font-weight: 700;
+}
+
+/* ── Intro screen ─────────────────────────────────────────────── */
+
+.hb-intro {
+  background: #ffffff;
+  border: 1px solid #e5e3dd;
+  border-radius: 12px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hb-intro-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a18;
+  text-align: center;
+}
+.hb-intro-steps {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hb-intro-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.hb-intro-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #7a9478;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+.hb-intro-body {
+  flex: 1;
+  min-width: 0;
+}
+.hb-intro-step-title {
+  font-weight: 600;
+  color: #1a1a18;
+  font-size: 14.5px;
+  margin-bottom: 3px;
+}
+.hb-intro-step-text {
+  color: #4a4a48;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.hb-intro-footer {
+  margin: 0;
+  color: #8a8680;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ── "איך זה עובד?" re-open link ─────────────────────────────────
+   Lives inside .hb-panel-col as a flex item ABOVE the .hb-panel.
+   `align-self: flex-start` keeps it at content width and, in an RTL
+   flex COLUMN, snaps it to the cross-axis start = visual RIGHT →
+   same right-edge alignment as the panel below. */
+.hb-intro-reopen {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #7a9478;
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hb-intro-reopen:hover {
+  color: #5d7259;
+}
+
+/* ── Mode hint (one-line contextual guidance at the top of the panel) */
+
+.hb-mode-hint {
+  background: rgba(122, 148, 120, 0.09);
+  color: #5d7259;
+  border: 1px solid rgba(122, 148, 120, 0.18);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+/* ── Split (panel + house) ─────────────────────────────────────── */
+
+.hb-split {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* Panel column — DOM-first: in an RTL flex row that lands on the
+   visual RIGHT edge. Wraps the "איך זה עובד?" re-open link and the
+   white action panel in one flex column so the link reads as
+   attached to the panel (small gap between them). The link stays at
+   its content width via align-self, so it hugs the RTL cross-start
+   (= visual RIGHT), matching the panel's right edge. */
+.hb-panel-col {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.hb-panel {
+  background: #ffffff;
+  border: 1px solid #e5e3dd;
+  border-radius: 10px;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.hb-house {
+  flex: 0 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+
+/* Narrow phones: switch to stacked (house top, panel-col middle) via
+   `order`. Finish bar sits below the split naturally. */
+@media (max-width: 720px) {
+  .hb-split {
+    flex-direction: column;
+  }
+  .hb-panel-col {
+    order: 2;
+    width: 100%;
+    flex: 0 0 auto;
+  }
+  .hb-house {
+    order: 1;
+    width: 100%;
+    flex: 0 0 auto;
+  }
+}
+
+/* Desktop: nudge the panel-col wrapper DOWN so the WHITE PANEL
+   (which sits below the link + a 6px flex gap inside the wrapper)
+   lines up with the top edge of the FIRST floor box. Target: panel
+   top at 48px (roof SVG 42 + roof↔floor gap 6). Wrapper margin ≈
+   48 − linkHeight(~20) − 6 gap = 22px. Link naturally floats just
+   above the panel with the intended small gap. */
+@media (min-width: 721px) {
+  .hb-panel-col {
+    margin-top: 22px;
+  }
+}
+
+/* ── Schematic house ───────────────────────────────────────────── */
+
+.hb-roof {
+  width: 100%;
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+.hb-roof svg {
+  width: 100%;
+  height: 42px;
+  display: block;
+  /* Allow the roof's symmetric eaves overhang (drawn slightly past
+     x=0 / x=200 in the 200×50 viewBox) to render past the SVG's
+     own bounding box. The <svg> also carries overflow="visible" as
+     a presentation attribute — this CSS is belt-and-suspenders for
+     browsers that historically only honored the CSS route. */
+  overflow: visible;
+}
+
+.hb-floor,
+.hb-yard {
+  border-radius: 8px;
+  padding: 22px 10px 10px;
+  background: #fefdf9;
+  position: relative;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+  min-height: 68px;
+}
+.hb-floor  { border: 1.5px solid #7a9478; }
+.hb-yard   { border: 1.5px dashed #7a9478; background: #fbf9f4; margin-top: 4px; }
+
+.hb-floor--selected,
+.hb-yard--selected {
+  box-shadow: 0 0 0 2.5px rgba(122, 148, 120, 0.22);
+}
+
+.hb-floor-label {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  font-size: 11px;
+  color: #7a9478;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.hb-cubes {
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  gap: 6px;
+  justify-content: start;
+}
+
+.hb-cube {
+  width: 58px;
+  height: 44px;
+  border: 1px solid #d3dbcf;
+  background: #fcfdfb;
+  border-radius: 6px;
+  color: #4a4a48;
+  font-family: inherit;
+  font-size: 11.5px;
+  padding: 3px 4px;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 1.15;
+  box-sizing: border-box;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.hb-cube:hover  { transform: scale(1.04); }
+.hb-cube--detailed {
+  background: #7a9478;
+  border-color: #5d7259;
+  color: #ffffff;
+}
+.hb-cube--editing {
+  box-shadow: 0 0 0 2.5px #c98a3a;
+}
+
+/* ── Container "unit box" (יחידת סוויטה / יחידת דיור) ─────────────
+   A container room is drawn as a wider sage-tinted rectangle inside
+   the floor's cube grid. `grid-column: 1 / -1` makes it span the
+   full grid row width so subsequent cubes wrap to the next row —
+   the unit reads as its own grouping bar. The label sits at the top
+   (RTL: right side); children flow below it as smaller cubes that
+   keep the standard cube state colors (white=empty / sage=detailed
+   / orange-ring=editing). */
+.hb-unit-box {
+  grid-column: 1 / -1;
+  border: 2px solid #7a9478;
+  border-radius: 8px;
+  background: rgba(122, 148, 120, 0.10);
+  padding: 4px 8px 6px;
+  min-height: 44px;
+  box-sizing: border-box;
+  cursor: pointer;
+  direction: rtl;
+  transition: box-shadow 0.15s;
+}
+.hb-unit-box--editing {
+  /* Same orange editing ring as a single cube, so the currently-
+     entered container reads consistently with a currently-edited
+     room. */
+  box-shadow: 0 0 0 2.5px #c98a3a;
+}
+.hb-unit-label {
+  font-size: 11px;
+  color: #5d7259;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-align: right;
+  padding: 2px 2px 4px;
+  direction: rtl;
+  user-select: none;
+}
+.hb-unit-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-start;
+}
+/* Child cube — smaller than a top-level cube so the nesting reads
+   at a glance. State classes mirror .hb-cube's exactly. */
+.hb-unit-child {
+  width: 48px;
+  height: 34px;
+  border: 1px solid #d3dbcf;
+  background: #fcfdfb;
+  border-radius: 5px;
+  color: #4a4a48;
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 3px 3px;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 1.15;
+  box-sizing: border-box;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.hb-unit-child:hover { transform: scale(1.05); }
+.hb-unit-child--detailed {
+  background: #7a9478;
+  border-color: #5d7259;
+  color: #ffffff;
+}
+.hb-unit-child--editing {
+  box-shadow: 0 0 0 2px #c98a3a;
+}
+
+/* ── Rooms-panel breadcrumb (Part-2 replacement for the plain back
+   button used in Part-1). Rendered only when the user has entered a
+   container. RTL flow: floor segment on the visual RIGHT (start),
+   '›' separator in the middle, current unit label on the visual LEFT
+   (end). Only the floor segment is clickable; clicking it calls
+   exitContainer. */
+.hb-breadcrumb {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+  direction: rtl;
+  text-align: right;
+  font-size: 13px;
+  color: #4a4a48;
+  flex-wrap: wrap;
+}
+.hb-breadcrumb-link {
+  background: none;
+  border: none;
+  color: #5d7259;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hb-breadcrumb-link:hover,
+.hb-breadcrumb-link:focus-visible {
+  color: #4a5c48;
+  outline: none;
+}
+.hb-breadcrumb-sep {
+  color: #8a8680;
+  font-size: 14px;
+  line-height: 1;
+}
+.hb-breadcrumb-current {
+  color: #1a1a18;
+  font-weight: 600;
+}
+
+/* Ground line — sage bar between ground and basement (or under the
+   whole house when no basement is on). */
+.hb-ground-line {
+  height: 3px;
+  background: #7a9478;
+  border-radius: 2px;
+  margin: 4px 0;
+}
+
+/* ── Ground-row: yard beside ground floor (desktop only) ────────
+   Two yard instances render in the tree — one inside .hb-ground-row
+   next to the ground floor (desktop-only), one standalone at the end
+   of the vertical stack (mobile-only, hidden on desktop when paired).
+   CSS toggles which one is visible; on mobile the wrapper is a plain
+   block, so the ground floor renders at its normal full width. */
+.hb-yard--mobile-only  { display: block; }
+.hb-yard--desktop-only { display: none; }
+
+@media (min-width: 769px) {
+  /* Desktop layout math:
+       floors column   = 240px (fits the 3-cube grid + padding + air)
+       + gap           =   6px
+       + yard column   = 130px
+       ───────────────────────
+       .hb-house       = 376px
+
+     `align-items: flex-start` on the flex COLUMN puts children at the
+     RTL cross-start = visual RIGHT. So every child that lives DIRECTLY
+     under .hb-house (roof, non-ground floors, ground line, standalone
+     yard) gets anchored to the visual-RIGHT edge and takes only the
+     floors-column width (240px). The roof therefore paints ONLY over
+     the floors column and does not extend over the paired yard. */
+  .hb-house {
+    flex: 0 1 376px;
+    align-items: flex-start;
+  }
+
+  .hb-house > .hb-roof,
+  .hb-house > .hb-floor,
+  .hb-house > .hb-yard,
+  .hb-house > .hb-ground-line {
+    width: 240px;
+    max-width: 240px;
+    box-sizing: border-box;
+  }
+
+  /* When a yard is on, stretch the ground line so it runs under BOTH
+     the floors column AND the paired yard, including the gap between
+     them, AND overshoots a few px past the yard's visual-LEFT outer
+     edge for a subtle eave.
+
+     Width is computed explicitly from the desktop layout math:
+       floors column (240) + gap (6) + yard (130) = 376
+     plus a small OVERHANG (4px) past the yard's outer edge.
+
+     Aligned to cross-start via .hb-house's align-items:flex-start,
+     so in RTL the extra width extends visually LEFT — reaching (and
+     slightly beyond) the yard's outer edge. align-self:stretch is a
+     safety net for browsers that resolve width:100% oddly on a
+     column-flex item with align-items:flex-start; the explicit calc
+     wins on the width axis either way. max-width:none is essential —
+     the base rule above caps at 240px. */
+  .hb-house > .hb-ground-line.hb-ground-line--with-yard {
+    width: calc(240px + 6px + 130px + 4px); /* floors + gap + yard + eave */
+    max-width: none;
+    align-self: stretch;
+  }
+
+  /* The ground row is the ONE exception — it spans the full 376px so
+     the ground floor (240) sits under the roof at visual-right while
+     the paired yard (130) sits OUTSIDE the roof span at visual-left,
+     vertically in line with the ground floor. */
+  .hb-ground-row {
+    align-self: stretch;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+  }
+  /* DOM order [floor, yard] with parent direction:rtl paints the
+     ground floor on the visual RIGHT and the yard on the visual LEFT. */
+  .hb-ground-row > .hb-floor { flex: 0 0 240px; min-width: 240px; }
+  .hb-ground-row > .hb-yard  { flex: 0 0 130px; min-width: 130px; }
+  /* Inside the paired yard, let cube rows wrap to the available width
+     instead of overflowing the narrower yard column. Scoped to the
+     paired instance only — the standalone yard keeps its 3-col grid. */
+  .hb-ground-row > .hb-yard .hb-cubes {
+    grid-template-columns: repeat(auto-fill, 58px);
+  }
+
+  .hb-yard--mobile-only  { display: none; }
+  .hb-yard--desktop-only { display: block; }
+}
+
+/* ── Right-click context menu on a room cube (desktop) ──────────
+   Fixed-positioned floating panel — the parent component sets top/left
+   from the contextmenu event's clientX/Y. Cream surface + charcoal
+   text + subtle border/shadow to match the app's design tokens. RTL. */
+.hb-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  background: #f7f5f2;
+  color: #1a1a18;
+  border: 1px solid rgba(26, 26, 24, 0.13);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hb-context-menu-item {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  text-align: right;
+  color: #1a1a18;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.hb-context-menu-item:hover,
+.hb-context-menu-item:focus-visible {
+  background: #e8e3dc;
+  outline: none;
+}
+.hb-context-menu-item--danger {
+  color: #a24a3a;
+}
+.hb-context-menu-item--danger:hover,
+.hb-context-menu-item--danger:focus-visible {
+  background: rgba(162, 74, 58, 0.10);
+}
+
+/* ── Panel: shared ─────────────────────────────────────────────── */
+
+.hb-panel-title {
+  margin: 0 0 8px;
+  font-size: 15.5px;
+  font-weight: 600;
+  color: #1a1a18;
+}
+.hb-panel-help {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4a4a48;
+  line-height: 1.5;
+}
+.hb-panel-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.hb-panel-back {
+  background: none;
+  border: none;
+  color: #7a9478;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+/* ── Panel: floors mode ───────────────────────────────────────── */
+
+.hb-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.hb-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1a1a18;
+  cursor: pointer;
+  user-select: none;
+}
+.hb-check input {
+  cursor: pointer;
+}
+.hb-check input:disabled {
+  cursor: not-allowed;
+}
+
+/* Floor row wrapper — only used for floor rows (not the yard row) so
+   the red trash button can sit at the visual-LEFT end while the
+   label + checkbox stay at the visual-RIGHT. `margin-inline-start:auto`
+   on the trash pushes it away from the flow start (visual right) to
+   the flow end (visual left). */
+.hb-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+.hb-floor-delete {
+  margin-inline-start: auto;
+  background: none;
+  border: none;
+  color: #c94b4b;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+.hb-floor-delete:hover,
+.hb-floor-delete:focus-visible {
+  background: rgba(201, 75, 75, 0.10);
+  outline: none;
+}
+.hb-floor-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Confirm-delete-floor modal ---------------------------------------
+   Fixed-position dim overlay + cream panel. Same visual language as
+   the app's other confirmation modals (see QuoteBuilder.jsx): cream
+   #f7f5f2 surface, charcoal #1a1a18 text, subtle border/shadow, RTL.
+   The secondary button follows the app's outline pattern; the danger
+   button uses the same red as the trash icon. */
+.hb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+}
+.hb-modal {
+  background: #f7f5f2;
+  color: #1a1a18;
+  border: 1px solid rgba(26, 26, 24, 0.13);
+  border-radius: 8px;
+  padding: 26px 30px;
+  max-width: 480px;
+  width: 90vw;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+  box-sizing: border-box;
+}
+.hb-modal-message {
+  margin: 0 0 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1a1a18;
+  text-align: right;
+}
+.hb-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+}
+.hb-modal-btn {
+  padding: 9px 22px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  min-width: 96px;
+}
+.hb-modal-btn--secondary {
+  background: transparent;
+  color: #1a1a18;
+  border: 1px solid rgba(26, 26, 24, 0.22);
+}
+.hb-modal-btn--secondary:hover {
+  background: #eeebe6;
+}
+.hb-modal-btn--danger {
+  background: #c94b4b;
+  color: #ffffff;
+  border: 1px solid #b23e3e;
+}
+.hb-modal-btn--danger:hover {
+  background: #b23e3e;
+}
+
+.hb-btn-primary {
+  background: #7a9478;
+  color: #ffffff;
+  border: 1px solid #5d7259;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  font-weight: 500;
+}
+.hb-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.hb-btn-destructive {
+  background: none;
+  color: #c94b4b;
+  border: 1px solid #e6c1c1;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  margin-top: 14px;
+  width: 100%;
+}
+
+/* ── Panel: rooms mode ────────────────────────────────────────── */
+
+.hb-add-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.hb-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e3dd;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.hb-add-name {
+  flex: 1;
+  font-size: 13.5px;
+  color: #1a1a18;
+  min-width: 0;
+}
+
+/* Borderless input variant — slots into a .hb-add-row so the whole
+   list (palette rooms + the "חלל אחר" free-text) reads uniformly.
+   The row itself carries the border / background / padding; the input
+   is transparent and inherits the row's typography so it looks like
+   an editable label. */
+.hb-add-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: #1a1a18;
+  text-align: right;
+  direction: rtl;
+}
+.hb-add-input::placeholder {
+  color: #8a8680;
+}
+.hb-count-badge {
+  background: rgba(122, 148, 120, 0.18);
+  color: #5d7259;
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+.hb-plus {
+  background: #7a9478;
+  color: #ffffff;
+  border: 1px solid #5d7259;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Minus sibling of .hb-plus. Same geometry/font so the two buttons
+   share a row cleanly. Outlined (not filled) to read as a secondary
+   action; goes to a faded disabled state when the last-added room of
+   this type either doesn't exist or already has properties (that
+   removal goes through the right-click "הסר חלל" menu). */
+.hb-minus {
+  background: #ffffff;
+  color: #5d7259;
+  border: 1px solid #7a9478;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, opacity 0.12s;
+}
+.hb-minus:hover:not(:disabled),
+.hb-minus:focus-visible:not(:disabled) {
+  background: rgba(122, 148, 120, 0.12);
+  outline: none;
+}
+.hb-minus:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Legend (מקרא) — sits at the top of the props panel. Three swatches
+   using the SAME hexes as .hb-cube / .hb-cube--detailed / .hb-cube--editing
+   further up. The "active" swatch is an empty cube wearing the same
+   sage border + orange (#c98a3a) editing ring, matching how a currently-
+   edited empty cube paints in the schematic house. */
+.hb-legend {
+  display: flex;
+  flex-direction: column;
+  /* Row gap sized to leave room for the editing swatch's 2px orange
+     ring so it doesn't visually collide with the neighbouring row. */
+  gap: 7px;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  background: rgba(122, 148, 120, 0.06);
+  border: 1px solid rgba(122, 148, 120, 0.18);
+  border-radius: 6px;
+  direction: rtl;
+  text-align: right;
+}
+.hb-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #4a4a48;
+  /* justify-content defaults to flex-start; in an RTL flex row that's
+     the visual RIGHT, so the swatch (DOM-first) anchors at the visual
+     right and the label follows to its visual left — every row lines
+     up at the same right-edge column. */
+}
+.hb-legend-swatch {
+  /* All three swatches share the SAME box size — 20×20 square — so
+     the labels align in a clean single column regardless of which
+     swatch variant is in the row. The editing variant paints its
+     orange ring via box-shadow, which sits OUTSIDE the box and does
+     not change the layout width/height. */
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.hb-legend-swatch--detailed {
+  background: #7a9478;
+  border: 1px solid #5d7259;
+}
+.hb-legend-swatch--empty {
+  background: #fcfdfb;
+  border: 1px solid #d3dbcf;
+}
+.hb-legend-swatch--editing {
+  background: #fcfdfb;
+  border: 1px solid #d3dbcf;
+  /* Orange editing ring — same #c98a3a as .hb-cube--editing. box-shadow
+     paints outside the border but does NOT participate in layout, so
+     the swatch stays exactly 20×20 like the other two. */
+  box-shadow: 0 0 0 2px #c98a3a;
+}
+.hb-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d9d6cd;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+  background: #ffffff;
+  color: #1a1a18;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+/* Textarea variant used inside the step-4 sections. Inherits .hb-input's
+   surface/border/typography; adds line-height + width:100% so it behaves
+   like a normal multi-line note field rather than the flex row input. */
+.hb-textarea {
+  width: 100%;
+  flex: none;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.hb-custom-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* ── Panel: props mode ────────────────────────────────────────── */
+
+.hb-props-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.hb-props-group {
+  border-top: 1px solid #ececec;
+  padding-top: 10px;
+}
+.hb-props-groups > .hb-props-group:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.hb-group-title {
+  font-size: 12.5px;
+  color: #4a4a48;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+/* CSS Grid — every chip in a group renders at identical width (1fr per
+   column) regardless of label length. auto-fill computes how many
+   110px-min columns fit; empty trailing slots stay empty so the last
+   row's chips keep the same width as the rows above (2 per row on
+   ≤360px, more on wider viewports). */
+.hb-chip-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
+}
+.hb-chip {
+  background: #ffffff;
+  border: 1px solid #d9d6cd;
+  color: #4a4a48;
+  border-radius: 20px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  line-height: 1.2;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  box-sizing: border-box;
+}
+.hb-chip--selected {
+  background: #7a9478;
+  border-color: #5d7259;
+  color: #ffffff;
+}
+
+/* ── Segmented control (single-select fields) ─────────────────
+   Used for every RADIO group in the props panel (including the room
+   size selector). Visually unified with the .hb-chip family — same
+   soft warm-grey border (#d9d6cd), same 20px pill rounding, same
+   6×10 padding, 12.5px font, same #4a4a48 text — so a segmented
+   control reads as the chip buttons "joined into one bar", not a
+   different control species. Behaviour is unchanged: segments share
+   borders (the container carries the outer border and rounded end
+   corners; each non-first segment draws the inner physical-right
+   separator in the same soft grey). `overflow: hidden` clips the
+   selected sage fill into the rounded corners.
+   RTL note: `direction: rtl` on the flex row places the FIRST DOM
+   segment at the visual RIGHT and the LAST DOM segment at the
+   visual LEFT — matching the spec ("first option on visual-right").
+   The physical-right border becomes the inner separator for every
+   non-first item; `:first-child` clears it so no double border sits
+   against the container's outer right edge. */
+.hb-segment-row {
+  display: flex;
+  direction: rtl;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #d9d6cd;
+  border-radius: 20px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.hb-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 10px;
+  background: #ffffff;
+  color: #4a4a48;
+  border: none;
+  border-right: 1px solid #d9d6cd;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.2;
+  text-align: center;
+  box-sizing: border-box;
+  transition: background 0.12s, color 0.12s;
+}
+.hb-segment:first-child {
+  border-right: none;
+}
+.hb-segment:hover:not(:disabled):not(.hb-segment--selected) {
+  background: rgba(122, 148, 120, 0.10);
+}
+.hb-segment--selected {
+  background: #7a9478;
+  color: #ffffff;
+}
+.hb-segment:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.hb-freeprops {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hb-freeprops li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #4a4a48;
+  padding: 4px 8px;
+  background: #fbf9f4;
+  border: 1px solid #ece8df;
+  border-radius: 6px;
+}
+.hb-freeprops li > span { flex: 1; min-width: 0; }
+.hb-remove {
+  background: none;
+  border: none;
+  color: #c94b4b;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* ── Finish bar ────────────────────────────────────────────────── */
+
+.hb-finish {
+  border-top: 1px solid #ececec;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hb-finish-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fbf9f4;
+  border: 1px solid #e5e3dd;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.hb-finish-check input {
+  margin-top: 3px;
+  transform: scale(1.15);
+  cursor: pointer;
+}
+.hb-finish-title {
+  font-size: 14.5px;
+  color: #1a1a18;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.hb-finish-sub {
+  font-size: 12.5px;
+  color: #8a8680;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.hb-back {
+  background: none;
+  border: none;
+  color: #7a9478;
+  font-family: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  padding: 4px 0;
+  align-self: flex-start;
+}

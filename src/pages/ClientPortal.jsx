@@ -29,6 +29,7 @@ import ClientFinishing from './client/ClientFinishing'
 import ClientContractorSpec from './client/ClientContractorSpec'
 import ClientProgress from './client/ClientProgress'
 import ClientMeetings from './client/ClientMeetings'
+import ClientProgrammingQuestionnaire from './client/ClientProgrammingQuestionnaire'
 import ClientAccount from './client/ClientAccount'
 import ClientPlaceholder from './client/ClientPlaceholder'
 import ClientFooter, { ClientFooterProvider } from './client/ClientFooter'
@@ -88,6 +89,7 @@ const MENU_ITEMS = [
   { key: 'file',         label: 'פרטי תיק',         enabled: true,  Component: ClientFile },
   { key: 'documents',    label: 'תיק מסמכים',       enabled: true,  Component: ClientDocuments },
   { key: 'shared',       label: 'מרחב משותף',       enabled: true,  Component: ClientSharedFiles },
+  { key: 'questionnaire',label: 'שאלון פרוגרמה',    enabled: true,  Component: ClientProgrammingQuestionnaire },
   { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
   { key: 'finishing',    label: 'חומרי גמר',        enabled: true,  Component: ClientFinishing },
   { key: 'contractor',   label: 'מפרט לקבלן',       enabled: true,  Component: ClientContractorSpec },
@@ -146,6 +148,12 @@ export default function ClientPortal() {
      back to WHATSAPP_URL (the default wa.me link). */
   const [clientVisibleTabs, setClientVisibleTabs] = useState(null)
   const [whatsappGroupUrl,  setWhatsappGroupUrl]  = useState(null)
+  /* Per-project override for the programming-questionnaire tile.
+     Default false — until an admin flips projects.show_programming_questionnaire
+     on for this project (via the settings modal), the client doesn't
+     see the tile at all. Dev-only column for now; a prod row without
+     the column reads back as undefined and safely stays false. */
+  const [showProgrammingQuestionnaire, setShowProgrammingQuestionnaire] = useState(false)
   useEffect(() => {
     let cancelled = false
     const loadProjectMeta = async () => {
@@ -153,13 +161,14 @@ export default function ClientPortal() {
       let row = null
       const tryBoth = await supabase
         .from('projects')
-        .select('client_visible_tabs, whatsapp_group_url')
+        .select('client_visible_tabs, whatsapp_group_url, show_programming_questionnaire')
         .eq('id', project_id)
         .maybeSingle()
       if (tryBoth.error) {
-        /* Most likely: prod row, column not yet migrated. Re-run the
-           visibility-only SELECT so the rest of the portal keeps
-           working; the whatsapp link silently stays at the default. */
+        /* Most likely: prod row, one of the new columns not yet
+           migrated. Re-run the visibility-only SELECT so the rest of
+           the portal keeps working; whatsapp link silently stays at
+           the default and the questionnaire tile stays hidden. */
         const fallback = await supabase
           .from('projects')
           .select('client_visible_tabs')
@@ -172,6 +181,7 @@ export default function ClientPortal() {
       if (cancelled) return
       setClientVisibleTabs(row?.client_visible_tabs || null)
       setWhatsappGroupUrl(row?.whatsapp_group_url ?? null)
+      setShowProgrammingQuestionnaire(row?.show_programming_questionnaire === true)
     }
     loadProjectMeta()
     return () => { cancelled = true }
@@ -225,8 +235,8 @@ export default function ClientPortal() {
 
   /* Resolve all 4 groups once per render. Hidden groups become null. */
   const resolvedGroups = useMemo(
-    () => GROUPS.map(g => ({ group: g, resolved: resolveGroup(g, clientVisibleTabs) })),
-    [clientVisibleTabs]
+    () => GROUPS.map(g => ({ group: g, resolved: resolveGroup(g, clientVisibleTabs, showProgrammingQuestionnaire) })),
+    [clientVisibleTabs, showProgrammingQuestionnaire]
   )
 
   /* ── Navigation primitives shared via context ───────────────────── */
@@ -249,7 +259,7 @@ export default function ClientPortal() {
       if (currentOrigin) {
         const g = GROUPS.find(x => x.key === currentOrigin)
         if (g) {
-          const r = resolveGroup(g, clientVisibleTabs)
+          const r = resolveGroup(g, clientVisibleTabs, showProgrammingQuestionnaire)
           if (r && r.mode === 'expand') landOnGroup = currentOrigin
         }
       }
@@ -258,7 +268,7 @@ export default function ClientPortal() {
       setCurrentOrigin(null)
       setDrawerOpen(false)
     },
-  }), [currentOrigin, clientVisibleTabs])
+  }), [currentOrigin, clientVisibleTabs, showProgrammingQuestionnaire])
 
   /* Drawer accordion — toggle a group's expanded state. */
   const toggleDrawerGroup = (groupKey) => {
@@ -451,6 +461,7 @@ export default function ClientPortal() {
           lastName={lastName}
           isFamily={isFamily}
           clientVisibleTabs={clientVisibleTabs}
+          showProgrammingQuestionnaire={showProgrammingQuestionnaire}
           /* Home-only props: lets ClientHome auto-open a group's sub-
              screen after goBack lands here, then clear it once consumed. */
           pendingHomeGroup={activeKey === 'home' ? pendingHomeGroup : null}

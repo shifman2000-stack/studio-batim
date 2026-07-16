@@ -110,6 +110,15 @@ function ProjectsKanban() {
   const [archiveStep, setArchiveStep]   = useState(0) // 0=none, 1=dialog1, 2=dialog2
   const [archiveTarget, setArchiveTarget] = useState(null) // project to archive
 
+  /* ── Archived-in-hold-column bucket ──
+     Separate state for archived (finished) projects surfaced under the
+     "השהייה" column as a collapsible bucket. Kept in its own array so
+     the main `projects` state stays archived-free (every drag/drop and
+     stage-placement filter still works unchanged). The accordion starts
+     collapsed on every mount. */
+  const [archivedHold,     setArchivedHold]     = useState([])
+  const [archiveHoldOpen,  setArchiveHoldOpen]  = useState(false)
+
   // ── Parent-project feature (2-level hierarchy enforced frontend-only).
   // The Kanban shows only top-level projects (parent_project_id IS NULL).
   // childCounts maps a top-level project id -> number of non-archived children.
@@ -234,6 +243,11 @@ function ProjectsKanban() {
         setProjects(projectsData)
       }
 
+      /* Also load archived projects at this hierarchy level for the
+         "השהייה" column's archive bucket. Kept in a separate state
+         so the main `projects` array stays archived-free. */
+      await fetchArchivedHold()
+
       const { data: usersData } = await supabase
         .from('profiles')
         .select('id, first_name, last_name')
@@ -278,6 +292,24 @@ function ProjectsKanban() {
     const { data, error } = await q.order('created_at', { ascending: false })
     if (!error && data) setProjects(data)
     await loadChildCounts()
+    await fetchArchivedHold()
+  }
+
+  /* Fetch archived projects at the SAME hierarchy level the board is
+     currently showing (top-level or under the URL parent). Mirrors the
+     shape and joins of the main projects query so we can render the
+     bucket cards with the same markup. Used exclusively by the "השהייה"
+     column's archive accordion — never merged into `projects`. */
+  const fetchArchivedHold = async () => {
+    let q = supabase
+      .from('projects')
+      .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
+      .eq('archived', true)
+    q = parentId
+      ? q.eq('parent_project_id', parentId)
+      : q.is('parent_project_id', null)
+    const { data, error } = await q.order('archived_at', { ascending: false })
+    if (!error && data) setArchivedHold(data)
   }
 
   // ── Archive view fetch ──
@@ -319,6 +351,9 @@ function ProjectsKanban() {
         .eq('id', projectId)
         .single()
       if (restored) setProjects(prev => [restored, ...prev])
+      /* Keep the "השהייה" archive bucket in sync — the restored row
+         must not appear in both the bucket and the main columns. */
+      setArchivedHold(prev => prev.filter(p => p.id !== projectId))
       showArchiveToast(`הפרויקט "${target?.name ?? ''}" שוחזר בהצלחה`)
     }
   }
@@ -349,6 +384,9 @@ function ProjectsKanban() {
     await supabase.from('tasks').delete().eq('project_id', projectId)
     await supabase.from('projects').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', projectId)
     setProjects(prev => prev.filter(p => p.id !== projectId))
+    /* Refresh the "השהייה" column's archive bucket so the freshly
+       archived project appears there without needing a page reload. */
+    await fetchArchivedHold()
     showArchiveToast(`הפרויקט "${projectName}" הועבר לארכיון בהצלחה`)
   }
 
@@ -667,10 +705,15 @@ ${authCode || '—'}
   const openSettings = (project) => {
     setSettingsTarget(project)
     setSettingsDraft({
-      name:               project.name               || '',
-      is_favorite:        !!project.is_favorite,
-      responsible_id:     project.responsible_id     || '',
-      whatsapp_group_url: project.whatsapp_group_url ?? '',   // null-safe for not-yet-migrated prod
+      name:                          project.name               || '',
+      is_favorite:                   !!project.is_favorite,
+      responsible_id:                project.responsible_id     || '',
+      whatsapp_group_url:            project.whatsapp_group_url ?? '',   // null-safe for not-yet-migrated prod
+      /* Per-project override: whether the client sees the programming
+         questionnaire tile in the portal. Same null-safety pattern —
+         a row without the column reads as undefined and normalises to
+         false so the modal shows an unchecked box on unmigrated rows. */
+      show_programming_questionnaire: project.show_programming_questionnaire === true,
     })
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
@@ -720,6 +763,14 @@ ${authCode || '—'}
     const waOrig  = ((settingsTarget.whatsapp_group_url ?? '') || '').trim() || null
     if (waDraft !== waOrig) patch.whatsapp_group_url = waDraft
 
+    /* show_programming_questionnaire — boolean diff. Undefined on the
+       original (unmigrated row) normalises to false so the checkbox
+       reflects "no override yet"; only patch when the draft actually
+       differs from that baseline. */
+    const spqDraft = !!settingsDraft.show_programming_questionnaire
+    const spqOrig  = settingsTarget.show_programming_questionnaire === true
+    if (spqDraft !== spqOrig) patch.show_programming_questionnaire = spqDraft
+
     /* No-op shortcut. */
     if (Object.keys(patch).length === 0) {
       setSettingsTarget(null)
@@ -753,6 +804,10 @@ ${authCode || '—'}
 
   const handleDragStart = (e, projectId) => {
     if (userRole !== 'admin') { e.preventDefault(); return }
+    /* Belt-and-suspenders: archived cards render with draggable={false}
+       so this branch shouldn't fire in normal flow, but if anything
+       ever kicks off a drag on one (e.g. programmatic), abort. */
+    if (archivedHold.some(p => p.id === projectId)) { e.preventDefault(); return }
     setDragId(projectId)
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -1061,7 +1116,11 @@ ${authCode || '—'}
                 onDrop={(e) => handleDrop(e, stage)}
               >
                 <div className="kanban-col-header" style={{ background: bg, color: text }}>
-                  {stage.name}
+                  {/* Display-only override: this column also holds the
+                      archive bucket, so the title reads split. The DB
+                      stage name stays "השהייה" and every code path that
+                      matches on stage.name === 'השהייה' is unchanged. */}
+                  {stage.name === 'השהייה' ? 'בהשהייה / הסתיימו' : stage.name}
                   <span className="kanban-col-count">{cards.length}</span>
                 </div>
 
@@ -1143,6 +1202,177 @@ ${authCode || '—'}
                     </div>
                   ))}
                 </div>
+
+                {/* ── Archive bucket (SHOWN ONLY IN "השהייה" COLUMN) ──
+                      Collapsible list of archived projects at the same
+                      hierarchy level. Cards mirror the normal-card
+                      markup so the visual parity is preserved; drag
+                      is disabled per-card AND the wrapper swallows
+                      dragover/drop so nothing can be dropped into
+                      the archive. Header shows a chevron on the
+                      visual-right (RTL first-child) + count. */}
+                {stage.name === 'השהייה' && (
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
+                    onDrop={(e) => { e.preventDefault(); e.stopPropagation() }}
+                    style={{ padding: '0 5px 6px' }}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={archiveHoldOpen}
+                      onClick={() => setArchiveHoldOpen(v => !v)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setArchiveHoldOpen(v => !v)
+                        }
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 8px',
+                        background: archiveHoldOpen ? '#eeebe6' : '#f2efe9',
+                        border: '1px solid rgba(26,26,24,0.13)', borderRadius: 6,
+                        cursor: 'pointer', direction: 'rtl',
+                        fontFamily: 'Heebo, sans-serif', fontSize: 13, color: '#1a1a18',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {/* Chevron rendered FIRST — in this RTL row it
+                          lands on the visual-right, mirroring the
+                          accordion pattern used elsewhere. */}
+                      <svg
+                        width="12" height="12" viewBox="0 0 24 24"
+                        fill="none" stroke="#7a9478" strokeWidth="2.4"
+                        strokeLinecap="round" strokeLinejoin="round"
+                        aria-hidden="true"
+                        style={{
+                          flexShrink: 0,
+                          transform: archiveHoldOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.15s',
+                        }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                      <span style={{ flex: 1, fontWeight: 500 }}>הסתיימו</span>
+                      <span style={{
+                        background: 'rgba(0,0,0,0.10)', borderRadius: 10,
+                        fontSize: 12, fontWeight: 600, padding: '1px 7px',
+                      }}>
+                        {archivedHold.length}
+                      </span>
+                    </div>
+
+                    {/* Body — hidden via display:none when collapsed. */}
+                    <div
+                      aria-hidden={!archiveHoldOpen}
+                      style={{
+                        display: archiveHoldOpen ? 'flex' : 'none',
+                        flexDirection: 'column', gap: 5,
+                        padding: '6px 0 2px',
+                      }}
+                    >
+                      {archivedHold.length === 0 ? (
+                        <div style={{
+                          color: '#8a8680', fontSize: 12, padding: '4px 6px',
+                          textAlign: 'right', direction: 'rtl',
+                        }}>
+                          אין פרויקטים בארכיון.
+                        </div>
+                      ) : (
+                        archivedHold.map(project => (
+                          <div
+                            key={project.id}
+                            className="kanban-card"
+                            /* Explicit false — never draggable, not even
+                               for admins. */
+                            draggable={false}
+                            /* Open in READ-ONLY archive mode — same nav
+                               shape the archive VIEW uses (line ~926).
+                               ProjectDetail keys off location.state.fromArchive
+                               to render the red banner, disable inputs,
+                               and swap the back link to "חזור לארכיון". */
+                            onDoubleClick={() => navigate(`/projects/${project.id}`, { state: { fromArchive: true } })}
+                            onContextMenu={(e) => handleCardRightClick(e, project)}
+                            style={{
+                              opacity: 0.55,
+                              filter: 'grayscale(0.5)',
+                              cursor: 'default',
+                              ...(project.is_favorite ? { border: '2.5px solid #2D3748' } : {}),
+                            }}
+                          >
+                            <div className="kanban-card-top-row">
+                              <div className="kanban-card-name">
+                                {project.name}
+                                {!parentId && childCounts[project.id] > 0 && (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      navigate(`/פרויקטים/אב/${project.id}`)
+                                    }}
+                                    onDoubleClick={(e) => e.stopPropagation()}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onContextMenu={(e) => e.stopPropagation()}
+                                    onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.7' }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 2,
+                                      color: '#7a9478',
+                                      fontSize: 11,
+                                      fontWeight: 500,
+                                      marginInlineStart: 6,
+                                      verticalAlign: 'middle',
+                                      cursor: 'pointer',
+                                      transition: 'opacity 0.12s',
+                                    }}
+                                    title={`${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים`}
+                                  >
+                                    <IconFolder size={12} />
+                                    <span>{childCounts[project.id]}</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
+                            </div>
+                            <div className="kanban-card-meta">
+                              {project.profiles?.first_name && (
+                                <span className="kanban-card-responsible">
+                                  {project.profiles.first_name}
+                                </span>
+                              )}
+                            </div>
+                            {/* Task-status dots — archived projects have
+                                their tasks deleted at archive time, so
+                                this normally shows nothing, but keeping
+                                the exact same conditional preserves
+                                markup parity with regular cards. */}
+                            {tasksByProject[project.id]?.length > 0 && (() => {
+                              const statuses = tasksByProject[project.id]
+                              const dots = statuses.slice(0, 5)
+                              const overflow = statuses.length > 5
+                              return (
+                                <div className="kanban-card-tasks">
+                                  {dots.map((s, i) => (
+                                    <span
+                                      key={i}
+                                      className="kanban-task-dot"
+                                      style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
+                                    />
+                                  ))}
+                                  {overflow && <span className="kanban-task-overflow">5+</span>}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -1581,6 +1811,36 @@ ${authCode || '—'}
                     </svg>
                   </button>
                 </div>
+              </div>
+
+              {/* 6b. Programming-questionnaire visibility toggle.
+                     Client-only: flips whether the שאלון פרוגרמה tile
+                     shows in the portal for this project. Admin/meeting
+                     split-view stays available regardless. */}
+              <div style={pdSettingsRow}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    color: '#1a1a2e',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    direction: 'rtl',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!settingsDraft.show_programming_questionnaire}
+                    onChange={(e) => setSettingsDraft(d => ({
+                      ...d,
+                      show_programming_questionnaire: e.target.checked,
+                    }))}
+                    style={{ width: 16, height: 16, accentColor: '#7a9478', cursor: 'pointer' }}
+                  />
+                  חשוף שאלון פרוגרמה ללקוח
+                </label>
               </div>
 
               {/* ── Group D: destructive (admin-only) ────────────────── */}

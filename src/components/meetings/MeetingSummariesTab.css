@@ -8,11 +8,13 @@
   color: #1a1a18;
 }
 
-/* ── Top toolbar — "+ סיכום פגישה חדש" ── */
+/* ── Top toolbar — "+ סיכום פגישה חדש" and its programming twin ── */
 .ms-toolbar {
   display: flex;
   justify-content: flex-start;   /* RTL: visual right */
+  gap: 8px;                       /* space between the two + buttons */
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
 .ms-add-btn {
@@ -507,4 +509,86 @@
 .ms-btn-secondary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* ── "סיכום פגישת פרוגרמה" split-screen mode ─────────────────────
+   Two-pane layout that replaces the summaries list while active.
+   Panes scroll independently; page-level scroll is unaffected.
+   RTL: first child in the DOM (.ms-program-pane--editor) lands on
+   the visual-RIGHT — that's the meeting-summary editor. The
+   questionnaire pane sits on the visual-LEFT. */
+.ms-program-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ms-program-title {
+  margin: 0;
+  font-family: 'Heebo', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #1a1a18;
+}
+
+.ms-program-split {
+  display: flex;
+  direction: rtl;
+  gap: 16px;
+  /* Bounded so each pane can have its own scroll instead of scrolling
+     the entire tab. 80vh keeps the split visible without hiding the
+     project's own header. */
+  height: 80vh;
+  min-height: 480px;
+}
+
+.ms-program-pane {
+  flex: 1 1 50%;
+  min-width: 0;                    /* let panes shrink under 50% */
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e3dd;
+  border-radius: 10px;
+  overflow: hidden;                /* body handles the scroll */
+}
+
+.ms-program-pane-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid #ece8df;
+  background: #faf9f6;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a18;
+  flex: 0 0 auto;
+}
+
+.ms-program-pane-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* The questionnaire brings its own .cp-page/.cp-container paddings —
+   drop the pane's inner padding for that half so the two containers
+   don't stack. */
+.ms-program-pane-body--flush {
+  padding: 0;
+}
+
+/* On narrow screens the split becomes a vertical stack so both panes
+   are still usable. Height turns off so each pane can size naturally. */
+@media (max-width: 900px) {
+  .ms-program-split {
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+  }
+  .ms-program-pane {
+    flex: 0 0 auto;
+    max-height: 70vh;
+  }
 }

@@ -50,14 +50,27 @@
   background: #7a9478;
 }
 
-/* ── Shared Site Header ── */
+/* ── Shared Site Header ──
+   Uses a modest inline-padding cap to keep the logo and the
+   right-hand controls close to the page edge, so on wide screens
+   the header content occupies the width naturally instead of the
+   two clusters drifting into an oversized middle gap.
+   `padding-inline` (logical property) is the correct edge padding
+   under RTL; the previous 24px horizontal became 12px so the
+   greeting/nav sit closer to the visual-right edge and the logo
+   sits closer to the visual-left edge. min-height + border-bottom
+   stay untouched. */
 .site-header {
   display: flex;
   flex-direction: row-reverse;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  min-height: 90px;
-  padding: 0px 24px 8px 24px;
+  min-height: 52px;
+  /* Symmetric vertical padding — the previous 0/8 offset combined
+     with align-items:center kept the nav visually low in the bar.
+     Equal top/bottom (4px each) makes the empty band above the nav
+     equal the empty band below it. */
+  padding: 4px 12px 4px 12px;
   border-bottom: 1px solid #ddd;
   background-color: #fff;
 }
@@ -72,7 +85,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
 
 /* ── User greeting + Attendance (rightmost) ── */

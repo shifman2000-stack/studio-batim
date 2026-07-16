@@ -27,7 +27,7 @@ export const GROUPS = [
     key:      'progress_group',
     label:    'התקדמות התהליך',
     icon:     'progress_group',
-    children: ['documents', 'progress', 'meetings'],
+    children: ['questionnaire', 'documents', 'progress', 'meetings'],
   },
   {
     key:      'plans',
@@ -45,24 +45,38 @@ export const GROUPS = [
  * tile/drawer entry to render — typically because they're brand-new
  * screens shipped ahead of their manager-side toggle.
  *
- * Currently EMPTY: the questionnaire is temporarily disconnected from
- * the portal so this bundle can ship without the questionnaire /
- * house-builder module. When the manager-side lands the questionnaire
- * key will move back in here (or graduate to CONTROLLABLE_TABS).
+ * Currently empty. 'questionnaire' USED to live here as a force-on
+ * override; it's now gated per-project via the
+ * projects.show_programming_questionnaire boolean instead (see
+ * getVisibleChildren below).
  */
 const ALWAYS_ON_CHILDREN = new Set()
 
 /**
  * Children of a group that the current project allows the client to see.
  * Order is preserved from the group's `children` array.
+ *
+ * Two extra gates on top of the ALWAYS_ON / client_visible_tabs logic:
+ *   * 'questionnaire' — hidden unless the third param
+ *     `showProgrammingQuestionnaire` is strictly true (the value of
+ *     projects.show_programming_questionnaire for this project).
+ *     Undefined / false → tile is not rendered to the client at all.
+ *
  * @param {object} group
- * @param {object|null} clientVisibleTabs   projects.client_visible_tabs json
+ * @param {object|null} clientVisibleTabs             projects.client_visible_tabs json
+ * @param {boolean|undefined} showProgrammingQuestionnaire
+ *   projects.show_programming_questionnaire — controls ONLY the
+ *   'questionnaire' child. Default undefined → treated as false.
  * @returns {string[]}
  */
-export function getVisibleChildren(group, clientVisibleTabs) {
-  return group.children.filter(k =>
-    ALWAYS_ON_CHILDREN.has(k) || isClientTabVisible(k, clientVisibleTabs)
-  )
+export function getVisibleChildren(group, clientVisibleTabs, showProgrammingQuestionnaire) {
+  return group.children.filter(k => {
+    /* Per-project override for the programming-questionnaire tile.
+       Must be strictly true (not truthy) — a missing column reads
+       back as undefined and stays hidden on the client. */
+    if (k === 'questionnaire') return showProgrammingQuestionnaire === true
+    return ALWAYS_ON_CHILDREN.has(k) || isClientTabVisible(k, clientVisibleTabs)
+  })
 }
 
 /**
@@ -81,10 +95,11 @@ export function getVisibleChildren(group, clientVisibleTabs) {
  *
  * @param {object} group
  * @param {object|null} clientVisibleTabs
+ * @param {boolean|undefined} showProgrammingQuestionnaire   forwarded to getVisibleChildren
  * @returns {null | { mode: 'direct', target: string } | { mode: 'expand', children: string[] }}
  */
-export function resolveGroup(group, clientVisibleTabs) {
-  const visible = getVisibleChildren(group, clientVisibleTabs)
+export function resolveGroup(group, clientVisibleTabs, showProgrammingQuestionnaire) {
+  const visible = getVisibleChildren(group, clientVisibleTabs, showProgrammingQuestionnaire)
   if (visible.length === 0) return null
   if (group.children.length === 1) return { mode: 'direct', target: visible[0] }
   return { mode: 'expand', children: visible }

@@ -54,11 +54,13 @@ const CHILD_LABELS = {
   contractor:    'מפרט לקבלן',
   progress:      'שלבי התקדמות',
   meetings:      'סיכומי פגישות',
+  questionnaire: 'שאלון פרוגרמה',
 }
 
 export default function ClientHome({
   firstName, lastName, isFamily,
   clientVisibleTabs,
+  showProgrammingQuestionnaire,
   pendingHomeGroup,
   clearPendingHomeGroup,
 }) {
@@ -86,7 +88,7 @@ export default function ClientHome({
 
   /* Pre-resolve every group once per render so we don't redo the
      visibility math inside the JSX. Hidden groups become null. */
-  const resolvedGroups = GROUPS.map(g => ({ group: g, resolved: resolveGroup(g, clientVisibleTabs) }))
+  const resolvedGroups = GROUPS.map(g => ({ group: g, resolved: resolveGroup(g, clientVisibleTabs, showProgrammingQuestionnaire) }))
   const visibleGroups  = resolvedGroups.filter(rg => rg.resolved !== null)
 
   const handleGroupTap = (group, resolved) => {

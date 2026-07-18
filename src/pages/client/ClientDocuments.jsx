@@ -67,9 +67,14 @@ export default function ClientDocuments() {
   const isMounted = useRef(true)
 
   /* ── State ───────────────────────────────────────────────────────── */
-  const [documents, setDocuments]       = useState([])
-  const [latestByDoc, setLatestByDoc]   = useState({})  // { docId: version }
-  const [nameByUserId, setNameByUserId] = useState({})  // uploader uuid → display name
+  const [documents, setDocuments]         = useState([])
+  /* Multi-file model: for each document_id, an ARRAY of versions
+     sorted by uploaded_at DESC (newest first). A legacy row that
+     has only project_documents.file_url and no matching
+     document_versions rows appears as a single synthetic entry
+     tagged `isLegacy: true` so nothing disappears. */
+  const [versionsByDoc, setVersionsByDoc] = useState({})  // { docId: version[] }
+  const [nameByUserId, setNameByUserId]   = useState({})  // uploader uuid → display name
   const [loading, setLoading]           = useState(true)
   const [uploadingDocId, setUploadingDocId] = useState(null)
   const [uploadErrors, setUploadErrors] = useState({})  // { docId: true }
@@ -105,30 +110,56 @@ export default function ClientDocuments() {
     const visibleDocs = Array.isArray(docs) ? docs : []
     setDocuments(visibleDocs)
 
-    /* Stage 2 — latest version row per document.
-       Strategy: pull ALL versions for the visible doc ids ordered desc by
-       uploaded_at and keep the first seen per document_id. Cheap because
-       version counts per project are small. */
+    /* Stage 2 — ALL version rows per document (newest first).
+       We keep every attachment now, not just the latest, so the row
+       can render a stacked list. RLS on document_versions gates
+       these to versions of documents whose parent client_access is
+       'view' or 'view_edit' AND whose project is the caller's — same
+       guard as the manager's server-side. Client-side filter here is
+       just an optimisation, not a security boundary. */
     const docIds = visibleDocs.map(d => d.id)
-    let latest = {}
+    let versionsMap = {}
     let uploaderIds = []
 
     if (docIds.length > 0) {
       const { data: versions } = await supabase
         .from('document_versions')
-        .select('document_id, file_url, file_name, uploaded_by, uploaded_at')
+        .select('id, document_id, file_url, file_name, uploaded_by, uploaded_at')
         .in('document_id', docIds)
         .order('uploaded_at', { ascending: false })
 
       if (!isMounted.current) return
       for (const v of versions || []) {
-        if (!(v.document_id in latest)) latest[v.document_id] = v
+        if (!versionsMap[v.document_id]) versionsMap[v.document_id] = []
+        versionsMap[v.document_id].push(v)
       }
-      uploaderIds = Array.from(
-        new Set(Object.values(latest).map(v => v.uploaded_by).filter(Boolean))
-      )
+      /* Legacy fallback — a doc that has parent file_url but no
+         matching version rows was uploaded by the OLD admin path
+         (before multi-file support wrote versions). Surface it as
+         one synthetic entry so it still shows for the client.
+         `isLegacy: true` is diagnostic-only here — nothing writes
+         through this codepath on the client side. */
+      for (const d of visibleDocs) {
+        if ((!versionsMap[d.id] || versionsMap[d.id].length === 0) && d.file_url) {
+          versionsMap[d.id] = [{
+            id:          `__legacy__${d.id}`,
+            document_id: d.id,
+            file_url:    d.file_url,
+            file_name:   d.file_name || null,
+            uploaded_by: null,
+            uploaded_at: null,
+            isLegacy:    true,
+          }]
+        }
+      }
+      uploaderIds = Array.from(new Set(
+        Object.values(versionsMap)
+          .flat()
+          .map(v => v.uploaded_by)
+          .filter(Boolean)
+      ))
     }
-    setLatestByDoc(latest)
+    setVersionsByDoc(versionsMap)
 
     /* Stage 3 — resolve uploader names. profiles first (staff), then
        client_users (client). RLS may restrict client_users to the
@@ -267,10 +298,26 @@ export default function ClientDocuments() {
       })
       if (insertError) throw insertError
 
-      /* 4. Keep the latest on the project_documents row so view-only readers
-            see the same file as the latest version. */
+      /* 4. Keep the parent row in sync — same denormalization the admin
+            side does on upload so the manager view reflects a client
+            upload identically:
+              file_url + file_name → newest attachment
+              status               → 'התקבל'  (green ✓ in DocumentsTab,
+                                                progresses the row-based
+                                                "X מתוך Y מסמכים התקבלו"
+                                                counter)
+              date                 → today (YYYY-MM-DD, same format the
+                                            admin uploadFile writes)
+            Same policy client_can_update_editable_documents already
+            gates this UPDATE — RLS is row-level, not column-level. */
+      const today = new Date().toISOString().slice(0, 10)
       const { error: updateError } = await supabase.from('project_documents')
-        .update({ file_url: publicUrl, file_name: file.name })
+        .update({
+          file_url:  publicUrl,
+          file_name: file.name,
+          status:    'התקבל',
+          date:      today,
+        })
         .eq('id', docId)
       if (updateError) throw updateError
 
@@ -286,55 +333,51 @@ export default function ClientDocuments() {
     if (isMounted.current) setUploadingDocId(null)
   }
 
-  /* ── Render a single document row ── */
+  /* Build the meta line for a single version. Legacy synthesised
+     versions have no uploaded_at + no uploaded_by → reads "קובץ" as
+     a neutral fallback so old files stay openable but don't lie
+     about metadata. */
+  const buildVersionMeta = (v) => {
+    if (v.isLegacy) return 'קובץ'
+    const uploader = clean(nameByUserId[v.uploaded_by]) || '—'
+    const dateStr  = formatDate(v.uploaded_at)
+    return dateStr
+      ? `${dateStr} · ${uploader}`
+      : `${uploader}`
+  }
+
+  /* ── Render a single document row — LIST of attached files ──
+     Row-level: document name + meta (or "טרם הועלה קובץ" if empty).
+     File-level: each attachment is one line inside the row with its
+     own file name + open link + per-file meta (date · uploader).
+     Row-level upload button ("צרף עוד קובץ" / "העלה קובץ") stays,
+     appends a new version via uploadDocVersion. No per-file delete
+     on the client side — client_access controls VISIBILITY not
+     MUTATION beyond upload; deletions stay admin-only, matching the
+     pre-change behavior. */
   const renderDocRow = (doc) => {
-    const version     = latestByDoc[doc.id]
-    const fileUrl     = version?.file_url || doc.file_url
-    const hasFile     = !!fileUrl
+    const versions    = versionsByDoc[doc.id] || []
+    const hasFiles    = versions.length > 0
     const isUploading = uploadingDocId === doc.id
     const rowError    = !!uploadErrors[doc.id]
     const editable    = doc.client_access === 'view_edit'
-
-    /* Build the meta line. file_name is intentionally NOT shown here —
-       it's still tracked in DB and used as the file when the link is
-       tapped, but the meta is reserved for upload metadata.
-
-       A doc with no document_versions row (including legacy docs that
-       only have project_documents.file_url) reads "טרם הועלה קובץ".
-       The legacy file_url is still wired to the link target so those
-       older docs remain openable on tap. */
-    let metaText
-    if (version) {
-      const uploader = clean(nameByUserId[version.uploaded_by]) || '—'
-      const dateStr  = formatDate(version.uploaded_at)
-      metaText = dateStr
-        ? `העלאה אחרונה ב-${dateStr} ע״י ${uploader}`
-        : `העלאה אחרונה ע״י ${uploader}`
-    } else {
-      metaText = 'טרם הועלה קובץ'
-    }
-
-    const docName = clean(doc.name) || '—'
+    const docName     = clean(doc.name) || '—'
+    const uploadLabel = hasFiles ? 'צרף עוד קובץ' : 'העלה קובץ'
 
     return (
       <div key={doc.id} className="cp-doc-row">
         <div className="cp-doc-row-main">
-          {hasFile ? (
-            <a
-              className="cp-doc-link"
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <div className="cp-doc-name">{docName}</div>
-              <div className="cp-doc-meta">{metaText}</div>
-            </a>
-          ) : (
-            <div className="cp-doc-link cp-doc-link--inert">
-              <div className="cp-doc-name cp-doc-name--unfilled">{docName}</div>
-              <div className="cp-doc-meta">{metaText}</div>
+          {/* Row title — inert (not a link), because the row now has
+              multiple files listed below. Grays out when the row is
+              empty, mirroring the previous cp-doc-name--unfilled state. */}
+          <div className="cp-doc-link cp-doc-link--inert" style={{ flex: 1, minWidth: 0 }}>
+            <div className={'cp-doc-name' + (hasFiles ? '' : ' cp-doc-name--unfilled')}>
+              {docName}
             </div>
-          )}
+            {!hasFiles && (
+              <div className="cp-doc-meta">טרם הועלה קובץ</div>
+            )}
+          </div>
 
           {editable && (
             <div className="cp-doc-actions">
@@ -347,12 +390,55 @@ export default function ClientDocuments() {
                   onClick={() => handlePickFile(doc.id)}
                   disabled={!!uploadingDocId}
                 >
-                  העלה גרסה חדשה
+                  {uploadLabel}
                 </button>
               )}
             </div>
           )}
         </div>
+
+        {hasFiles && (
+          /* Stacked list of files — newest first. Each entry links
+             directly to its own file_url (opens in a new tab, same
+             pattern as before). Kept as a plain <ul> with reset
+             list-style so we don't need a new CSS class; direction
+             is inherited from the cp-page shell (RTL). */
+          <ul
+            style={{
+              listStyle: 'none',
+              margin:    '6px 0 0',
+              padding:   0,
+              display:   'flex',
+              flexDirection: 'column',
+              gap:       4,
+            }}
+          >
+            {versions.map(v => {
+              const displayName = clean(v.file_name)
+                || (v.file_url ? decodeURIComponent(v.file_url.split('/').pop()) : 'קובץ')
+              const meta = buildVersionMeta(v)
+              return (
+                <li key={v.id} style={{
+                  display: 'flex', alignItems: 'baseline', gap: 8,
+                  flexWrap: 'wrap', direction: 'rtl',
+                }}>
+                  <a
+                    className="cp-doc-link"
+                    href={v.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ flex: '1 1 auto', minWidth: 0 }}
+                  >
+                    <div className="cp-doc-name" style={{ fontSize: 14 }}>{displayName}</div>
+                    {meta && (
+                      <div className="cp-doc-meta">{meta}</div>
+                    )}
+                  </a>
+                </li>
+              )
+            })}
+          </ul>
+        )}
 
         {rowError && (
           <div className="cp-doc-error" role="alert">שגיאה בהעלאה, נסה שוב</div>

@@ -303,13 +303,16 @@ function StatusIcon({ status }) {
   )
 }
 
-/* ── Single document row ── */
-function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPreview, onClientAccessChange }) {
+/* ── Single document row ──
+   Now supports MULTIPLE attached files per row (each surfaced from a
+   document_versions row; a legacy row with only project_documents
+   .file_url is shown as a synthetic pseudo-version — see loadDocs). */
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
-  const ext      = getFileExtension(doc)
-  const fullName = doc.file_url ? decodeURIComponent(doc.file_url.split('/').pop()) : ''
+  const versions = doc.versions || []
+  const hasFiles = versions.length > 0
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0]
@@ -343,37 +346,54 @@ function DocRow({ doc, index, onPatch, onUpload, onFileDelete, onDocDelete, onPr
         />
       </div>
 
-      {/* קובץ */}
+      {/* קובץ — רשימת קבצים מצורפים (versions).
+          Each attached file is one line: [ext badge] [preview] [download] [×].
+          A "+ צרף" control always sits at the bottom of the list to add
+          another file. Hidden input is shared — always mounted so the
+          picker works whether or not files already exist. */}
       <div className="dt-col-file">
-        {uploading ? (
-          <span className="dt-file-uploading">מעלה...</span>
-        ) : doc.file_url ? (
-          <div className="dt-file-existing">
-            <span className="dt-file-name" title={fullName}>{ext}</span>
-            <button type="button" className="dt-file-icon-btn"
-              onClick={() => onPreview({ url: doc.file_url, name: fullName })} title="תצוגה מקדימה">
-              <IconEye />
-            </button>
-            <button type="button" className="dt-file-icon-btn"
-              onClick={() => isExternalUrl(doc.file_url)
-                ? window.open(doc.file_url, '_blank', 'noopener,noreferrer')
-                : downloadBlob(doc.file_url, fullName)
-              } title="הורד">
-              <IconDownload />
-            </button>
-            <button type="button" className="dt-file-icon-btn dt-file-delete-btn"
-              onClick={() => onFileDelete(doc)} title="מחק קובץ">
-              ×
-            </button>
-          </div>
-        ) : (
-          <>
-            <input type="file" ref={fileRef} style={{ display: 'none' }} onChange={handleFileChange} />
-            <button type="button" className="dt-file-pick-btn" onClick={() => fileRef.current?.click()}>
+        <input type="file" ref={fileRef} style={{ display: 'none' }} onChange={handleFileChange} />
+        <div className="dt-file-list" style={{ display: 'flex', flexDirection: 'column', gap: 4, direction: 'rtl' }}>
+          {hasFiles && versions.map((v) => {
+            const vExt = getFileExtension(v)
+            const vName = v.file_name
+              || (v.file_url ? decodeURIComponent(v.file_url.split('/').pop()) : '')
+            return (
+              <div key={v.id} className="dt-file-existing" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span className="dt-file-name" title={vName}>{vExt}</span>
+                <button type="button" className="dt-file-icon-btn"
+                  onClick={() => onPreview({ url: v.file_url, name: vName })} title="תצוגה מקדימה">
+                  <IconEye />
+                </button>
+                <button type="button" className="dt-file-icon-btn"
+                  onClick={() => isExternalUrl(v.file_url)
+                    ? window.open(v.file_url, '_blank', 'noopener,noreferrer')
+                    : downloadBlob(v.file_url, vName)
+                  } title="הורד">
+                  <IconDownload />
+                </button>
+                <button type="button" className="dt-file-icon-btn dt-file-delete-btn"
+                  onClick={() => onVersionDelete(doc, v)} title="מחק קובץ">
+                  ×
+                </button>
+              </div>
+            )
+          })}
+          {uploading ? (
+            <span className="dt-file-uploading">מעלה...</span>
+          ) : (
+            <button
+              type="button"
+              className="dt-file-pick-btn"
+              onClick={() => fileRef.current?.click()}
+              /* Compact when files already exist — visually reads as
+                 "add another" rather than a first-time picker. */
+              style={hasFiles ? { alignSelf: 'flex-start' } : undefined}
+            >
               + צרף
             </button>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
       {/* הערות */}
@@ -576,7 +596,49 @@ export default function DocumentsTab({ projectId }) {
       data = fetched
     }
 
-    setDocs(data || [])
+    /* ── Step 4: load version list per doc.
+       One query, grouped in memory. Newest first per doc (uploaded_at DESC),
+       which matches the parent's denormalized file_url — the latest upload
+       always sits at the top of the list. */
+    const rows = data || []
+    const docIds = rows.map(d => d.id)
+    let versionsByDoc = {}
+    if (docIds.length > 0) {
+      const { data: versionsData } = await supabase
+        .from('document_versions')
+        .select('id, document_id, file_url, file_name, uploaded_by, uploaded_at')
+        .in('document_id', docIds)
+        .order('uploaded_at', { ascending: false })
+      for (const v of versionsData || []) {
+        if (!versionsByDoc[v.document_id]) versionsByDoc[v.document_id] = []
+        versionsByDoc[v.document_id].push(v)
+      }
+    }
+
+    /* Attach the versions array to each doc. If a doc has a parent
+       file_url but NO document_versions rows, it's a legacy admin
+       upload (before this change wrote versions). Surface it as a
+       synthetic pseudo-version so it shows in the UI list without
+       auto-writing to the DB on load. Distinguished by `isLegacy:true`
+       and an id prefix — every mutation path checks the flag. */
+    const merged = rows.map(d => {
+      const real = versionsByDoc[d.id] || []
+      let versions = real
+      if (real.length === 0 && d.file_url) {
+        versions = [{
+          id:          `__legacy__${d.id}`,
+          document_id: d.id,
+          file_url:    d.file_url,
+          file_name:   d.file_name || null,
+          uploaded_by: null,
+          uploaded_at: null,
+          isLegacy:    true,
+        }]
+      }
+      return { ...d, versions }
+    })
+
+    setDocs(merged)
     const state = {}
     STAGES.forEach(s => { state[s.name] = false })
     setOpenStages(state)
@@ -618,26 +680,122 @@ export default function DocumentsTab({ projectId }) {
     }
   }
 
-  /* ── File upload ── */
+  /* ── File upload — APPENDS a version, does NOT replace ──
+     A row can now hold N files: each upload lands as a new
+     document_versions row, and the parent project_documents is kept
+     pointing at the LATEST file (denormalized "current" for legacy
+     single-file consumers + the client's read path). Status flips
+     to 'התקבל' and date to today on every upload (row-level "received"
+     signal keeps existing counters correct). */
   const uploadFile = async (doc, file) => {
     const fileExt = file.name.includes('.') ? file.name.split('.').pop() : 'bin'
     const path    = `${projectId}/${doc.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file)
-    if (error) { console.error('Upload error:', error); return }
+    const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, file)
+    if (uploadErr) { console.error('Upload error:', uploadErr); return }
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path)
     const today = new Date().toISOString().slice(0, 10)
-    setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, file_url: publicUrl, status: 'התקבל', date: today } : d))
-    await supabase.from('project_documents').update({ file_url: publicUrl, status: 'התקבל', date: today }).eq('id', doc.id)
+
+    /* Grab the current user id so uploaded_by is recorded. Falls back
+       to null if the session probe fails — the column is nullable and
+       the RLS staff policy doesn't require it, so INSERT still works. */
+    let userId = null
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      userId = session?.user?.id || null
+    } catch { /* stay null */ }
+
+    /* Insert the new version row. We select back the inserted row so
+       we can push it into local state with the same shape the loader
+       produces. */
+    const { data: inserted, error: insertErr } = await supabase
+      .from('document_versions')
+      .insert({
+        document_id: doc.id,
+        file_url:    publicUrl,
+        file_name:   file.name,
+        uploaded_by: userId,
+      })
+      .select('id, document_id, file_url, file_name, uploaded_by, uploaded_at')
+      .single()
+    if (insertErr) { console.error('Version insert error:', insertErr); return }
+
+    /* Denormalize the latest onto the parent so single-file consumers
+       (client portal, older code) keep working. */
+    await supabase.from('project_documents').update({
+      file_url:  publicUrl,
+      file_name: file.name,
+      status:    'התקבל',
+      date:      today,
+    }).eq('id', doc.id)
+
+    setDocs(prev => prev.map(d => {
+      if (d.id !== doc.id) return d
+      /* Drop any legacy pseudo-version once we have a real one — its
+         file_url was equal to d.file_url anyway, and it isn't a real
+         DB row. Prepend the new version so uploaded_at DESC ordering
+         holds. */
+      const prevVersions = (d.versions || []).filter(v => !v.isLegacy)
+      return {
+        ...d,
+        file_url:  publicUrl,
+        file_name: file.name,
+        status:    'התקבל',
+        date:      today,
+        versions:  [inserted, ...prevVersions],
+      }
+    }))
   }
 
-  /* ── File delete ── */
-  const deleteFile = async (doc) => {
-    if (doc.file_url) {
-      const path = storagePath(doc.file_url)
+  /* ── Per-file delete — deletes ONE version + keeps parent in sync ──
+     If the deleted file was the parent's current denormalized file_url
+     (i.e. the latest), the parent moves to the NEW latest of what's
+     left (or NULL + status='חסר' + date=null if the last file was
+     removed). If the deleted file wasn't the latest, the parent stays.
+     Legacy pseudo-versions skip the DB DELETE (no row exists) but
+     still clear the parent + remove the storage object. */
+  const deleteVersion = async (doc, version) => {
+    /* 1. Remove the storage object (fixes the historic leak on
+       overwrites). External URLs (e.g. Google Drive) return null from
+       storagePath and are skipped — nothing to remove. */
+    if (version.file_url) {
+      const path = storagePath(version.file_url)
       if (path) await supabase.storage.from(BUCKET).remove([path])
     }
-    setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, file_url: null, status: 'חסר', date: null } : d))
-    await supabase.from('project_documents').update({ file_url: null, status: 'חסר', date: null }).eq('id', doc.id)
+
+    /* 2. Delete the DB row unless this is the legacy pseudo-version. */
+    if (!version.isLegacy) {
+      await supabase.from('document_versions').delete().eq('id', version.id)
+    }
+
+    /* 3. Recompute the remaining versions list in local state, then
+       decide whether the parent's denormalized fields need updating. */
+    const remaining = (doc.versions || []).filter(v => v.id !== version.id)
+
+    /* Was the deleted file the one the parent currently points to?
+       Compare on file_url — that's the denormalization key. */
+    const wasLatest = doc.file_url && doc.file_url === version.file_url
+
+    let parentPatch = null
+    if (remaining.length === 0) {
+      /* No files left → row reverts to "חסר". */
+      parentPatch = { file_url: null, file_name: null, status: 'חסר', date: null }
+    } else if (wasLatest) {
+      /* Latest deleted → point parent at the new latest (top of the
+         remaining list, since we keep it sorted DESC). Status stays
+         "התקבל" — there are still files attached. */
+      const newLatest = remaining[0]
+      parentPatch = { file_url: newLatest.file_url, file_name: newLatest.file_name }
+    }
+    /* else: not-latest deleted → parent is untouched. */
+
+    if (parentPatch) {
+      await supabase.from('project_documents').update(parentPatch).eq('id', doc.id)
+    }
+
+    setDocs(prev => prev.map(d => {
+      if (d.id !== doc.id) return d
+      return { ...d, ...(parentPatch || {}), versions: remaining }
+    }))
   }
 
   /* ── Add custom doc ── */
@@ -666,12 +824,30 @@ export default function DocumentsTab({ projectId }) {
     if (data) setDocs(prev => [...prev, data])
   }
 
-  /* ── Delete custom doc ── */
+  /* ── Delete custom doc (whole row) ──
+     document_versions.document_id ON DELETE CASCADE wipes the DB
+     rows automatically, but the Storage objects are separate — we
+     iterate every version + fall back to the parent file_url for
+     legacy rows so no object is left orphaned. Duplicate paths are
+     de-duped before the batch remove. */
   const deleteDoc = async (docId) => {
     const doc = docs.find(d => d.id === docId)
-    if (doc?.file_url) {
-      const path = storagePath(doc.file_url)
-      if (path) await supabase.storage.from(BUCKET).remove([path])
+    if (doc) {
+      const paths = new Set()
+      for (const v of (doc.versions || [])) {
+        const p = v.file_url ? storagePath(v.file_url) : null
+        if (p) paths.add(p)
+      }
+      /* Extra safety: if the parent still has a file_url that isn't
+         covered by versions (edge case on a partially-loaded row),
+         include it too. */
+      if (doc.file_url) {
+        const p = storagePath(doc.file_url)
+        if (p) paths.add(p)
+      }
+      if (paths.size > 0) {
+        await supabase.storage.from(BUCKET).remove([...paths])
+      }
     }
     await supabase.from('project_documents').delete().eq('id', docId)
     setDocs(prev => prev.filter(d => d.id !== docId))
@@ -784,7 +960,7 @@ export default function DocumentsTab({ projectId }) {
                                 index={i}
                                 onPatch={patchDoc}
                                 onUpload={uploadFile}
-                                onFileDelete={deleteFile}
+                                onVersionDelete={deleteVersion}
                                 onDocDelete={deleteDoc}
                                 onPreview={setPreviewFile}
                                 onClientAccessChange={patchClientAccess}
@@ -809,7 +985,7 @@ export default function DocumentsTab({ projectId }) {
                             index={i}
                             onPatch={patchDoc}
                             onUpload={uploadFile}
-                            onFileDelete={deleteFile}
+                            onVersionDelete={deleteVersion}
                             onDocDelete={deleteDoc}
                             onPreview={setPreviewFile}
                             onClientAccessChange={patchClientAccess}

@@ -79,13 +79,32 @@ export const QUESTIONNAIRE_STEPS = [
         ['מודרני','modern'], ['כפרי','rustic'], ['קלאסי','classic'], ['סקנדינבי','scandi'],
         ['תעשייתי','industrial'], ['מינימליסטי','minimal'], ['בוהו','boho'], ['ים-תיכוני','medi']
       ] },
+      /* Roof-type chips (גג רעפים / גג שטוח / גג משולב) were removed —
+         the roof is chosen in the house builder (answers.house.general.roof),
+         so offering it here too was redundant. Existing rows that already
+         stored roof_tile/roof_flat/roof_mix keep those keys in
+         answers.questionnaire.arch; they simply no longer render. */
       { type: 'options', store: 'arch', sectionLabel: 'אלמנטים אדריכליים', options: [
-        ['גג רעפים','roof_tile'], ['גג שטוח','roof_flat'], ['גג משולב','roof_mix'], ['קורות חשופות','beams'],
+        ['קורות חשופות','beams'],
         ['קשתות','arches'], ['חלונות גדולים','bigwin'], ['תקרה גבוהה','highceil'], ['חלל כפול','double_h']
       ] },
       { type: 'textarea', key: 'style_notes', label: 'עוד על האווירה והסגנון',
         placeholder: 'כל דבר שיעזור לנו להבין את הטעם שלכם' }
     ]
+  },
+  {
+    /* Chapter 5 — house-level toggles that used to live inside the
+       house builder (V2 Step 1 "החלטות כלליות"). Moved out here so
+       Einav gets a dedicated questionnaire chapter for them. Data
+       still lives in answers.house.general.floorHeatingFloors and
+       answers.house.general.elevator — no data reshape. Rendered
+       by a bespoke section in ClientProgrammingQuestionnaire
+       (blocks:[] is intentional — the render is special-cased on
+       step.key === 'house_general'). */
+    key: 'house_general',
+    title: 'החלטות כלליות לבית',
+    intro: 'שני פרטים טכניים שיעזרו לנו לתכנן — חימום רצפתי ומעלית.',
+    blocks: []
   },
   {
     key: 'inspiration',

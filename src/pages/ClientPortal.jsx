@@ -87,7 +87,7 @@ const IconUser = ({ size = 20 }) => (
 const MENU_ITEMS = [
   { key: 'home',         label: 'דף בית',           enabled: true,  Component: ClientHome },
   { key: 'file',         label: 'פרטי תיק',         enabled: true,  Component: ClientFile },
-  { key: 'documents',    label: 'תיק מסמכים',       enabled: true,  Component: ClientDocuments },
+  { key: 'documents',    label: 'מעקב מסמכים',      enabled: true,  Component: ClientDocuments },
   { key: 'shared',       label: 'מרחב משותף',       enabled: true,  Component: ClientSharedFiles },
   { key: 'questionnaire',label: 'שאלון פרוגרמה',    enabled: true,  Component: ClientProgrammingQuestionnaire },
   { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
@@ -283,10 +283,16 @@ export default function ClientPortal() {
   const activeItem  = MENU_ITEMS.find(m => m.key === activeKey) || MENU_ITEMS[0]
   const ActiveScreen = activeItem.Component
 
-  /* The floating back arrow appears on every content screen except the
-     home grid itself and the account screen (account is reached via the
-     drawer footer, not via group navigation, so it has no origin). */
-  const showBackArrow = activeKey !== 'home' && activeKey !== 'account'
+  /* The floating back arrow appears on every content screen except:
+       · home        — the grid itself; nothing to go back to.
+       · account     — reached via the drawer footer, not group nav.
+       · questionnaire — the programming module renders its OWN round
+                        back-arrow (same .cp-screen-back styling) that
+                        returns to the module's internal hub rather
+                        than exiting via goBack(). Suppressing the
+                        shared one here keeps exactly ONE back control
+                        visible on those screens. */
+  const showBackArrow = activeKey !== 'home' && activeKey !== 'account' && activeKey !== 'questionnaire'
 
   return (
     <ClientFooterProvider whatsappGroupUrl={whatsappGroupUrl}>

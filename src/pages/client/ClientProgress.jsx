@@ -33,6 +33,7 @@ const IconChevron = ({ size = 16 }) => (
   </svg>
 )
 
+
 /* Group the flat list into consecutive mega-stage buckets.
    Order is already chronological (col0 → col1 → col2 → col3). */
 function groupByMega(items) {
@@ -83,6 +84,10 @@ export default function ClientProgress() {
   const [ganttState, setGanttState] = useState({})
   const [openSet,    setOpenSet]    = useState(new Set())
   const [loading,    setLoading]    = useState(true)
+  /* Per-point note visibility. Notes are hidden by default; users
+     tap the warning triangle next to a step title to reveal the
+     note text. Independent of the mega-stage accordion state. */
+  const [openNotes,  setOpenNotes]  = useState(new Set())
 
   /* One read-only fetch. All blocks start COLLAPSED (openSet stays empty);
      the user opens whichever mega-stages they want. */
@@ -129,6 +134,18 @@ export default function ClientProgress() {
     <div className="cp-page">
       <div className="cp-container">
         <h1 className="cp-screen-title">שלבי התקדמות</h1>
+        <p style={{
+          margin: '4px 0 16px',
+          fontSize: 13,
+          color: '#8a8680',
+          textAlign: 'right',
+          direction: 'rtl',
+          lineHeight: 1.6,
+          whiteSpace: 'pre-line',
+        }}>
+          {'במסך זה תוכלו לעקוב אחר התקדמות הפרויקט. ההתקדמות מעודכנת ע"י צוות הסטודיו.\n' +
+           'שימו לב לנוחיותכם - כאשר שלבים בעלי תלות בשלבים אחרים ניתן לראות את התלות ע"י פתיחת החץ הקטן ליד הכותרת'}
+        </p>
 
         <div className="cp-progress-accordion">
           {groups.map(group => {
@@ -175,21 +192,79 @@ export default function ClientProgress() {
                 {isOpen && (
                   <ol className="cp-progress-points">
                     {group.items.map(item => {
-                      const status = ganttState?.[item.pointId] || 'future'
-                      const note   = CLIENT_NOTES[item.pointId]
+                      const status   = ganttState?.[item.pointId] || 'future'
+                      const note     = CLIENT_NOTES[item.pointId]
+                      /* pointId captured explicitly so the click handler
+                         closes over a stable primitive — no accidental
+                         reliance on `item` if the map ever changes shape. */
+                      const noteId   = item.pointId
+                      const noteOpen = openNotes.has(noteId)
                       return (
                         <li key={item.pointId} className="cp-progress-point">
                           <span className={`cp-progress-node cp-progress-node--${status}`}>
                             {status === 'done' && <IconCheck size={11} />}
                           </span>
                           <div className="cp-progress-body">
-                            <div className={`cp-progress-label cp-progress-label--${status}`}>
-                              {item.label}
+                            <div
+                              className={`cp-progress-label cp-progress-label--${status}`}
+                              style={note ? { display: 'flex', alignItems: 'center', gap: 6 } : undefined}
+                            >
+                              {/* Title FIRST → in this RTL flex row the
+                                  first child lands on the visual-RIGHT
+                                  (leading side, reading start). Warning
+                                  triangle LAST → visual-LEFT (trailing
+                                  side), matching the spec. */}
+                              <span>{item.label}</span>
+                              {note && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    /* Defensive: prevent any accidental
+                                       bubble to a parent handler and
+                                       stop the default click chain.
+                                       Toggle by cloning the Set into a
+                                       fresh reference so React
+                                       re-renders. */
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    setOpenNotes(prev => {
+                                      const next = new Set(prev)
+                                      if (next.has(noteId)) next.delete(noteId)
+                                      else next.add(noteId)
+                                      return next
+                                    })
+                                  }}
+                                  aria-expanded={noteOpen}
+                                  aria-label={noteOpen ? 'סגור הערה' : 'פתח הערה'}
+                                  title={noteOpen ? 'סגור הערה' : 'פתח הערה'}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    padding: 2,
+                                    marginInlineStart: 4,
+                                    cursor: 'pointer',
+                                    color: '#8a8680',   /* charcoal-muted — matches the app's secondary/meta text tokens */
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    /* Standard accordion pattern — chevron
+                                       points down when collapsed, rotates
+                                       180° on open. */
+                                    transform: noteOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                    transition: 'transform 0.15s ease',
+                                  }}
+                                >
+                                  <IconChevron size={14} />
+                                </button>
+                              )}
                             </div>
                             {status === 'current' && (
                               <div className="cp-progress-here">אנחנו כאן</div>
                             )}
-                            {note && <div className="cp-progress-note">{note}</div>}
+                            {note && noteOpen && (
+                              <div className="cp-progress-note">{note}</div>
+                            )}
                           </div>
                         </li>
                       )

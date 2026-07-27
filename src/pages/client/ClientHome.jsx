@@ -41,13 +41,15 @@ import { useClient } from '../../components/ClientRoute'
 import { useClientNav } from '../ClientPortal'
 import { GROUPS, resolveGroup } from '../../lib/clientPortalGroups'
 import { GroupIcon, IconBack } from '../../components/icons/PortalIcons'
+import { loadOpenDocRequests } from '../../lib/openDocRequests'
+import OpenRequestsBadge from '../../components/OpenRequestsBadge'
 
 /* Child-key → drawer label. Mirrors MENU_ITEMS in ClientPortal.jsx —
    kept inline so the home screen doesn't have to import the whole
    menu config just to render a sub-tile label. */
 const CHILD_LABELS = {
   file:          'פרטי תיק',
-  documents:     'תיק מסמכים',
+  documents:     'מעקב מסמכים',
   shared:        'מרחב משותף',
   quantities:    'כתב כמויות',
   finishing:     'חומרי גמר',
@@ -64,9 +66,33 @@ export default function ClientHome({
   pendingHomeGroup,
   clearPendingHomeGroup,
 }) {
-  const { first_name: ctxFirstName } = useClient()
+  const { id: clientUserId, first_name: ctxFirstName, project_id } = useClient()
   const { navigate } = useClientNav()
   const displayName = firstName || ctxFirstName || ''
+
+  /* Total count of open document requests for this project — the number
+     of view_edit rows that the CLIENT has not yet uploaded to. Staff
+     uploads don't close the request; the client's own upload does.
+     Fetched fresh on every mount so navigating away and back (via
+     goBack) picks up newly-completed uploads. Never throws — errors
+     return zero and hide the badge. Same source of truth as the
+     per-stage counts inside ClientDocuments (they use
+     computeOpenRequests() on the same data). */
+  const [openTotal, setOpenTotal] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    if (!project_id) { setOpenTotal(0); return }
+    loadOpenDocRequests(project_id, clientUserId).then(res => {
+      if (!cancelled) setOpenTotal(res.total || 0)
+    })
+    return () => { cancelled = true }
+  }, [project_id, clientUserId])
+
+  /* Documents is the only source of open requests today, so the group
+     badge on progress_group == the documents-tile badge inside the sub-
+     screen. Kept as two named locals for readability at the call sites. */
+  const badgeForGroup = (group) => group.key === 'progress_group' ? openTotal : 0
+  const badgeForChild = (childKey) => childKey === 'documents'     ? openTotal : 0
 
   /* Sub-screen state — when set, the group grid is replaced by the
      children grid of that group + a back button. Initialized from a
@@ -155,34 +181,55 @@ export default function ClientHome({
               </button>
             </div>
             <div className="cp-home-tiles">
-              {activeSubGroup.resolved.children.map(childKey => (
-                <button
-                  key={childKey}
-                  type="button"
-                  className="cp-home-tile cp-home-tile--child"
-                  onClick={() => navigate(childKey, activeSubGroup.group.key)}
-                >
-                  <span className="cp-home-tile-label">{CHILD_LABELS[childKey] || childKey}</span>
-                </button>
-              ))}
+              {activeSubGroup.resolved.children.map(childKey => {
+                const badge = badgeForChild(childKey)
+                return (
+                  <button
+                    key={childKey}
+                    type="button"
+                    className="cp-home-tile cp-home-tile--child"
+                    onClick={() => navigate(childKey, activeSubGroup.group.key)}
+                    style={{ position: 'relative' }}
+                  >
+                    {badge > 0 && (
+                      <OpenRequestsBadge
+                        count={badge}
+                        style={{ position: 'absolute', top: 8, right: 8 }}
+                      />
+                    )}
+                    <span className="cp-home-tile-label">{CHILD_LABELS[childKey] || childKey}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         ) : (
           visibleGroups.length > 0 && (
             <div className="cp-home-tiles">
-              {visibleGroups.map(({ group, resolved }) => (
-                <button
-                  key={group.key}
-                  type="button"
-                  className="cp-home-tile"
-                  onClick={() => handleGroupTap(group, resolved)}
-                >
-                  <span className="cp-home-tile-icon">
-                    <GroupIcon name={group.icon} size={36} />
-                  </span>
-                  <span className="cp-home-tile-label">{group.label}</span>
-                </button>
-              ))}
+              {visibleGroups.map(({ group, resolved }) => {
+                const badge = badgeForGroup(group)
+                return (
+                  <button
+                    key={group.key}
+                    type="button"
+                    className="cp-home-tile"
+                    onClick={() => handleGroupTap(group, resolved)}
+                    style={{ position: 'relative' }}
+                  >
+                    {badge > 0 && (
+                      <OpenRequestsBadge
+                        count={badge}
+                        size="lg"
+                        style={{ position: 'absolute', top: 10, right: 10 }}
+                      />
+                    )}
+                    <span className="cp-home-tile-icon">
+                      <GroupIcon name={group.icon} size={36} />
+                    </span>
+                    <span className="cp-home-tile-label">{group.label}</span>
+                  </button>
+                )
+              })}
             </div>
           )
         )}

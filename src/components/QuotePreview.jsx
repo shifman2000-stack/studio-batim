@@ -80,28 +80,41 @@ export function buildInitialData(inquiry = {}) {
     ],
 
     // ── Page 2 — Stage 01 תכנון ──
-    s01_lead: 'תכנון בית מגורים ופיתוח שטח המגרש.',
+    // Editable stage + substage titles. Defaults preserve the current
+    // hardcoded Hebrew text so existing/new quotes look identical
+    // until a user edits them; new keys carry safe defaults via the
+    // merge-on-load pattern so old draft_content jsonb without these
+    // keys still renders correctly.
+    s01_title:         'תכנון',
+    s01_lead:          'תכנון בית מגורים ופיתוח שטח המגרש.',
 
+    s01_prog_title:    'פרוגרמה',
     s01_prog: [
       'עם תחילת שלב התכנון תערך פגישת פרוגרמה וביקור המתכנן בשטח, בה יגבשו המתכנן והמזמין פרוגרמה תכנונית ועיצובית מפורטת — הכוללת הגדרת תכולה ואופי התכנון, צרכים, רצונות, סגנון עיצובי ודרישות מיוחדות — אשר תאושר ע״י המזמין.',
     ],
 
+    s01_measure_title: 'מדידה',
     s01_measure: [
       'התכנון יעשה על גבי קובץ מדידה להיתר בלבד, בפורמט DWG, אשר יועבר למתכנן על ידי מודד מוסמך. במידה והפרויקט כולל תכנון המשתלב במבנה קיים, נדרשת גם מדידת פנים/אל-הרס של המבנה הקיים בפורמט DWG.',
       'ההתקשרות מול מודד מוסמך תהיה ישירות על ידי המזמין ועל חשבונו.',
     ],
 
+    s01_alts_title:    'חלופות תכנון',
     s01_alts: [
       'המתכנן יגיש למזמין חלופות תכנון התואמות לפרוגרמה ולאפשרויות הקיימות. פגישה ראשונה להצגת החלופות תערך כחודש מפגישת הפרוגרמה, והמשך הפגישות בתדירות שבועית בכפוף לזמינות המשתתפים. הפגישות יערכו במשרדי סטודיו בתים או בזום.',
       'החלופות יכללו חלוקת חללים, העמדת ריהוט, כלים סניטריים ושימושי החצר, ויפותחו בתאום עם המזמין עד להגעה לחלופת תכנון סופית ומאושרת.',
       'מתום 4 חודשים קלנדריים מפגישת הפרוגרמה, במידה ולא אושרה סקיצה — מוסכם על תוספת של 500 ₪ עבור כל חודש נוסף.',
     ],
 
+    s01_render_title:  'הדמיה',
     s01_render: [
       'המתכנן יכין הדמיה תלת-ממדית ממוחשבת עבור חלופת תכנון סופית מאושרת, הכוללת מבטי חוץ לצרכי היתר בלבד.',
     ],
 
     // ── Page 2 — Stage 02 היתר בניה ──
+    s02_title:            'היתר בניה',
+
+    s02_planner_title:    'תפקיד המתכנן',
     s02_planner: [
       'המתכנן הינו עורך הבקשה להיתר ואחראי לביקורת אדריכלות.',
       'המתכנן יגיש בקשה לקבלת תיק מידע מהוועדה לתכנון ובניה עם תחילת שלב התכנון הראשוני.',
@@ -109,6 +122,7 @@ export function buildInitialData(inquiry = {}) {
       'המתכנן יתאם בין היועצים השונים (מהנדס קונסטרוקציה, יועץ אינסטלציה וכיו״ב). ההתקשרות מול היועצים תהיה ישירות על ידי המזמין ועל חשבונו.',
     ],
 
+    s02_client_title:     'אחריות המזמין',
     s02_client: [
       'השגת מסמכים, חתימתם וחתימת עו״ד במידת הצורך, כדי לקדם את הבקשה מול הרשויות והגופים השונים ובהתאם לדרישות.',
       'בדיקת היקפי האגרות המוטלות על הבניה — דמי היתר רמ״י, היטל השבחה, אגרות פיתוח, אגרת ביוב, אגרת בניה וכיו״ב.',
@@ -116,12 +130,14 @@ export function buildInitialData(inquiry = {}) {
       'איסוף והחתמת המסמכים הדרושים והגשתם לוועדה לצורך קבלת טופס 4.',
     ],
 
+    s02_supervision_title:'פיקוח וחתימות',
     s02_supervision: [
       'בשלב הביצוע המתכנן יבצע פיקוח עליון לצורכי רישוי בלבד, הכולל 4 ביקורים (ראה פירוט בשלב ליווי הבניה).',
       'המתכנן יחתום על הטפסים הנדרשים כאחראי לביקורת אדריכלות וכעורך הבקשה: היתר בניה, טופס תחילת עבודה (טופס 2) וטופס גמר (טופס 4). חתימה על טפסי עורך בקשה לטופס 4 תבוצע לאחר העברת תשלום אחרון.',
     ],
 
     // ── Page 3 — Stage 03 תוכניות עבודה ──
+    s03_title:   'תוכניות עבודה',
     s03_lead:    'המתכנן יערוך תוכניות לביצוע (תואמות להיתר הבניה וללא חריגות) הכוללות:',
     s03_twoCol: [
       'תכנית בניה, חתכים וחזיתות עבור כל קומה',
@@ -140,20 +156,26 @@ export function buildInitialData(inquiry = {}) {
     s03_meetings: 'המתכנן יערוך פגישות עם המזמין להצגת התוכניות ויבצע סבב תיקונים אחד מול המזמין. לאחר מכן יוצאו התוכניות להצעות מחיר מקבלנים. עם בחירת הקבלן (ובהתאם לצורך, גם המפקח) יבוצע סבב תיקונים נוסף מולם, שלאחריו יימסרו התוכניות הסופיות לביצוע.',
 
     // ── Page 3 — Stage 04 ליווי בניה ──
+    s04_title:              'ליווי בניה',
+
+    s04_supervision_title:  'פיקוח עליון',
     s04_supervision: [
       'במסגרת תפקיד המתכנן כמפקח עליון, יבוצעו 4 ביקורים לצורכי רישוי: סימון קווי בניין, גמר יסודות, גמר שלד וגמר בניין — בנוכחות מנהל עבודה/מפקח בניה, לצורך בקרה על התאמת הבניה להיתר בלבד.',
       'ליווי הבניה מוגבל ל-12 חודשים ממתן ההיתר. בתום תקופה זו יגבה תשלום של 500 ₪ בתוספת מע״מ עבור כל חודש נוסף של ליווי.',
     ],
+    s04_extraVisits_title:  'ביקורים נוספים בשטח',
     s04_extraVisits: [
       'המתכנן יבצע עד שני ביקורים נוספים בשטח לפגישות והסברים לבעלי המקצוע ולקבלן. עבור כל ביקור נוסף מעבר לכך יגבה סך של 650 ₪ + מע״מ.',
       'באחריות מנהל העבודה/המפקח/המזמין לעדכן את המתכנן בסוגיות ובשלבי הביצוע, ולתאם ביקור בשטח יומיים מראש לכל הפחות.',
       'המתכנן ייתן מענה לסוגיות תכנוניות שעולות במהלך הבניה מול בעלי המקצוע, ככל שנוגע לתחום אחריותו.',
     ],
+    s04_finishConsult_title:'ייעוץ ובחירות גמר',
     s04_finishConsult: [
       'המתכנן יעמיד לרשות המזמין פגישת ייעוץ בסטודיו לבחירת צבעי גמר קירות וחלונות.',
       'המתכנן יתלווה למזמין לסיור אחד בצנרת דרום באשקלון לבחירת חיפויים, ריצופים וכלים סניטריים.',
       'פגישת הייעוץ וליווי לצנרת דרום יעמדו לרשות המזמין בתאום מראש, ועד שנה מקבלת היתר בניה.',
     ],
+    s04_instructions_title: 'הוראות ואחריות',
     s04_instructions: [
       'המזמין (בעל ההיתר) מתחייב לבנות לפי תוכניות היתר הבניה. על פי חוק, מחובתו של המתכנן כאחראי לביקורת לדווח בכתב לוועדה לתכנון ובניה על כל סטייה מההיתר.',
       'המזמין ידאג למילוי ההוראות שבתוכניות העבודה ולבטיחות באתר בהתאם להוראות החוק ודרישת הוועדה המקומית.',
@@ -161,6 +183,11 @@ export function buildInitialData(inquiry = {}) {
     ],
 
     // ── Page 4 — Terms (12 items flat; rendered in 3 groups of 4) ──
+    // Group titles are editable but the group BOUNDARIES [0,4)/[4,8)/[8,12)
+    // stay hardcoded — the array is a flat 12 by design, no add/remove UI.
+    termsGroup1Title: 'תנאי ההצעה',
+    termsGroup2Title: 'מה אינו כלול בהצעה',
+    termsGroup3Title: 'זכויות ואחריות',
     terms: [
       // Group 1 — תנאי ההצעה (1–4)
       'הצעת המחיר תואמת לנתונים המפורטים בתכולת השירות ובפירוט שלבי העבודה. במידה וישתנו הנתונים תעודכן הצעת המחיר בהתאם.',
@@ -676,52 +703,74 @@ ${styleTags}
           <h1 className="hero-title" style={{ fontSize: 26 }}>פירוט שלבי העבודה</h1>
         </div>
 
-        {/* STAGE 01 — תכנון */}
+        {/* STAGE 01 — תכנון. Number stays hardcoded; the title text
+            + the 4 substage titles are Field-wired to editable keys
+            so the editor can rename stages while old jsonb without
+            these keys keeps rendering the seeded defaults. */}
         <div className="stage">
           <div className="stage-head">
             <span className="stage-num">01</span>
-            <span className="stage-title">תכנון</span>
+            <span className="stage-title">
+              <Field value={data.s01_title} onChange={val => patch('s01_title', val)} isReadOnly={!canEdit('_locked')} />
+            </span>
           </div>
           <div className="stage-body">
             <p className="stage-lead">
               <Area value={data.s01_lead} onChange={val => patch('s01_lead', val)} isReadOnly={!canEdit('_locked')} />
             </p>
             <div className="substage">
-              <div className="substage-title">פרוגרמה</div>
+              <div className="substage-title">
+                <Field value={data.s01_prog_title} onChange={val => patch('s01_prog_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s01_prog}    onUpdate={patchList('s01_prog')}    isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">מדידה</div>
+              <div className="substage-title">
+                <Field value={data.s01_measure_title} onChange={val => patch('s01_measure_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s01_measure} onUpdate={patchList('s01_measure')} isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">חלופות תכנון</div>
+              <div className="substage-title">
+                <Field value={data.s01_alts_title} onChange={val => patch('s01_alts_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s01_alts}    onUpdate={patchList('s01_alts')}    isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">הדמיה</div>
+              <div className="substage-title">
+                <Field value={data.s01_render_title} onChange={val => patch('s01_render_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s01_render}  onUpdate={patchList('s01_render')}  isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
         </div>
 
-        {/* STAGE 02 — היתר בניה */}
+        {/* STAGE 02 — היתר בניה. Same pattern: stage title + 3
+            substage titles are Field-wired; number stays hardcoded. */}
         <div className="stage stage-last">
           <div className="stage-head">
             <span className="stage-num">02</span>
-            <span className="stage-title">היתר בניה</span>
+            <span className="stage-title">
+              <Field value={data.s02_title} onChange={val => patch('s02_title', val)} isReadOnly={!canEdit('_locked')} />
+            </span>
           </div>
           <div className="stage-body">
             <div className="substage">
-              <div className="substage-title">תפקיד המתכנן</div>
+              <div className="substage-title">
+                <Field value={data.s02_planner_title} onChange={val => patch('s02_planner_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s02_planner}     onUpdate={patchList('s02_planner')}     isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">אחריות המזמין</div>
+              <div className="substage-title">
+                <Field value={data.s02_client_title} onChange={val => patch('s02_client_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s02_client}      onUpdate={patchList('s02_client')}      isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">פיקוח וחתימות</div>
+              <div className="substage-title">
+                <Field value={data.s02_supervision_title} onChange={val => patch('s02_supervision_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s02_supervision} onUpdate={patchList('s02_supervision')} isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
@@ -740,11 +789,15 @@ ${styleTags}
 
         <PageHeader dateValue={data.date} onDateChange={val => patch('date', val)} isReadOnly={!canEdit('_locked')} />
 
-        {/* STAGE 03 — תוכניות עבודה */}
+        {/* STAGE 03 — תוכניות עבודה. Number stays hardcoded; title
+            is Field-wired. Stage 03 has no substages (single lead +
+            two-col list + closing + meetings). */}
         <div className="stage">
           <div className="stage-head">
             <span className="stage-num">03</span>
-            <span className="stage-title">תוכניות עבודה</span>
+            <span className="stage-title">
+              <Field value={data.s03_title} onChange={val => patch('s03_title', val)} isReadOnly={!canEdit('_locked')} />
+            </span>
           </div>
           <div className="stage-body">
             <p>
@@ -771,27 +824,38 @@ ${styleTags}
           </div>
         </div>
 
-        {/* STAGE 04 — ליווי בניה */}
+        {/* STAGE 04 — ליווי בניה. Same pattern: title + all 4
+            substage titles are Field-wired; number stays hardcoded. */}
         <div className="stage stage-last">
           <div className="stage-head">
             <span className="stage-num">04</span>
-            <span className="stage-title">ליווי בניה</span>
+            <span className="stage-title">
+              <Field value={data.s04_title} onChange={val => patch('s04_title', val)} isReadOnly={!canEdit('_locked')} />
+            </span>
           </div>
           <div className="stage-body">
             <div className="substage">
-              <div className="substage-title">פיקוח עליון</div>
+              <div className="substage-title">
+                <Field value={data.s04_supervision_title} onChange={val => patch('s04_supervision_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s04_supervision}   onUpdate={patchList('s04_supervision')}   isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">ביקורים נוספים בשטח</div>
+              <div className="substage-title">
+                <Field value={data.s04_extraVisits_title} onChange={val => patch('s04_extraVisits_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s04_extraVisits}   onUpdate={patchList('s04_extraVisits')}   isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">ייעוץ ובחירות גמר</div>
+              <div className="substage-title">
+                <Field value={data.s04_finishConsult_title} onChange={val => patch('s04_finishConsult_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s04_finishConsult} onUpdate={patchList('s04_finishConsult')} isReadOnly={!canEdit('_locked')} />
             </div>
             <div className="substage">
-              <div className="substage-title">הוראות ואחריות</div>
+              <div className="substage-title">
+                <Field value={data.s04_instructions_title} onChange={val => patch('s04_instructions_title', val)} isReadOnly={!canEdit('_locked')} />
+              </div>
               <SubstageList items={data.s04_instructions}  onUpdate={patchList('s04_instructions')}  isReadOnly={!canEdit('_locked')} />
             </div>
           </div>
@@ -815,14 +879,23 @@ ${styleTags}
           <h1 className="hero-title" style={{ fontSize: 26 }}>תנאי ההתקשרות</h1>
         </div>
 
-        {/* Terms — 3 groups of 4 */}
+        {/* Terms — 3 groups of 4. Group boundaries [0,4)/[4,8)/[8,12)
+            stay hardcoded (the flat terms array is a fixed 12). Group
+            titles are Field-wired to editable keys with the current
+            hardcoded text as their seeded default. */}
         {[
-          { title: 'תנאי ההצעה',         start: 0, end: 4 },
-          { title: 'מה אינו כלול בהצעה', start: 4, end: 8 },
-          { title: 'זכויות ואחריות',      start: 8, end: 12 },
-        ].map(({ title, start, end }) => (
-          <div key={title} className="terms-group">
-            <div className="terms-title">{title}</div>
+          { titleKey: 'termsGroup1Title', start: 0, end: 4  },
+          { titleKey: 'termsGroup2Title', start: 4, end: 8  },
+          { titleKey: 'termsGroup3Title', start: 8, end: 12 },
+        ].map(({ titleKey, start, end }) => (
+          <div key={titleKey} className="terms-group">
+            <div className="terms-title">
+              <Field
+                value={data[titleKey]}
+                onChange={val => patch(titleKey, val)}
+                isReadOnly={!canEdit('_locked')}
+              />
+            </div>
             <ol className="terms-list">
               {data.terms.slice(start, end).map((text, i) => {
                 const idx = start + i

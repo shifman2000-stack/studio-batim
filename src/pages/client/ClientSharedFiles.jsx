@@ -347,6 +347,16 @@ export default function ClientSharedFiles() {
       <div className="cp-container">
 
         <h1 className="cp-screen-title">מרחב משותף</h1>
+        <p style={{
+          margin: '4px 0 16px',
+          fontSize: 13,
+          color: '#8a8680',
+          textAlign: 'right',
+          direction: 'rtl',
+          lineHeight: 1.5,
+        }}>
+          כאן נוכל לשתף בינינו קבצים, תמונות, או לרשום הערות
+        </p>
 
         {pageError && (
           <div className="cp-save-error" role="alert">{pageError}</div>
@@ -361,7 +371,7 @@ export default function ClientSharedFiles() {
             onClick={handlePickFile}
             disabled={uploading}
           >
-            {uploading ? 'מעלה...' : '+ הוסף מסמך'}
+            {uploading ? 'מעלה...' : '+ הוסף תמונה/מסמך'}
           </button>
           <button
             type="button"

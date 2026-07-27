@@ -21,9 +21,11 @@
 //   5. UPDATE project_documents.file_url + .file_name so view-only
 //      readers see the latest file too.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
+import { computeOpenRequests } from '../../lib/openDocRequests'
+import OpenRequestsBadge from '../../components/OpenRequestsBadge'
 
 const BUCKET = 'project-files'
 
@@ -198,6 +200,19 @@ export default function ClientDocuments() {
   }, [project_id])
 
   useEffect(() => { loadData() }, [loadData])
+
+  /* Open-request counts derived from the same in-memory dataset that
+     the tab already loads. Refreshes automatically after every upload
+     (which calls loadData → resets documents + versionsByDoc), so the
+     stage badge decreases the instant the CLIENT'S first upload lands
+     on a view_edit row (staff uploads don't close a request — see
+     openDocRequests.js). `byStage` is keyed by the same stage string
+     used below for grouping ('כללי' fallback), so lookup is
+     `openByStage[group.key]`. */
+  const { byStage: openByStage } = useMemo(
+    () => computeOpenRequests(documents, versionsByDoc, userId),
+    [documents, versionsByDoc, userId]
+  )
 
   /* ── Group documents by stage (preserves first-appearance order) ── */
   const groupedDocs = []
@@ -475,6 +490,13 @@ export default function ClientDocuments() {
                     onKeyDown={(e) => handleHeaderKeyDown(e, group.key)}
                   >
                     <span className="cp-progress-header-name">{group.key}</span>
+                    <OpenRequestsBadge
+                      count={openByStage[group.key] || 0}
+                      /* Inline next to the caption — small enough to
+                         sit visually inside the header row without
+                         breaking its RTL flow. */
+                      style={{ marginInlineStart: 6 }}
+                    />
                     <span className="cp-progress-header-caption">
                       {group.docs.length} מסמכים
                     </span>

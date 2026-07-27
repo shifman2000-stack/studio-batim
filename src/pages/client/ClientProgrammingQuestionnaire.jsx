@@ -41,7 +41,13 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { ClientContext } from '../../components/ClientRoute'
 import { IconBack } from '../../components/icons/PortalIcons'
+/* Portal navigation — used by the HUB's back-arrow to leave the
+   programming module entirely. useClientNav() falls back to no-op
+   handlers when there's no provider (embedded/admin usage), so it's
+   safe to call unconditionally. */
+import { useClientNav } from '../ClientPortal'
 import HouseBuilder from '../../components/questionnaire/HouseBuilder'
+import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
 import {
   QUESTIONNAIRE_STEPS,
   AGE_RANGES,
@@ -492,6 +498,120 @@ function renderBlock(block, idx, qData, updateQ, isLocked) {
   }
 }
 
+/* YesNoRow — compact "כן / לא" connected segmented control paired
+   with a question label above it. Toggle-off on re-click of the
+   currently-selected value clears back to null (matches the
+   elevator control's original behaviour). Used by
+   HouseGeneralSection for the heating + elevator questions so
+   both read visually identical. */
+function YesNoRow({ label, value, onChange, isLocked }) {
+  const setVal = (v) => {
+    if (isLocked) return
+    onChange(value === v ? null : v)
+  }
+  const selected = (value === true || value === false) ? value : null
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{
+        display:      'inline-flex',
+        direction:    'rtl',
+        background:   '#ffffff',
+        border:       '1px solid #d9d6cd',
+        borderRadius: 20,
+        overflow:     'hidden',
+      }}>
+        {[{ value: true, label: 'כן' }, { value: false, label: 'לא' }].map((opt, i) => {
+          const sel = selected === opt.value
+          return (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => setVal(opt.value)}
+              disabled={isLocked}
+              aria-pressed={sel}
+              style={{
+                padding:     '6px 18px',
+                background:  sel ? '#7a9478' : '#ffffff',
+                color:       sel ? '#ffffff' : '#4a4a48',
+                border:      'none',
+                borderRight: i > 0 ? '1px solid #d9d6cd' : 'none',
+                cursor:      isLocked ? 'not-allowed' : 'pointer',
+                opacity:     isLocked ? 0.65 : 1,
+                fontFamily:  'inherit',
+                fontSize:    12.5,
+                lineHeight:  1.2,
+                whiteSpace:  'nowrap',
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* HouseGeneralSection — bespoke renderer for the house_general
+   questionnaire chapter. Reads/writes answers.house.general.* directly
+   (NOT answers.questionnaire.*) so the fields keep their existing
+   home in the jsonb.
+
+   Both questions are simple yes/no now:
+     · general.floorHeating (bool|null) — heating yes/no.
+     · general.elevator     (bool|null) — elevator yes/no.
+
+   Legacy data compatibility: earlier versions stored heating as
+   general.floorHeatingFloors (string[] of floor keys). On READ, if
+   the new boolean is missing we derive it from the legacy array —
+   "any floors selected" reads as true. On WRITE, only the new
+   boolean is set; the old array is left untouched so nothing is
+   destructively cleared. */
+function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
+  const house    = (answers && answers.house) || {}
+  const general  = house.general || {}
+
+  const legacyHeatingFloors = Array.isArray(general.floorHeatingFloors)
+    ? general.floorHeatingFloors
+    : []
+  const heatingValue = (general.floorHeating === true || general.floorHeating === false)
+    ? general.floorHeating
+    : (legacyHeatingFloors.length > 0 ? true : null)
+  const elevatorValue = (general.elevator === true || general.elevator === false)
+    ? general.elevator
+    : null
+
+  const patchGeneral = (partial) => {
+    if (isLocked) return
+    onHouseChange({
+      ...house,
+      general: { ...general, ...partial },
+    })
+  }
+  const setHeating  = (v) => patchGeneral({ floorHeating: v })
+  const setElevator = (v) => patchGeneral({ elevator:     v })
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <YesNoRow
+        label="האם מעוניינים בחימום רצפתי"
+        value={heatingValue}
+        onChange={setHeating}
+        isLocked={isLocked}
+      />
+      <YesNoRow
+        label="האם מעוניינים במעלית"
+        value={elevatorValue}
+        onChange={setElevator}
+        isLocked={isLocked}
+      />
+    </div>
+  )
+}
+
 /* ─────────────────────────────────────────────────────────────────
    Main component
    ───────────────────────────────────────────────────────────────── */
@@ -527,6 +647,10 @@ export default function ClientProgrammingQuestionnaire({
   const clientCtx = useContext(ClientContext)
   const project_id = embeddedProjectId ?? (clientCtx && clientCtx.project_id)
   const isMounted = useRef(true)
+
+  /* Portal nav — the hub's back-arrow leaves the programming module.
+     Safe no-ops when rendered outside the portal (embedded admin). */
+  const { goBack } = useClientNav()
 
   const [loading,          setLoading]          = useState(true)
   const [tableUnavailable, setTableUnavailable] = useState(false)
@@ -578,6 +702,15 @@ export default function ClientProgrammingQuestionnaire({
      Local only — does not persist across mounts; entering the screen
      always starts on the hub. */
   const [view, setView] = useState('hub')
+
+  /* DEV-ONLY: which house-builder implementation to render — the
+     existing V1 (default, and the ONLY one shipped in production
+     builds) or the new WIP V2 shell (Phase 1). Not exposed to
+     clients; the toggle button below is gated by import.meta.env.DEV
+     so a production build sees dead code and always renders V1.
+     Both accept the same props + write to the same answers.house
+     jsonb, so switching between them mid-session preserves data. */
+  /* useHouseV2 state removed — V2 is the sole builder now. */
 
   /* ── Auto-save refs (hooks; top-level, before any early return) ────
      hasLoadedRef       : flipped true after the initial load runs, so
@@ -1153,7 +1286,68 @@ export default function ClientProgrammingQuestionnaire({
   return (
     <div className="cp-page">
       <div className="cp-container">
-        {!embedded && <h1 className="cp-screen-title">שאלון פרוגרמה</h1>}
+        {/* Screen header row — title at the RTL start (visual RIGHT)
+            and the round back-arrow at the visual LEFT of the SAME
+            row, vertically centered.
+              · hub view       → title only (nothing to go back to
+                                 within the module).
+              · questionnaire  → title + arrow.
+              · house view     → SUPPRESSED ENTIRELY. HouseBuilderV2
+                                 renders its own "מערכת בונה הבית"
+                                 header row with the same arrow, so
+                                 showing "שאלון פרוגרמה" here too
+                                 would double up the titles.
+            Bottom margin is deliberately tight (6px) so content
+            starts close under the title — the h1's own 12px bottom
+            margin is zeroed out here. */}
+        {view !== 'house' && (!embedded || view === 'questionnaire') && (
+          <div style={{
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'space-between',
+            gap:            10,
+            direction:      'rtl',
+            marginBottom:   6,
+          }}>
+            {!embedded ? (
+              <h1
+                className="cp-screen-title"
+                style={{ margin: 0, flex: 1, minWidth: 0 }}
+              >
+                שאלון פרוגרמה
+              </h1>
+            ) : (
+              <span style={{ flex: 1 }} />
+            )}
+            {view === 'questionnaire' && (
+              <button
+                type="button"
+                className="cp-screen-back"
+                onClick={returnToHub}
+                aria-label="חזרה למרחב הפרוגרמה"
+                title="חזרה למרחב הפרוגרמה"
+              >
+                <IconBack size={20} />
+              </button>
+            )}
+            {/* HUB back-arrow — same round control, but this one
+                leaves the programming module entirely and returns to
+                the portal (goBack), since the hub IS the module's
+                root. Hidden in embedded/admin usage where there's no
+                portal nav to go back to. */}
+            {view === 'hub' && !embedded && (
+              <button
+                type="button"
+                className="cp-screen-back"
+                onClick={() => goBack()}
+                aria-label="חזרה"
+                title="חזרה"
+              >
+                <IconBack size={20} />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Row-state banner. Two variants:
               * client viewing a submitted row → "לצפייה בלבד" (locked
@@ -1274,46 +1468,20 @@ export default function ClientProgrammingQuestionnaire({
               </button>
             </div>
 
-            {/* "סיים ושלח" — final submit. Enabled only when BOTH
-                per-part completion flags are true. Hidden once the
-                row is locked (isLocked) — the top banner takes over —
-                AND hidden for admin viewers (they don't submit on
-                behalf of the client; they only edit). */}
-            {!isLocked && !isAdmin && (() => {
-              const canSubmit  = questionnaireDone && houseDone
-              const btnDisabled = submitting || !canSubmit
-              return (
-                <div style={{ marginTop: 18, textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setSubmitError(''); setConfirmSubmitOpen(true) }}
-                    disabled={btnDisabled}
-                    style={{
-                      background:   canSubmit ? '#7a9478' : '#c9c5be',
-                      color:        '#ffffff',
-                      border:       `1px solid ${canSubmit ? '#5d7259' : '#b6b1a7'}`,
-                      borderRadius: 10,
-                      padding:      '12px 28px',
-                      fontFamily:   'inherit',
-                      fontSize:     15,
-                      fontWeight:   600,
-                      cursor:       btnDisabled ? 'not-allowed' : 'pointer',
-                      boxShadow:    '0 1px 3px rgba(0,0,0,0.08)',
-                      opacity:      submitting ? 0.7 : 1,
-                    }}
-                  >
-                    {submitting ? 'שולח...' : 'סיים ושלח'}
-                  </button>
-                  <div style={{
-                    fontSize: 12, color: '#8a8680', marginTop: 6,
-                  }}>
-                    {canSubmit
-                      ? 'לאחר השליחה לא ניתן יהיה לערוך את השאלון.'
-                      : 'יש לסיים את שני החלקים לפני השליחה'}
-                  </div>
-                </div>
-              )
-            })()}
+            {/* The "סיים ושלח" final-submit button + its explanatory
+                copy were REMOVED. The workflow changed: the client no
+                longer submits the programming module — Einav sees the
+                data live at any time, and the client's data stays
+                editable indefinitely. Auto-save + the manual
+                "שמור טיוטה" button keep persisting everything.
+
+                The submit machinery below (handleSubmit, the confirm
+                dialog, the `submitted` / `submitted_at` columns and
+                the isLocked read-only path) is intentionally LEFT IN
+                PLACE but is now unreachable from the client UI —
+                nothing sets confirmSubmitOpen any more. Existing rows
+                that were already submitted still render their banner
+                and stay locked; no DB columns were dropped. */}
 
             {/* DEV-ONLY reactivate — resets submitted / submitted_at
                 and the two per-part flags so the flow can be re-tested
@@ -1360,42 +1528,32 @@ export default function ClientProgrammingQuestionnaire({
              its finish bar (ABOVE the finish checkbox) — we pass the
              immediate-save handler + the two in-flight flags via
              onManualSave / savingDraft / savedFlash props. */
-          <HouseBuilder
-            initialData={answers?.house || null}
-            onChange={handleHouseChange}
-            onBack={handleHouseBack}
-            onDone={handleHouseDone}
-            readOnly={isLockedForViewer}
-            onManualSave={handleManualSave}
-            savingDraft={savingDraft}
-            /* Controlled finish-checkbox — driven by the meta flag so
-               the "done" state survives reloads. onDoneChange fires on
-               BOTH directions (uncontrolled fallback in HouseBuilder
-               still emits onDone on true-only). */
-            doneChecked={houseDone}
-            onDoneChange={handleHouseDoneChange}
-            savedFlash={savedFlash}
-          />
+          <>
+            {/* Always V2. The old DEV toggle to switch back to V1 was
+                removed — V2 is the sole builder now. V1 (HouseBuilder)
+                stays imported but unused; kept as a fallback for now,
+                the import can be removed in a later cleanup. */}
+            <HouseBuilderV2
+              initialData={answers?.house || null}
+              onChange={handleHouseChange}
+              onBack={handleHouseBack}
+              onDone={handleHouseDone}
+              readOnly={isLockedForViewer}
+              onManualSave={handleManualSave}
+              savingDraft={savingDraft}
+              doneChecked={houseDone}
+              onDoneChange={handleHouseDoneChange}
+              savedFlash={savedFlash}
+            />
+          </>
         ) : (
           /* ── QUESTIONNAIRE VIEW ──────────────────────────────────
              Existing 5-step form, plus a top back-link that returns
              the client to the hub. "סיום ושליחה" on the last step
              saves and also returns to the hub (goNext handles that). */
           <>
-            <button
-              type="button"
-              onClick={returnToHub}
-              aria-label="חזרה למרחב הפרוגרמה"
-              style={{
-                background: 'none', border: 'none', color: '#7a9478',
-                fontFamily: 'inherit', fontSize: 13.5, cursor: 'pointer',
-                padding: '4px 0', marginBottom: 6,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}
-            >
-              <IconBack size={14} />
-              <span>חזרה למרחב הפרוגרמה</span>
-            </button>
+            {/* Back-arrow now lives on the screen-title row above —
+                see the header block at the top of this return. */}
 
             {/* Step pills — clickable, current one filled sage. Scrolls
                 horizontally on narrow mobile so all steps stay reachable. */}
@@ -1446,7 +1604,20 @@ export default function ClientProgrammingQuestionnaire({
                 </p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {step.blocks.map((block, idx) => renderBlock(block, idx, qData, updateQ, isLockedForViewer))}
+                {step.key === 'house_general' ? (
+                  /* Chapter 5 — house-level toggles (heating floors +
+                     elevator). Data lives in answers.house.general so we
+                     use handleHouseChange (the same setter the builder
+                     uses) instead of updateQ (which writes to
+                     answers.questionnaire). */
+                  <HouseGeneralSection
+                    answers={answers}
+                    onHouseChange={handleHouseChange}
+                    isLocked={isLockedForViewer}
+                  />
+                ) : (
+                  step.blocks.map((block, idx) => renderBlock(block, idx, qData, updateQ, isLockedForViewer))
+                )}
               </div>
             </section>
 
@@ -1506,7 +1677,7 @@ export default function ClientProgrammingQuestionnaire({
                   boxSizing:   'border-box',
                 }}
               >
-                {isLastStep ? 'סיימתי את השאלון' : 'הבא'}
+                {isLastStep ? 'סיימתי' : 'הבא'}
               </button>
             </div>
 

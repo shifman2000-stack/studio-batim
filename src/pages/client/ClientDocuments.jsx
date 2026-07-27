@@ -24,8 +24,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
-import { computeOpenRequests } from '../../lib/openDocRequests'
-import OpenRequestsBadge from '../../components/OpenRequestsBadge'
+import { computeOpenRequests, isOpenRequest } from '../../lib/openDocRequests'
+import OpenRequestsBadge, { OPEN_REQUEST_RED } from '../../components/OpenRequestsBadge'
 
 const BUCKET = 'project-files'
 
@@ -370,9 +370,47 @@ export default function ClientDocuments() {
      on the client side — client_access controls VISIBILITY not
      MUTATION beyond upload; deletions stay admin-only, matching the
      pre-change behavior. */
+  /* Dot + sentence marking a row the client still owes a file on.
+     RTL: the dot is the FIRST child so it paints to the visual RIGHT
+     of the text, i.e. it reads as coming BEFORE the sentence. */
+  const renderOpenRequestNote = (style) => (
+    <div
+      className="cp-doc-meta"
+      style={{
+        display:    'flex',
+        alignItems: 'center',
+        gap:        6,
+        direction:  'rtl',
+        ...style,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          flexShrink:   0,
+          width:        8,
+          height:       8,
+          borderRadius: 999,
+          background:   OPEN_REQUEST_RED,
+          display:      'inline-block',
+        }}
+      />
+      <span>התקבלה בקשה להעלאת קובץ</span>
+    </div>
+  )
+
   const renderDocRow = (doc) => {
     const versions    = versionsByDoc[doc.id] || []
     const hasFiles    = versions.length > 0
+    /* Same defensive posture as the badge path: a failure here yields
+       NO indicator rather than a broken screen. */
+    let openRequest = false
+    try {
+      openRequest = isOpenRequest(doc, versions, userId)
+    } catch (e) {
+      console.warn('isOpenRequest failed for doc', doc && doc.id, e)
+      openRequest = false
+    }
     const isUploading = uploadingDocId === doc.id
     const rowError    = !!uploadErrors[doc.id]
     const editable    = doc.client_access === 'view_edit'
@@ -389,8 +427,12 @@ export default function ClientDocuments() {
             <div className={'cp-doc-name' + (hasFiles ? '' : ' cp-doc-name--unfilled')}>
               {docName}
             </div>
+            {/* Empty row: when it's an open request the dot+sentence
+                REPLACES "טרם הועלה קובץ" — never both. */}
             {!hasFiles && (
-              <div className="cp-doc-meta">טרם הועלה קובץ</div>
+              openRequest
+                ? renderOpenRequestNote()
+                : <div className="cp-doc-meta">טרם הועלה קובץ</div>
             )}
           </div>
 
@@ -455,6 +497,12 @@ export default function ClientDocuments() {
           </ul>
         )}
 
+        {/* Row already has a file (uploaded by the team) but the
+            client hasn't uploaded: keep the existing per-file
+            "date · uploader" lines untouched and add the dot+sentence
+            directly beneath them as an ADDITIONAL line. */}
+        {hasFiles && openRequest && renderOpenRequestNote({ marginTop: 6 })}
+
         {rowError && (
           <div className="cp-doc-error" role="alert">שגיאה בהעלאה, נסה שוב</div>
         )}
@@ -490,18 +538,35 @@ export default function ClientDocuments() {
                     onKeyDown={(e) => handleHeaderKeyDown(e, group.key)}
                   >
                     <span className="cp-progress-header-name">{group.key}</span>
-                    <OpenRequestsBadge
-                      count={openByStage[group.key] || 0}
-                      /* Inline next to the caption — small enough to
-                         sit visually inside the header row without
-                         breaking its RTL flow. */
-                      style={{ marginInlineStart: 6 }}
-                    />
                     <span className="cp-progress-header-caption">
                       {group.docs.length} מסמכים
                     </span>
-                    <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
-                      <IconChevron size={16} />
+                    {/* Badge + chevron travel together at the visual
+                        LEFT end of the row, well away from the grey
+                        "N מסמכים" count so two numbers never sit side
+                        by side. `marginInlineStart: auto` on the GROUP
+                        is what pushes it left in RTL; the chevron's own
+                        auto margin (from .cp-progress-chevron) is
+                        zeroed inside the group so the badge-to-chevron
+                        gap stays a fixed 6px instead of splitting the
+                        row's free space between them. The chevron is
+                        last, so it stays exactly where it was — at the
+                        far left edge — with the badge immediately to
+                        its visual right. */}
+                    <span style={{
+                      marginInlineStart: 'auto',
+                      display:           'inline-flex',
+                      alignItems:        'center',
+                      gap:               6,
+                      flexShrink:        0,
+                    }}>
+                      <OpenRequestsBadge count={openByStage[group.key] || 0} />
+                      <span
+                        className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}
+                        style={{ marginInlineStart: 0 }}
+                      >
+                        <IconChevron size={16} />
+                      </span>
                     </span>
                   </div>
                   {isOpen && (

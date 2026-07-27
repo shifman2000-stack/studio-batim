@@ -8,6 +8,11 @@
 // natural "leading top" corner is the physical top-right, matching the
 // WhatsApp / iOS notification convention.
 
+/* The one alert-red used for open-request affordances. Exported so
+   the per-row dot in ClientDocuments reuses this exact value instead
+   of re-declaring a hex that could drift from the badge. */
+export const OPEN_REQUEST_RED = '#d9534f'
+
 export default function OpenRequestsBadge({ count, size = 'sm', style }) {
   if (!count || count <= 0) return null
   const dim = size === 'lg' ? 22 : 18
@@ -23,8 +28,8 @@ export default function OpenRequestsBadge({ count, size = 'sm', style }) {
         height:          dim,
         padding:         '0 6px',
         borderRadius:    999,
-        background:      '#d9534f',   /* alert-red, matches the app's
-                                         danger tokens elsewhere */
+        background:      OPEN_REQUEST_RED,  /* alert-red, matches the
+                                         app's danger tokens elsewhere */
         color:           '#ffffff',
         fontSize:        fs,
         fontWeight:      700,

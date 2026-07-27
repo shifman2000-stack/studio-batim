@@ -46,7 +46,6 @@ import { IconBack } from '../../components/icons/PortalIcons'
    handlers when there's no provider (embedded/admin usage), so it's
    safe to call unconditionally. */
 import { useClientNav } from '../ClientPortal'
-import HouseBuilder from '../../components/questionnaire/HouseBuilder'
 import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
 import {
   QUESTIONNAIRE_STEPS,
@@ -703,15 +702,6 @@ export default function ClientProgrammingQuestionnaire({
      always starts on the hub. */
   const [view, setView] = useState('hub')
 
-  /* DEV-ONLY: which house-builder implementation to render — the
-     existing V1 (default, and the ONLY one shipped in production
-     builds) or the new WIP V2 shell (Phase 1). Not exposed to
-     clients; the toggle button below is gated by import.meta.env.DEV
-     so a production build sees dead code and always renders V1.
-     Both accept the same props + write to the same answers.house
-     jsonb, so switching between them mid-session preserves data. */
-  /* useHouseV2 state removed — V2 is the sole builder now. */
-
   /* ── Auto-save refs (hooks; top-level, before any early return) ────
      hasLoadedRef       : flipped true after the initial load runs, so
                           the debounce doesn't try to save an empty row
@@ -977,15 +967,35 @@ export default function ClientProgrammingQuestionnaire({
     setView('hub')
   }
 
+  /* House-builder finish ("סיימתי" on its last step) — the exact
+     mirror of handleMarkQuestionnaireDone below: flip the part's
+     meta flag, persist with the SAME explicit save the "שמור טיוטה"
+     button uses (never the debounced autosave, which navigating away
+     could race and silently drop), then return to the hub on success.
+
+     The builder passes its current JSON, so the house content and the
+     flag land in ONE write. Like the questionnaire's flag this only
+     records "the client says this part is ready" — it locks nothing,
+     stays reversible, and does not touch submitted / submitted_at. */
   const handleHouseDone = async (jsonFromBuilder) => {
+    if (isLockedForViewer) return
     cancelPendingAutoSave()
-    if (jsonFromBuilder !== undefined && jsonFromBuilder !== null) {
-      setAnswers(prev => ({ ...(prev || {}), house: jsonFromBuilder }))
-      /* Non-silent so the user sees "נשמר ✓" confirming the finish
-         checkbox wrote to the DB. Does NOT navigate — the ↩ חזרה link
-         is the exit gesture. */
-      await saveDraftNow({ silent: false, houseOverride: jsonFromBuilder })
-    }
+    const nextHouse = (jsonFromBuilder !== undefined && jsonFromBuilder !== null)
+      ? jsonFromBuilder
+      : undefined
+    setAnswers(prev => ({
+      ...(prev || {}),
+      ...(nextHouse !== undefined ? { house: nextHouse } : {}),
+      meta: { ...((prev && prev.meta) || {}), house_done: true },
+    }))
+    /* metaOverride/houseOverride sidestep the setAnswers stale-closure
+       race so the FIRST save already carries both. */
+    const ok = await saveDraftNow({
+      silent: true,
+      ...(nextHouse !== undefined ? { houseOverride: nextHouse } : {}),
+      metaOverride: { house_done: true },
+    })
+    if (ok) setView('hub')
   }
 
   /* ── Per-part completion flags ─────────────────────────────────────
@@ -1516,23 +1526,20 @@ export default function ClientProgrammingQuestionnaire({
           </>
         ) : view === 'house' ? (
           /* ── HOUSE-BUILDER VIEW (Stage C-3) ──────────────────────
-             Persisted to answers.house. HouseBuilder hydrates from
+             Persisted to answers.house. HouseBuilderV2 hydrates from
              initialData, broadcasts every state change via onChange
              which writes it straight into `answers` on the parent so
              the shared debounced auto-save picks it up automatically.
-             onBack (silent save → hub) and onDone (non-silent save,
-             shows "נשמר ✓" flash) are explicit "flush" paths.
+             onBack (silent save → hub) and onDone (explicit save of
+             the house JSON + meta.house_done, then → hub) are the
+             "flush" paths.
              readOnly mirrors the parent lock (status === 'submitted')
              so a locked row disables every mutating control.
-             HouseBuilder itself hosts the "שמור טיוטה" button INSIDE
-             its finish bar (ABOVE the finish checkbox) — we pass the
-             immediate-save handler + the two in-flight flags via
-             onManualSave / savingDraft / savedFlash props. */
+             The builder hosts the "שמור טיוטה" button INSIDE its
+             footer — we pass the immediate-save handler + the two
+             in-flight flags via onManualSave / savingDraft /
+             savedFlash props. */
           <>
-            {/* Always V2. The old DEV toggle to switch back to V1 was
-                removed — V2 is the sole builder now. V1 (HouseBuilder)
-                stays imported but unused; kept as a fallback for now,
-                the import can be removed in a later cleanup. */}
             <HouseBuilderV2
               initialData={answers?.house || null}
               onChange={handleHouseChange}

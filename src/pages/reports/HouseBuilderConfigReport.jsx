@@ -1450,9 +1450,6 @@ function PropsEditor({ def, onUpdate }) {
 }
 
 function PropFieldEditor({ group, index, lastIndex, onPatch, onRemove, onMoveUp, onMoveDown }) {
-  const isSingle = group.type === 'single'
-  const noTitle  = group.noTitle === true
-
   /* Options editing */
   const options = Array.isArray(group.options) ? group.options : []
   const addOption = () => onPatch({ options: [...options, ''] })
@@ -1489,30 +1486,14 @@ function PropFieldEditor({ group, index, lastIndex, onPatch, onRemove, onMoveUp,
             color: CHARCOAL, textAlign: 'right', boxSizing: 'border-box',
           }}
         />
-        {/* single/multi segmented */}
-        <div style={{ display: 'flex' }}>
-          <SegmentedBtn
-            selected={isSingle}
-            first
-            onClick={() => onPatch({ type: 'single' })}
-          >single</SegmentedBtn>
-          <SegmentedBtn
-            selected={!isSingle}
-            last
-            onClick={() => onPatch({ type: 'multi' })}
-          >multi</SegmentedBtn>
-        </div>
-        <label style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          fontSize: 12, color: CHARCOAL, userSelect: 'none', cursor: 'pointer',
-        }}>
-          <input
-            type="checkbox"
-            checked={noTitle}
-            onChange={(e) => onPatch({ noTitle: e.target.checked })}
-          />
-          noTitle
-        </label>
+        {/* The single/multi selector and the noTitle checkbox were
+            REMOVED. On the client's characterization screen every
+            option is now an independent toggle and no group titles
+            are rendered, so neither setting changes anything there —
+            offering them would let Einav configure a no-op.
+            The `type` and `noTitle` KEYS are deliberately left in the
+            stored config JSON (untouched by this editor, still
+            validated below); only their controls are gone. */}
         <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 4 }}>
           <IconBtn title="הזז למעלה" disabled={index === 0}          onClick={onMoveUp}>▲</IconBtn>
           <IconBtn title="הזז למטה" disabled={index === lastIndex} onClick={onMoveDown}>▼</IconBtn>

@@ -50,6 +50,12 @@ import { IconBack } from '../icons/PortalIcons'
 /* Size labels match V1's houseSizeConfig verbatim. DOM order
    [L, M, S] paints as visual [גדול | בינוני | קטן] under RTL — same
    as V1's PropsPanel size selector. */
+/* Key under which a property group's selected options are stored.
+   Retains the legacy 'r' prefix so houseFromJSON's string→[string]
+   coercion of old single-select data lands on the key this screen
+   reads. Single definition — writers and readers must agree. */
+const propGroupKey = (gi) => 'r' + gi
+
 const SIZE_KEYS_IN_ORDER = ['L', 'M', 'S']
 const SIZE_LABELS_MAP    = { S: 'קטן', M: 'בינוני', L: 'גדול' }
 
@@ -67,12 +73,13 @@ const TARGET_AREA_SEGMENTS = [
 ]
 const TARGET_AREA_SEGMENT_VALUES = new Set(TARGET_AREA_SEGMENTS.map(o => o.value))
 
-/* Border/color tokens re-used across V2 primitives — copied verbatim
-   from V1's HouseBuilder.css so segmented controls, toggle rows, and
-   text inputs read as ONE design system across both builders. */
-const INPUT_BORDER  = '#d9d6cd'   /* soft warm-grey — V1's .hb-input,
-                                     .hb-chip, .hb-segment border. */
-const INPUT_TEXT    = '#4a4a48'   /* V1's segment/chip label color. */
+/* Border/color tokens re-used across V2 primitives, so segmented
+   controls, chips, toggle rows and text inputs all read as ONE
+   design system. These are V2's own tokens — the builder has no CSS
+   file and styles everything inline. */
+const INPUT_BORDER  = '#d9d6cd'   /* soft warm-grey — input / chip /
+                                     segment border. */
+const INPUT_TEXT    = '#4a4a48'   /* segment + chip label color. */
 const INPUT_BG_SEL  = '#7a9478'   /* selected sage (identical to SAGE). */
 const INPUT_BD_SEL  = '#5d7259'   /* selected border (identical to SAGE_DARK). */
 const INPUT_HOVER   = 'rgba(122, 148, 120, 0.10)'  /* V1's segment hover tint. */
@@ -324,18 +331,44 @@ export default function HouseBuilderV2({
     return DEFAULT_SIZE_KEY
   }
 
+  /* Build a fresh room object, allocating its id from `seq`. Returns
+     [room, nextSeq] so callers can chain allocations (a container +
+     its auto children) off ONE sequence and never collide. */
+  const makeRoom = (t, seq) => {
+    const room = { id: seq, type: t, props: {}, freeProps: [] }
+    const sizeKey = resolveInitialSizeKey(t)
+    if (sizeKey != null) room.sizeKey = sizeKey
+    return [room, seq + 1]
+  }
+
   const addRoomToFloor = (floorKey, type) => {
     if (readOnly) return
     const t = String(type || '').trim()
     if (!floorKey || !t) return
     setHouseState(prev => {
-      const nextSeq = (prev.roomSeq || 1) + 1
-      const sizeKey = resolveInitialSizeKey(t)
-      const room = { id: prev.roomSeq || 1, type: t, props: {}, freeProps: [] }
-      if (sizeKey != null) room.sizeKey = sizeKey
+      let seq = prev.roomSeq || 1
+      const [room, afterRoom] = makeRoom(t, seq)
+      seq = afterRoom
+      /* Containers arrive holding their configured auto children
+         (e.g. יחידת סוויטה always starts with a חדר שינה). Children
+         draw ids from the SAME sequence, so numbering stays
+         collision-free. Non-containers get NO `children` key — the
+         serializer only emits one when the array exists, so a plain
+         room's saved shape is byte-identical to before. */
+      if (isContainerType(t)) {
+        room.children = []
+        const autoKids = (config.getContainerAutoChildren
+          ? config.getContainerAutoChildren(t)
+          : []) || []
+        for (const childType of autoKids) {
+          const [child, afterChild] = makeRoom(childType, seq)
+          seq = afterChild
+          room.children.push(child)
+        }
+      }
       const nextRooms = { ...(prev.rooms || {}) }
       nextRooms[floorKey] = [...(nextRooms[floorKey] || []), room]
-      const next = { ...prev, roomSeq: nextSeq, rooms: nextRooms }
+      const next = { ...prev, roomSeq: seq, rooms: nextRooms }
       if (typeof onChange === 'function') onChange(houseToJSON(next))
       return next
     })
@@ -347,6 +380,72 @@ export default function HouseBuilderV2({
       const nextList = list.filter(r => r.id !== roomId)
       const nextRooms = { ...(prev.rooms || {}), [floorKey]: nextList }
       const next = { ...prev, rooms: nextRooms }
+      if (typeof onChange === 'function') onChange(houseToJSON(next))
+      return next
+    })
+  }
+
+  /* ── Container children ──────────────────────────────────────────
+     Children live in `container.children`, NOT in the floor's
+     top-level array, so these operate one level deeper than
+     addRoomToFloor / removeRoomFromFloor. */
+
+  const addChildToContainer = (floorKey, containerId, type) => {
+    if (readOnly) return
+    const t = String(type || '').trim()
+    if (!floorKey || !t) return
+    /* Defence in depth: no container inside a container. The child
+       palette already excludes them, this refuses anyway. */
+    if (isContainerType(t)) return
+    setHouseState(prev => {
+      const list = (prev.rooms || {})[floorKey] || []
+      const [child, nextSeq] = makeRoom(t, prev.roomSeq || 1)
+      const nextList = list.map(r =>
+        r.id === containerId
+          ? { ...r, children: [...(r.children || []), child] }
+          : r
+      )
+      const next = {
+        ...prev,
+        roomSeq: nextSeq,
+        rooms:   { ...(prev.rooms || {}), [floorKey]: nextList },
+      }
+      if (typeof onChange === 'function') onChange(houseToJSON(next))
+      return next
+    })
+  }
+
+  /* Required-type rule (ported from V1): a child whose type is listed
+     in the container's requiredTypes cannot be removed when it is the
+     LAST child of that type. Pure predicate — used to disable the UI
+     control AND re-checked inside the mutation below, so the rule
+     holds even if the control is bypassed. */
+  const canRemoveChild = (container, child) => {
+    if (!container || !child) return false
+    const required = (config.getContainerRequiredTypes
+      ? config.getContainerRequiredTypes(container.type)
+      : []) || []
+    if (!required.includes(child.type)) return true
+    const sameType = (container.children || []).filter(c => c.type === child.type).length
+    return sameType > 1
+  }
+
+  const removeChildFromContainer = (floorKey, containerId, childId) => {
+    if (readOnly) return
+    setHouseState(prev => {
+      const list = (prev.rooms || {})[floorKey] || []
+      const container = list.find(r => r.id === containerId)
+      if (!container) return prev
+      const child = (container.children || []).find(c => c.id === childId)
+      if (!child) return prev
+      /* The guard lives HERE, not only in the UI — refuse the write. */
+      if (!canRemoveChild(container, child)) return prev
+      const nextList = list.map(r =>
+        r.id === containerId
+          ? { ...r, children: (r.children || []).filter(c => c.id !== childId) }
+          : r
+      )
+      const next = { ...prev, rooms: { ...(prev.rooms || {}), [floorKey]: nextList } }
       if (typeof onChange === 'function') onChange(houseToJSON(next))
       return next
     })
@@ -408,14 +507,41 @@ export default function HouseBuilderV2({
   const roomLabel = (room) => roomLabelById[room.id] || displayType(room.type)
 
   /* Palette entries for the active floor — from the runtime config
-     (already stripped of the 'חלל אחר' marker by the adapter). Filter
-     out container types per the phase spec. */
-  const activePalette = (config.getPalette
+     (already stripped of the 'חלל אחר' marker by the adapter).
+     Container types are NO LONGER filtered out: they're offered like
+     any other type and, once added, render as an expanded group in
+     the room list below. */
+  const paletteRegular = (config.getPalette
     ? config.getPalette(activeAreaKey)
     : []) || []
-  const paletteRegular = activePalette.filter(t => !isContainerType(t))
 
   const activeAreaRooms = (houseState.rooms && houseState.rooms[activeAreaKey]) || []
+
+  /* Which container's "add child" palette is currently open (room id
+     | null), and which container is awaiting delete confirmation.
+     Both are transient view state — never serialized. */
+  const [childPaletteFor,   setChildPaletteFor]   = useState(null)
+  const [confirmRemoveUnit, setConfirmRemoveUnit] = useState(null)
+
+  /* Allowed children for a container, minus any container type —
+     enforces "no container inside a container" at the palette level. */
+  const allowedChildTypes = (containerType) => {
+    const allowed = (config.getContainerAllowedChildren
+      ? config.getContainerAllowedChildren(containerType)
+      : []) || []
+    return allowed.filter(t => !isContainerType(t))
+  }
+
+  /* Remove a whole unit. With children it takes them along, so ask
+     first; an empty unit goes immediately. */
+  const requestRemoveUnit = (floorKey, room) => {
+    if (readOnly) return
+    if ((room.children || []).length > 0) {
+      setConfirmRemoveUnit({ floorKey, roomId: room.id })
+      return
+    }
+    removeRoomFromFloor(floorKey, room.id)
+  }
 
   /* "אחר" custom-room input on the active floor. Local text state;
      writes a room whose `type` is the user's free string on submit. */
@@ -485,6 +611,15 @@ export default function HouseBuilderV2({
     return list.find(r => r.id === item.roomId) || null
   }
 
+  /* The container a queue item belongs to, or null for a top-level
+     room. Resolved straight off item.parentId — the queue already
+     carries it, so no re-scan of the tree is needed. */
+  const findQueueContainer = (item) => {
+    if (!item || item.parentId == null) return null
+    const list = (houseState.rooms || {})[item.areaKey] || []
+    return list.find(r => r.id === item.parentId) || null
+  }
+
   /* Immutable in-tree update — applies `updater(room)` to the room at
      (areaKey, roomId, parentId), returning a new state tree. Only
      rebuilds the touched area's list (and, when parentId is set, the
@@ -544,10 +679,17 @@ export default function HouseBuilderV2({
   })
 
   /* Per-room mutators — each wraps setHouseState + emits onChange +
-     marks the room characterized. Data shapes match V1's PropsPanel
-     writers exactly (props['r'+gi], props['c'+gi+'_'+opt], freeProps
-     array, sizeKey), so a saved questionnaire round-trips losslessly
-     between V1 and V2. */
+     marks the room characterized.
+
+     props shape: { [groupKey]: [selected option labels] } — ONE key
+     per property group holding an array. Every option is an
+     independent toggle; nothing is mutually exclusive any more, so
+     the config's single/multi `type` is not consulted here at all.
+
+     The group key keeps the legacy 'r'+gi spelling on purpose: that
+     is where the old single-select shape stored its chosen string,
+     so houseFromJSON's string→[string] coercion lands on the very
+     key this screen reads back. */
   const setQueueRoomSize = (item, sizeKey) => {
     if (readOnly || !item) return
     if (!SIZE_LABELS_MAP[sizeKey]) return
@@ -558,26 +700,19 @@ export default function HouseBuilderV2({
     })
     markCharacterized(item.roomId)
   }
-  const setQueueRoomRadio = (item, gi, value) => {
+  /* Toggle ONE option inside ONE group. Selecting an option never
+     clears a sibling — "אופי פתוח" and "אופי אינטימי" can both be on. */
+  const toggleQueueRoomOption = (item, gi, opt) => {
     if (readOnly || !item) return
+    const key = propGroupKey(gi)
     setHouseState(prev => {
-      const next = updateQueueRoom(prev, item, r => ({
-        ...r,
-        props: { ...(r.props || {}), ['r' + gi]: value },
-      }))
-      if (typeof onChange === 'function') onChange(houseToJSON(next))
-      return next
-    })
-    markCharacterized(item.roomId)
-  }
-  const toggleQueueRoomCheckbox = (item, gi, opt) => {
-    if (readOnly || !item) return
-    const key = 'c' + gi + '_' + opt
-    setHouseState(prev => {
-      const next = updateQueueRoom(prev, item, r => ({
-        ...r,
-        props: { ...(r.props || {}), [key]: !((r.props || {})[key]) },
-      }))
+      const next = updateQueueRoom(prev, item, r => {
+        const cur  = Array.isArray((r.props || {})[key]) ? (r.props || {})[key] : []
+        const nextArr = cur.includes(opt)
+          ? cur.filter(x => x !== opt)
+          : [...cur, opt]
+        return { ...r, props: { ...(r.props || {}), [key]: nextArr } }
+      })
       if (typeof onChange === 'function') onChange(houseToJSON(next))
       return next
     })
@@ -651,7 +786,12 @@ export default function HouseBuilderV2({
      card (see Step3Characterization), so the two never compete. */
   const goNext = () => {
     if (isLastStep) {
-      if (typeof onDone === 'function') onDone()
+      /* Finish ("סיימתי"). Hand the parent the CURRENT house JSON so
+         it can persist the content and the house_done flag in one
+         explicit save, then navigate back to the hub. Previously this
+         called onDone() with no argument, which the parent's handler
+         treated as "nothing to save" — so the button did nothing. */
+      if (typeof onDone === 'function') onDone(houseToJSON(houseState))
       return
     }
     setStepIndex(i => Math.min(STEPS.length - 1, i + 1))
@@ -1050,7 +1190,7 @@ export default function HouseBuilderV2({
                 were dropped — Einav prefers to type a specific
                 value directly. Single source of truth remains
                 answers.house.targetArea (number|null). */}
-            <Section title="גודל הבית" subtitle="הזינו גודל משוער במ״ר — ניתן לשנות מאוחר יותר">
+            <Section title="גודל הבית" subtitle="הזינו גודל רצוי במ״ר (בערך) — ניתן לשנות מאוחר יותר">
               <TextInput
                 value={customTargetText}
                 onChange={setTargetCustom}
@@ -1131,6 +1271,7 @@ export default function HouseBuilderV2({
               roof={(houseState.general && houseState.general.roof) || null}
               roomLabel={roomLabel}
               displayType={displayType}
+              isContainerType={isContainerType}
             />
 
             {/* ── Floor selector (segmented, redundant with mini-house
@@ -1246,17 +1387,50 @@ export default function HouseBuilderV2({
                   direction:           'rtl',
                 }}>
                   {activeAreaRooms.map(room => {
-                    /* Containers get passed through untouched (no edit,
-                       no remove) — Phase 2 doesn't manage them, but we
-                       show them so the user sees what's on the floor. */
-                    const isCont = isContainerType(room.type)
+                    /* Containers render as an always-expanded group
+                       block (header / children / add-child footer).
+                       There is no "enter the unit" mode — the user
+                       never leaves the floor. Regular rooms stay
+                       plain chips. The group spans the full grid
+                       width so it reads as a container, not a chip. */
+                    if (isContainerType(room.type)) {
+                      return (
+                        <ContainerGroup
+                          key={room.id}
+                          room={room}
+                          label={roomLabel(room)}
+                          childLabel={roomLabel}
+                          childTypes={allowedChildTypes(room.type)}
+                          displayType={displayType}
+                          canRemoveChild={(child) => canRemoveChild(room, child)}
+                          paletteOpen={childPaletteFor === room.id}
+                          onTogglePalette={() =>
+                            setChildPaletteFor(v => (v === room.id ? null : room.id))
+                          }
+                          onAddChild={(t) => addChildToContainer(activeAreaKey, room.id, t)}
+                          onRemoveChild={(childId) =>
+                            removeChildFromContainer(activeAreaKey, room.id, childId)
+                          }
+                          onRemoveUnit={() => requestRemoveUnit(activeAreaKey, room)}
+                          confirming={
+                            !!confirmRemoveUnit && confirmRemoveUnit.roomId === room.id
+                          }
+                          onConfirmRemoveUnit={() => {
+                            removeRoomFromFloor(activeAreaKey, room.id)
+                            setConfirmRemoveUnit(null)
+                          }}
+                          onCancelRemoveUnit={() => setConfirmRemoveUnit(null)}
+                          disabled={readOnly}
+                        />
+                      )
+                    }
                     return (
                       <RoomChip
                         key={room.id}
                         label={roomLabel(room)}
-                        isContainer={isCont}
+                        isContainer={false}
                         disabled={readOnly}
-                        onRemove={isCont ? null : () => removeRoomFromFloor(activeAreaKey, room.id)}
+                        onRemove={() => removeRoomFromFloor(activeAreaKey, room.id)}
                       />
                     )
                   })}
@@ -1276,6 +1450,7 @@ export default function HouseBuilderV2({
             index={Math.min(charIndex, Math.max(0, characterizationQueue.length - 1))}
             onIndexChange={setCharIndex}
             findQueueRoom={findQueueRoom}
+            findQueueContainer={findQueueContainer}
             characterizedIds={characterizedIds}
             config={config}
             displayType={displayType}
@@ -1283,8 +1458,7 @@ export default function HouseBuilderV2({
             FLOOR_DEFS={FLOOR_DEFS}
             YARD_LABEL={YARD_LABEL}
             setQueueRoomSize={setQueueRoomSize}
-            setQueueRoomRadio={setQueueRoomRadio}
-            toggleQueueRoomCheckbox={toggleQueueRoomCheckbox}
+            toggleQueueRoomOption={toggleQueueRoomOption}
             addQueueRoomFreeProp={addQueueRoomFreeProp}
             removeQueueRoomFreeProp={removeQueueRoomFreeProp}
             onFinish={() => { if (typeof onDone === 'function') onDone() }}
@@ -1789,6 +1963,67 @@ function RoomBtnLabel({ children, color }) {
   )
 }
 
+/* MiniContainerLine — a container inside the schematic's floor box.
+   Unlike a regular room (a small MiniChip in one grid cell), a
+   container spans the FULL width of the floor's chip grid and states
+   its contents inline:
+
+     "יחידת סוויטה: ח. שינה, ח. רחצה, ח. ארונות"
+
+   · Children are abbreviated with the SAME rules used elsewhere in
+     this component (abbreviate(): חדר→ח., פינה/פינת→פ., שירותי/
+     שירות→ש.) so the strip stays short.
+   · A childless container renders as just its label — no colon.
+   · COMPACT (yard accordion expanded → the drawing is squeezed):
+     label only, no colon, no children. Driven off the existing
+     yardExpanded state — no width measurement, no ResizeObserver.
+   · Whatever still overflows is clipped with ellipsis; the `title`
+     always carries the FULL, UNABBREVIATED line.
+   Same chip vocabulary as MiniChip — just wider. No new colors. */
+function MiniContainerLine({ room, roomLabel, compact }) {
+  const kids      = room.children || []
+  const parentLbl = roomLabel(room)
+  const fullKids  = kids.map(c => roomLabel(c))
+  const shortKids = fullKids.map(t => abbreviate(t))
+
+  const shown =
+    compact || fullKids.length === 0
+      ? parentLbl
+      : `${parentLbl}: ${shortKids.join(', ')}`
+  /* Tooltip always shows the complete, unabbreviated truth — even
+     in compact mode, where the children aren't rendered at all. */
+  const full =
+    fullKids.length === 0
+      ? parentLbl
+      : `${parentLbl}: ${fullKids.join(', ')}`
+
+  return (
+    <span
+      title={full}
+      style={{
+        gridColumn:   '1 / -1',
+        display:      'block',
+        width:        '100%',
+        background:   '#ffffff',
+        border:       `1px solid ${INPUT_BORDER}`,
+        borderRadius: 6,
+        padding:      '1px 6px',
+        fontSize:     11,
+        lineHeight:   1.4,
+        color:        CHARCOAL,
+        minWidth:     0,
+        boxSizing:    'border-box',
+        whiteSpace:   'nowrap',
+        overflow:     'hidden',
+        textOverflow: 'ellipsis',
+        textAlign:    'right',   /* RTL: reads from the visual RIGHT */
+      }}
+    >
+      {shown}
+    </span>
+  )
+}
+
 /* MiniChip — the SMALL compact chip used ONLY inside the sticky
    mini-house schematic (per-floor room labels). Reverts the
    pre-uniform sizing: tiny font, 1×6 padding, radius 6, sage border,
@@ -1880,10 +2115,15 @@ function PaletteButton({ label, count, disabled, onClick }) {
       default (signals "already exists"); containers render neutral
       with a small "יחידה" tag; a × remove button sits at the visual-
       LEFT edge (fixed size — doesn't grow the button). */
-function RoomChip({ label, isContainer, disabled, onRemove }) {
+function RoomChip({ label, isContainer, disabled, onRemove, blockedReason }) {
   const selected = !isContainer
   return (
-    <span style={roomButtonStyle({ selected, disabled })} title={label}>
+    <span
+      style={roomButtonStyle({ selected, disabled })}
+      /* When removal is blocked by the required-type rule, surface
+         WHY on hover instead of the plain room name. */
+      title={blockedReason || label}
+    >
       <RoomBtnLabel color={selected ? '#ffffff' : CHARCOAL}>{label}</RoomBtnLabel>
       {isContainer ? (
         <span style={{
@@ -1898,8 +2138,8 @@ function RoomChip({ label, isContainer, disabled, onRemove }) {
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove() }}
           disabled={disabled}
-          aria-label={`הסר ${label}`}
-          title={`הסר ${label}`}
+          aria-label={blockedReason || `הסר ${label}`}
+          title={blockedReason || `הסר ${label}`}
           style={{
             background:   'transparent',
             border:       'none',
@@ -1925,6 +2165,362 @@ function RoomChip({ label, isContainer, disabled, onRemove }) {
         </button>
       ) : null}
     </span>
+  )
+}
+
+/* ── SizeRadio — one option of step 3's classic size radio group.
+      RTL: the circle is the FIRST DOM child, so it paints to the
+      visual RIGHT of its label. Selected = circle filled with the
+      same sage used by the selected segment elsewhere; unselected =
+      empty circle with the standard INPUT_BORDER. Deliberately
+      compact — it reads as a small inline control, not a block. */
+function SizeRadio({ label, selected, disabled, onSelect }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={!!selected}
+      onClick={() => { if (!disabled) onSelect() }}
+      disabled={disabled}
+      style={{
+        display:     'inline-flex',
+        alignItems:  'center',
+        gap:         6,
+        background:  'none',
+        border:      'none',
+        padding:     '2px 0',
+        margin:      0,
+        fontFamily:  'inherit',
+        fontSize:    13,
+        color:       CHARCOAL,
+        cursor:      disabled ? 'not-allowed' : 'pointer',
+        opacity:     disabled ? 0.6 : 1,
+        direction:   'rtl',
+        lineHeight:  1,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          flexShrink:     0,
+          width:          16,
+          height:         16,
+          borderRadius:   999,
+          boxSizing:      'border-box',
+          border:         `1px solid ${selected ? SAGE : INPUT_BORDER}`,
+          background:     '#ffffff',
+          display:        'inline-flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          transition:     'border-color 0.12s',
+        }}
+      >
+        {selected && (
+          <span style={{
+            width:        8,
+            height:       8,
+            borderRadius: 999,
+            background:   SAGE,
+          }} />
+        )}
+      </span>
+      <span>{label}</span>
+    </button>
+  )
+}
+
+/* ── PropChip — one characteristic in step 3's flat "מאפיינים" grid.
+      Every chip is an independent toggle (there is no single-select
+      behaviour on this screen), so it carries no radio semantics —
+      aria-pressed, not aria-checked.
+
+      Reuses the file's existing chip vocabulary: selected = filled
+      sage with white text, unselected = white with the standard
+      INPUT_BORDER. Width comes from the parent 3-column grid; the
+      label WRAPS inside the chip rather than forcing a column to
+      grow, so the 3-per-row rhythm holds for long Hebrew labels.
+
+      `onRemove` turns the chip into a custom ("מאפיין אחר") entry:
+      always selected, with a × that DELETES it instead of toggling. */
+function PropChip({ label, selected, disabled, onClick, onRemove }) {
+  const interactive = !disabled && (onClick || onRemove)
+  return (
+    <span
+      style={{
+        boxSizing:      'border-box',
+        width:          '100%',
+        minWidth:       0,
+        minHeight:      ROOM_BTN.HEIGHT,
+        padding:        '5px 8px',
+        borderRadius:   ROOM_BTN.RADIUS,
+        border:         `1px solid ${selected ? SAGE : INPUT_BORDER}`,
+        background:     selected ? SAGE : '#ffffff',
+        color:          selected ? '#ffffff' : INPUT_TEXT,
+        fontFamily:     'inherit',
+        fontSize:       12,
+        lineHeight:     1.3,
+        display:        'inline-flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        gap:            4,
+        textAlign:      'center',
+        direction:      'rtl',
+        cursor:         interactive ? 'pointer' : 'default',
+        opacity:        disabled ? 0.6 : 1,
+        transition:     'background 0.12s, border-color 0.12s, color 0.12s',
+        /* Long labels wrap inside the chip instead of widening it. */
+        overflowWrap:   'anywhere',
+      }}
+      role={onClick ? 'button' : undefined}
+      aria-pressed={onClick ? !!selected : undefined}
+      tabIndex={onClick && !disabled ? 0 : undefined}
+      onClick={() => { if (!disabled && onClick) onClick() }}
+      onKeyDown={(e) => {
+        if (!onClick || disabled) return
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() }
+      }}
+      title={label}
+    >
+      <span style={{ minWidth: 0 }}>{label}</span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove() }}
+          aria-label={`הסר ${label}`}
+          title={`הסר ${label}`}
+          style={{
+            background:     'transparent',
+            border:         'none',
+            padding:        0,
+            width:          14,
+            height:         14,
+            borderRadius:   999,
+            display:        'inline-flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            color:          '#ffffff',
+            cursor:         'pointer',
+            fontSize:       13,
+            lineHeight:     1,
+            flexShrink:     0,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  )
+}
+
+/* ── ContainerGroup — a container ("חלל-על") rendered inline in the
+      floor's room list as an ALWAYS-EXPANDED bordered group. There is
+      deliberately no "enter the unit" navigation mode: header, its
+      children, and a scoped add-child control all sit on the floor.
+
+      Spans the full width of the parent 3-column grid so it reads as
+      a box holding chips rather than as another chip.
+
+      RTL note: the header is a flex row whose FIRST child (the unit
+      label) paints on the visual RIGHT, and `marginInlineStart:auto`
+      pushes the remove control to the visual LEFT edge. */
+function ContainerGroup({
+  room, label, childLabel, childTypes, displayType,
+  canRemoveChild, paletteOpen, onTogglePalette,
+  onAddChild, onRemoveChild, onRemoveUnit,
+  confirming, onConfirmRemoveUnit, onCancelRemoveUnit,
+  disabled,
+}) {
+  const kids = room.children || []
+  return (
+    <div style={{
+      gridColumn:   '1 / -1',
+      boxSizing:    'border-box',
+      background:   'rgba(122,148,120,0.05)',
+      border:       `1px solid ${SAGE}`,
+      borderRadius: ROOM_BTN.RADIUS,
+      padding:      '8px 10px',
+      direction:    'rtl',
+      display:      'flex',
+      flexDirection:'column',
+      gap:          8,
+    }}>
+      {/* Header — unit label at the RTL start, remove at the far end */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{
+          fontSize:   12.5,
+          fontWeight: 700,
+          color:      CHARCOAL,
+          minWidth:   0,
+          overflow:   'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {label}
+        </span>
+        <span style={{ fontSize: 10.5, color: MUTED, flexShrink: 0 }}>
+          יחידה · {kids.length}
+        </span>
+        <button
+          type="button"
+          onClick={onRemoveUnit}
+          disabled={disabled}
+          aria-label={`הסר ${label}`}
+          title={`הסר ${label}`}
+          style={{
+            marginInlineStart: 'auto',
+            background:   'transparent',
+            border:       'none',
+            padding:      0,
+            width:        18,
+            height:       18,
+            borderRadius: 999,
+            display:      'inline-flex',
+            alignItems:   'center',
+            justifyContent:'center',
+            color:        '#c94b4b',
+            cursor:       disabled ? 'not-allowed' : 'pointer',
+            opacity:      disabled ? 0.55 : 1,
+            fontSize:     15,
+            lineHeight:   1,
+            flexShrink:   0,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Inline confirm — a unit with children takes them with it. */}
+      {confirming && (
+        <div style={{
+          display:      'flex',
+          alignItems:   'center',
+          gap:          8,
+          flexWrap:     'wrap',
+          background:   '#ffffff',
+          border:       `1px solid ${INPUT_BORDER}`,
+          borderRadius: 8,
+          padding:      '8px 10px',
+        }}>
+          <span style={{ fontSize: 12, color: CHARCOAL, lineHeight: 1.4 }}>
+            להסיר את היחידה ואת {kids.length} החללים שבתוכה?
+          </span>
+          <button
+            type="button"
+            onClick={onConfirmRemoveUnit}
+            style={{
+              marginInlineStart: 'auto',
+              background:   '#c94b4b',
+              color:        '#ffffff',
+              border:       '1px solid #b03e3e',
+              borderRadius: 6,
+              padding:      '4px 12px',
+              fontFamily:   'inherit',
+              fontSize:     12,
+              fontWeight:   600,
+              cursor:       'pointer',
+              flexShrink:   0,
+            }}
+          >
+            הסר
+          </button>
+          <button
+            type="button"
+            onClick={onCancelRemoveUnit}
+            style={{
+              background:   '#ffffff',
+              color:        CHARCOAL,
+              border:       `1px solid ${INPUT_BORDER}`,
+              borderRadius: 6,
+              padding:      '4px 12px',
+              fontFamily:   'inherit',
+              fontSize:     12,
+              cursor:       'pointer',
+              flexShrink:   0,
+            }}
+          >
+            ביטול
+          </button>
+        </div>
+      )}
+
+      {/* Children — same chip family as the floor's regular rooms. */}
+      {kids.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: MUTED }}>
+          היחידה ריקה — הוסיפו חללים.
+        </div>
+      ) : (
+        <div style={{
+          display:             'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap:                 8,
+        }}>
+          {kids.map(child => {
+            const removable = canRemoveChild(child)
+            return (
+              <RoomChip
+                key={child.id}
+                label={childLabel(child)}
+                isContainer={false}
+                disabled={disabled || !removable}
+                blockedReason={
+                  !removable
+                    ? 'לא ניתן להסיר — לפחות אחד מסוג זה נדרש ביחידה'
+                    : null
+                }
+                onRemove={() => onRemoveChild(child.id)}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      {/* Footer — add-child control scoped to THIS container. */}
+      {!disabled && (
+        <div>
+          <button
+            type="button"
+            onClick={onTogglePalette}
+            style={{
+              background:   '#ffffff',
+              color:        SAGE_DARK,
+              border:       `1px dashed ${SAGE}`,
+              borderRadius: 6,
+              padding:      '5px 12px',
+              fontFamily:   'inherit',
+              fontSize:     12,
+              fontWeight:   600,
+              cursor:       'pointer',
+            }}
+          >
+            {paletteOpen ? '− סגור' : '＋ הוסף חלל ליחידה'}
+          </button>
+          {paletteOpen && (
+            childTypes.length === 0 ? (
+              <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8 }}>
+                אין סוגי חללים זמינים ליחידה זו.
+              </div>
+            ) : (
+              <div style={{
+                display:             'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap:                 8,
+                marginTop:           8,
+              }}>
+                {childTypes.map(t => (
+                  <PaletteButton
+                    key={t}
+                    label={displayType(t)}
+                    count={kids.filter(c => c.type === t).length}
+                    disabled={disabled}
+                    onClick={() => onAddChild(t)}
+                  />
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1958,6 +2554,7 @@ function RoomChip({ label, isContainer, disabled, onRemove }) {
 */
 function MiniHouse({
   activeAreas, activeAreaKey, onSelectArea, rooms, roof, roomLabel,
+  isContainerType,
 }) {
   const hasFirst    = activeAreas.includes('first')
   const hasGround   = activeAreas.includes('ground')
@@ -2037,6 +2634,8 @@ function MiniHouse({
             onSelect={() => onSelectArea('first')}
             rooms={rooms.first || []}
             roomLabel={roomLabel}
+            isContainerType={isContainerType}
+            compact={yardExpanded}
           />
         </div>
       )}
@@ -2068,6 +2667,8 @@ function MiniHouse({
               onSelect={() => onSelectArea('ground')}
               rooms={rooms.ground || []}
               roomLabel={roomLabel}
+              isContainerType={isContainerType}
+              compact={yardExpanded}
             />
           </div>
           {hasYard && (
@@ -2087,6 +2688,8 @@ function MiniHouse({
                   onSelect={() => onSelectArea('yard')}
                   rooms={rooms.yard || []}
                   roomLabel={roomLabel}
+                  isContainerType={isContainerType}
+                  compact={yardExpanded}
                   onToggleCollapse={() => setYardOpen(false)}
                 />
               ) : (
@@ -2127,6 +2730,8 @@ function MiniHouse({
             onSelect={() => onSelectArea('basement')}
             rooms={rooms.basement || []}
             roomLabel={roomLabel}
+            isContainerType={isContainerType}
+            compact={yardExpanded}
           />
         </div>
       )}
@@ -2266,7 +2871,10 @@ function YardStrip({ active, count, onSelect, onToggleCollapse }) {
    "outside the house". Active state = sage-tinted background.
    `onToggleCollapse` (yard only) renders a chevron in the header
    that folds the box back into its thin strip. */
-function FloorBox({ areaKey, active, onSelect, rooms, roomLabel, variant, onToggleCollapse }) {
+function FloorBox({
+  areaKey, active, onSelect, rooms, roomLabel, variant, onToggleCollapse,
+  isContainerType, compact = false,
+}) {
   const isYard = variant === 'yard'
   /* Chip columns per box. The yard is a narrow side box, so 3 chips
      across squeezed each name down to a single letter — it gets 2
@@ -2371,14 +2979,26 @@ function FloorBox({ areaKey, active, onSelect, rooms, roomLabel, variant, onTogg
           marginTop:           4,
         }}>
           {rooms.map(r => (
-            /* MiniChip — deliberately SMALL. The uniform ROOM_BTN
+            /* Containers get a full-width strip listing their
+               children inline; regular rooms stay small chips.
+
+               MiniChip — deliberately SMALL. The uniform ROOM_BTN
                size is for the palette + current-rooms chips beneath
                the sketch; inside the sketch we keep the tiny compact
                look (pre-uniform styling). MiniChip's SmartText
                abbreviates long labels ("חדר ילדים" → "ח. ילדים",
                "פינת קפה" → "פ. קפה") only when the full label
                would overflow the chip's width. */
-            <MiniChip key={r.id} text={roomLabel(r)} />
+            (isContainerType && isContainerType(r.type)) ? (
+              <MiniContainerLine
+                key={r.id}
+                room={r}
+                roomLabel={roomLabel}
+                compact={compact}
+              />
+            ) : (
+              <MiniChip key={r.id} text={roomLabel(r)} />
+            )
           ))}
         </div>
       )}
@@ -2386,36 +3006,80 @@ function FloorBox({ areaKey, active, onSelect, rooms, roomLabel, variant, onTogg
   )
 }
 
+/* hasCharacterization — is this room actually characterized?
+   Derived PURELY from the saved room object (answers.house.rooms),
+   so the answer survives a page reload — unlike the old ephemeral
+   `characterizedIds` Set, which was rebuilt per-mount and lost its
+   meaning because houseFromJSON re-issues room ids on hydration.
+
+   A room counts as characterized when it has at least one PROPERTY
+   chosen — under the array shape that means:
+     · any props group array holds at least one entry
+     · or any non-empty freeProps entry
+   The SIZE deliberately does not count: every room is created with
+   an enforced default sizeKey, so counting it would mark every room
+   as characterized the moment it's added. */
+function hasCharacterization(room) {
+  if (!room) return false
+  const p = room.props || {}
+  for (const k of Object.keys(p)) {
+    const v = p[k]
+    if (Array.isArray(v) && v.some(x => typeof x === 'string' && x.trim() !== '')) {
+      return true
+    }
+  }
+  return Array.isArray(room.freeProps)
+    && room.freeProps.some(x => typeof x === 'string' && x.trim() !== '')
+}
+
+/* roomDisplayName — the ONE naming scheme for a queue item. A room
+   inside a container is prefixed with its unit ("יחידת סוויטה -
+   חדר רחצה"); a top-level room is just its own label. Shared by the
+   step-3 card heading and the room picker so the two can never
+   disagree. */
+function roomDisplayName(room, container, roomLabel) {
+  if (!room) return ''
+  return container
+    ? `${roomLabel(container)} - ${roomLabel(room)}`
+    : roomLabel(room)
+}
+
+/* roomSizeLabel — the room's size as the size selector displays it
+   (קטן / בינוני / גדול), or null when there is none to show. A
+   fixed-area type has no size selector, so it has no size label —
+   the summary renders such a room without parentheses. */
+function roomSizeLabel(room, config) {
+  if (!room) return null
+  const isFixed = !!(config && config.hasFixedArea && config.hasFixedArea(room.type))
+  if (isFixed) return null
+  return SIZE_LABELS_MAP[room.sizeKey] || null
+}
+
 /* roomCharacteristics — flattens one room's stored answers into an
    ordered list of human-readable labels, for the step-3 summary:
-     · size    → קטן / בינוני / גדול (skipped for fixed-area types,
-                 which don't ask the size question at all)
-     · props   → walks the SAME config groups the editor renders, so
-                 order matches what the user saw. Radio groups store
-                 the chosen option text under props['r'+gi];
-                 checkbox groups store a bool under props['c'+gi+'_'+opt].
+     · props   → walks the SAME config groups the editor renders, in
+                 config group order and within each group its option
+                 order, so the line matches what the user saw. Each
+                 group holds an ARRAY of selected labels; every one
+                 of them is listed.
      · freeProps → the user's own "מאפיין אחר" entries, appended last.
+   The SIZE is deliberately NOT included — the summary shows it in
+   parentheses on the name line instead (see roomSizeLabel).
    Read-only derivation — never mutates the room. */
 function roomCharacteristics(room, config) {
   if (!room) return []
   const out = []
 
-  const isFixed = !!(config && config.hasFixedArea && config.hasFixedArea(room.type))
-  if (!isFixed && SIZE_LABELS_MAP[room.sizeKey]) {
-    out.push(SIZE_LABELS_MAP[room.sizeKey])
-  }
-
   const propsDef = (config && config.ROOM_PROPS && config.ROOM_PROPS[room.type]) || DEFAULT_PROPS
   const p = room.props || {}
   propsDef.forEach((group, gi) => {
-    if (group.radio) {
-      const v = p['r' + gi]
-      if (v) out.push(v)
-    } else {
-      (group.opts || []).forEach(opt => {
-        if (p['c' + gi + '_' + opt]) out.push(opt)
-      })
-    }
+    const sel = p[propGroupKey(gi)]
+    if (!Array.isArray(sel) || sel.length === 0) return
+    /* Emit in the group's own option order (not selection order) so
+       the summary line reads consistently between rooms. */
+    ;(group.opts || []).forEach(opt => {
+      if (sel.includes(opt)) out.push(opt)
+    })
   })
 
   ;(room.freeProps || []).forEach(fp => {
@@ -2447,26 +3111,31 @@ function areaKeyLabel(k) {
       the layout visible. */
 function Step3Characterization({
   queue, index, onIndexChange,
-  findQueueRoom, characterizedIds,
+  findQueueRoom, findQueueContainer, characterizedIds,
   config, displayType, roomLabel,   // eslint-disable-line no-unused-vars
   FLOOR_DEFS, YARD_LABEL,
   setQueueRoomSize,
-  setQueueRoomRadio,
-  toggleQueueRoomCheckbox,
+  toggleQueueRoomOption,
   addQueueRoomFreeProp,
   removeQueueRoomFreeProp,
   onFinish, readOnly,
 }) {
   const total = queue.length
   const [freePropText, setFreePropText] = useState('')
+  /* "מאפיין חדש" expander — collapsed by default. */
+  const [freePropOpen, setFreePropOpen] = useState(false)
   /* Read-only at-a-glance overview of every characterized room.
      Swaps the guided body while open. */
   const [showSummary, setShowSummary] = useState(false)
 
   /* Reset the free-prop draft on room change so users don't
      accidentally add the previous room's typed-but-unsubmitted text
-     to the next room. */
-  useEffect(() => { setFreePropText('') }, [index])
+     to the next room, and re-collapse the expander so every room
+     starts from the same quiet state. */
+  useEffect(() => {
+    setFreePropText('')
+    setFreePropOpen(false)
+  }, [index])
 
   /* Empty queue — user has no rooms yet. Prompt them back to step 2. */
   if (total === 0) {
@@ -2487,117 +3156,6 @@ function Step3Characterization({
     )
   }
 
-  /* ── SUMMARY VIEW ──
-     Read-only overview of every characterized room, in queue order
-     (ground → first → basement → yard). Swaps out the guided body;
-     "חזרה לאפיון" returns to exactly where the user left off (the
-     queue index is untouched). */
-  if (showSummary) {
-    const rows = queue
-      .filter(q => characterizedIds.has(q.roomId))
-      .map(q => {
-        const r = findQueueRoom(q)
-        if (!r) return null
-        return {
-          key:   `${q.areaKey}-${q.roomId}`,
-          label: roomLabel(r),
-          area:  areaKeyLabel(q.areaKey),
-          chars: roomCharacteristics(r, config),
-        }
-      })
-      .filter(Boolean)
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, direction: 'rtl' }}>
-        {/* Header — title + close control */}
-        <div style={{
-          display:        'flex',
-          alignItems:     'center',
-          justifyContent: 'space-between',
-          gap:            10,
-          padding:        '0 2px',
-        }}>
-          <span style={{ fontSize: 14, color: CHARCOAL, fontWeight: 700 }}>
-            תצוגה סיכומית
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowSummary(false)}
-            style={{
-              background:   '#ffffff',
-              color:        SAGE_DARK,
-              border:       `1px solid ${BORDER}`,
-              borderRadius: 8,
-              padding:      '6px 12px',
-              fontFamily:   'inherit',
-              fontSize:     12.5,
-              fontWeight:   600,
-              cursor:       'pointer',
-              flexShrink:   0,
-            }}
-          >
-            חזרה לאפיון
-          </button>
-        </div>
-
-        {rows.length === 0 ? (
-          <div style={{
-            background:   '#ffffff',
-            border:       `1px dashed ${BORDER}`,
-            borderRadius: 10,
-            padding:      '28px 20px',
-            textAlign:    'center',
-            color:        MUTED,
-            fontSize:     13.5,
-            lineHeight:   1.5,
-          }}>
-            עדיין לא אופיינו חללים.
-          </div>
-        ) : (
-          <div style={{
-            background:   '#ffffff',
-            border:       `1px solid ${BORDER}`,
-            borderRadius: 12,
-            padding:      '4px 14px',
-          }}>
-            {rows.map((row, i) => (
-              <div
-                key={row.key}
-                style={{
-                  padding:   '10px 0',
-                  borderTop: i === 0 ? 'none' : `1px solid ${BORDER}`,
-                }}
-              >
-                {/* Line 1 — numbered room name (V1 numbering) + floor */}
-                <div style={{
-                  display:    'flex',
-                  alignItems: 'baseline',
-                  gap:        6,
-                  flexWrap:   'wrap',
-                }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: CHARCOAL, lineHeight: 1.3 }}>
-                    {row.label}
-                  </span>
-                  <span style={{ fontSize: 11, color: MUTED }}>
-                    {row.area}
-                  </span>
-                </div>
-                {/* Line 2 — all characteristics, comma-joined */}
-                <div style={{
-                  marginTop:  3,
-                  fontSize:   12.5,
-                  color:      INPUT_TEXT,
-                  lineHeight: 1.6,
-                }}>
-                  {row.chars.length > 0 ? row.chars.join(', ') : '—'}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    )
-  }
 
   const item = queue[index]
   const room = item ? findQueueRoom(item) : null
@@ -2616,10 +3174,26 @@ function Step3Characterization({
   const isFixed  = !!(config && config.hasFixedArea && config.hasFixedArea(room.type))
   const propsDef = (config && config.ROOM_PROPS && config.ROOM_PROPS[room.type]) || DEFAULT_PROPS
 
-  const characterizedCount = queue.reduce(
-    (n, q) => n + (characterizedIds.has(q.roomId) ? 1 : 0),
-    0
-  )
+  /* Rooms of the CURRENTLY SELECTED floor, in queue order. Drives
+     both the "N אופיינו" counter and the summary list, so the two
+     always agree and both re-derive when the floor changes. */
+  const floorItems = queue
+    /* `qi` = the item's index in the FULL queue, kept so the room
+       picker can jump straight to it via onIndexChange.
+       `c` = the owning container (null for a top-level room) so the
+       summary rows can name themselves the same way the step-3
+       heading does. */
+    .map((q, qi) => ({ q, qi, r: findQueueRoom(q), c: findQueueContainer(q) }))
+    .filter(x => x.q.areaKey === item.areaKey && x.r)
+
+  /* Container of the room currently being characterized, if any. */
+  const itemContainer = findQueueContainer(item)
+
+  /* Count read straight off the SAVED rooms (not ephemeral state),
+     scoped to this floor — matches the "חלל X מתוך Y ב{מפלס}"
+     counter sitting on the same row, and survives a reload. */
+  const characterizedCount = floorItems
+    .reduce((n, x) => n + (hasCharacterization(x.r) ? 1 : 0), 0)
 
   /* Per-floor counter: within the current item's floor, what
      position out of how many rooms. Queue is already ordered
@@ -2637,9 +3211,14 @@ function Step3Characterization({
 
   const submitFreeProp = () => {
     const t = freePropText.trim()
+    /* Empty input → no-op, and the expander deliberately stays open
+       so the user can just type. */
     if (!t) return
     addQueueRoomFreeProp(item, t)
     setFreePropText('')
+    /* Successful add → collapse again; the new entry is now visible
+       as a selected chip in the grid above. */
+    setFreePropOpen(false)
   }
 
   /* Floor-selector options: only floors that have at least one
@@ -2701,13 +3280,13 @@ function Step3Characterization({
         </span>
         <span style={{ fontSize: 12, color: MUTED }}>
           {characterizedCount} אופיינו
-          {/* Inline link into the read-only overview of everything
-              characterized so far. Subtle sage text-link so it reads
-              as secondary to the counter it follows. */}
+          {/* Single toggle for the summary — same position, same
+              styling in both states; only the label flips. This is
+              the ONLY control that opens/closes the summary. */}
           {' '}
           <button
             type="button"
-            onClick={() => setShowSummary(true)}
+            onClick={() => setShowSummary(v => !v)}
             style={{
               background:     'none',
               border:         'none',
@@ -2720,11 +3299,24 @@ function Step3Characterization({
               cursor:         'pointer',
             }}
           >
-            (לתצוגה סיכומית)
+            {showSummary ? '(חזרה לאפיון)' : '(לתצוגה סיכומית)'}
           </button>
         </span>
       </div>
 
+      {/* ── SUMMARY vs SINGLE-ROOM ──
+          The summary replaces ONLY this block. Everything above it
+          (progress bar, "שלב 3 מתוך 3", companion bubble, floor
+          selector, the counter row + toggle link) and the sticky
+          footer below all stay mounted. Because the list derives
+          from `floorItems`, switching floors while the summary is
+          open just re-renders it for the newly selected floor —
+          the summary stays open. The queue `index` is never touched
+          by the toggle, so closing returns to the same room. */}
+      {showSummary ? (
+        <SummaryPanel floorItems={floorItems} config={config} roomLabel={roomLabel} />
+      ) : (
+      <>
       {/* Room card — big header + controls */}
       <div style={{
         background:   '#ffffff',
@@ -2736,15 +3328,20 @@ function Step3Characterization({
         gap:          14,
         direction:    'rtl',
       }}>
-        {/* Header: numbered room label + floor context */}
-        <div>
+        {/* Title block — room name + grey floor subtitle only. The
+            size control moved out to its own row below. */}
+        <div style={{ minWidth: 0 }}>
           <div style={{
             fontSize:   19,
             fontWeight: 700,
             color:      CHARCOAL,
             lineHeight: 1.25,
           }}>
-            {roomLabel(room)}
+            {/* A room inside a container carries its unit in the
+                heading itself ("יחידת סוויטה - חדר רחצה"); a
+                top-level room keeps the plain label. Shared with
+                the room picker via roomDisplayName. */}
+            {roomDisplayName(room, itemContainer, roomLabel)}
           </div>
           <div style={{
             marginTop:  3,
@@ -2752,147 +3349,168 @@ function Step3Characterization({
             color:      MUTED,
             lineHeight: 1.4,
           }}>
+            {/* Floor only — the "בתוך יחידה" fragment moved into the
+                heading above, so it isn't stated twice. */}
             {areaKeyLabel(item.areaKey)}
-            {item.parentId != null ? ' · בתוך יחידה' : ''}
           </div>
         </div>
 
-        {/* Size selector — segmented S/M/L in [L, M, S] DOM order
-            (paints as visual [גדול | בינוני | קטן] under RTL, same
-            as V1). Hidden for fixed-area room types. */}
+        {/* ── גודל — classic radio group ──
+            A compact inline row of radios, not a full-width control.
+            Labels are the short letters S / M / L, but the value
+            written is the SAME config size key as before, so nothing
+            about storage changes. A fixed-area room asks no size
+            question at all — neither the control nor this heading
+            renders for it. */}
         {!isFixed && (
           <div>
-            <FieldLabel>גודל החלל</FieldLabel>
-            <Segmented
-              options={SIZE_KEYS_IN_ORDER.map(k => ({ value: k, label: SIZE_LABELS_MAP[k] }))}
-              selected={SIZE_LABELS_MAP[room.sizeKey] ? room.sizeKey : 'M'}
-              onSelect={(v) => setQueueRoomSize(item, v)}
-              disabled={readOnly}
-              ariaLabel="גודל החלל"
-            />
+            <FieldLabel>גודל</FieldLabel>
+            <div
+              role="radiogroup"
+              aria-label="גודל"
+              style={{
+                display:    'flex',
+                alignItems: 'center',
+                gap:        16,
+                direction:  'rtl',
+              }}
+            >
+              {SIZE_KEYS_IN_ORDER.map(k => (
+                <SizeRadio
+                  key={k}
+                  /* Short letter for display; `k` stays the stored key. */
+                  label={k}
+                  selected={(SIZE_LABELS_MAP[room.sizeKey] ? room.sizeKey : 'M') === k}
+                  disabled={readOnly}
+                  onSelect={() => setQueueRoomSize(item, k)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Prop groups from config (or DEFAULT_PROPS fallback).
-            radio → connected Segmented single-select.
-            else  → gapped MultiToggle chips (multi-select). */}
-        {propsDef.map((group, gi) => {
-          const radioValue = ((room.props || {})['r' + gi]) || null
-          return (
-            <div key={gi}>
-              {!group.noTitle && <FieldLabel>{group.t}</FieldLabel>}
-              {group.radio ? (
-                <Segmented
-                  options={group.opts.map(opt => ({ value: opt, label: opt }))}
-                  selected={radioValue}
-                  onSelect={(v) => setQueueRoomRadio(item, gi, v)}
-                  disabled={readOnly}
-                  ariaLabel={group.t}
-                />
-              ) : (
-                <div style={{
-                  display:   'flex',
-                  flexWrap:  'wrap',
-                  gap:       6,
-                  direction: 'rtl',
-                }}>
-                  {group.opts.map(opt => {
-                    const key = 'c' + gi + '_' + opt
-                    const selected = !!((room.props || {})[key])
-                    return (
-                      <MultiToggle
-                        key={opt}
-                        label={opt}
-                        selected={selected}
-                        onClick={() => toggleQueueRoomCheckbox(item, gi, opt)}
-                        disabled={readOnly}
-                      />
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {/* Free "מאפיין אחר" — text input + submit + removable chip
-            list. Same shape V1 writes (freeProps: string[]). */}
+        {/* ── מאפיינים — ONE flat grid ──
+            Every option of every config group, flattened, 3 per row,
+            all chips identical. No group sub-headings are rendered.
+            Every chip is an INDEPENDENT toggle: the config's
+            single/multi `type` is deliberately ignored here, so
+            picking one option never clears a sibling.
+            Custom "מאפיין אחר" entries join this same grid (already
+            selected, with a × that deletes rather than toggles). */}
         <div>
-          <FieldLabel>מאפיין אחר</FieldLabel>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, direction: 'rtl' }}>
-            <TextInput
-              value={freePropText}
-              onChange={setFreePropText}
-              placeholder="הוסיפו מאפיין משלכם"
-              readOnly={readOnly}
-              ariaLabel="מאפיין אחר"
-              style={{ flex: '1 1 auto', minWidth: 0 }}
-            />
-            <button
-              type="button"
-              onClick={submitFreeProp}
-              disabled={readOnly || !freePropText.trim()}
-              aria-label="הוסף מאפיין"
-              style={{
-                background:   SAGE,
-                color:        '#ffffff',
-                border:       `1px solid ${SAGE_DARK}`,
-                borderRadius: 8,
-                padding:      '8px 14px',
-                fontFamily:   'inherit',
-                fontSize:     13,
-                fontWeight:   600,
-                cursor:       (readOnly || !freePropText.trim()) ? 'not-allowed' : 'pointer',
-                opacity:      (readOnly || !freePropText.trim()) ? 0.55 : 1,
-                flexShrink:   0,
-              }}
-            >
-              ＋ הוסף
-            </button>
+          <FieldLabel>מאפיינים</FieldLabel>
+          <div style={{
+            display:             'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap:                 8,
+            direction:           'rtl',
+          }}>
+            {propsDef.map((group, gi) => {
+              const sel = (room.props || {})[propGroupKey(gi)]
+              const selArr = Array.isArray(sel) ? sel : []
+              return (group.opts || []).map(opt => (
+                <PropChip
+                  key={`${gi}-${opt}`}
+                  label={opt}
+                  selected={selArr.includes(opt)}
+                  disabled={readOnly}
+                  onClick={() => toggleQueueRoomOption(item, gi, opt)}
+                />
+              ))
+            })}
+            {/* Custom characteristics live in the SAME grid, always
+                in the selected state; × removes them outright. */}
+            {(room.freeProps || []).map((fp, i) => (
+              <PropChip
+                key={`free-${i}`}
+                label={fp}
+                selected
+                disabled={readOnly}
+                onRemove={readOnly ? null : () => removeQueueRoomFreeProp(item, i)}
+              />
+            ))}
           </div>
-          {(room.freeProps || []).length > 0 && (
-            <div style={{
-              display:   'flex',
-              flexWrap:  'wrap',
-              gap:       ROOM_BTN.GAP,
-              direction: 'rtl',
-              marginTop: 8,
+        </div>
+
+        {/* "מאפיין חדש" — collapsed by default. Expanding reveals the
+            same input + add button as before, unchanged in behaviour.
+            A successful add collapses it again and clears the input
+            (see submitFreeProp); the new entry shows up as a selected
+            chip in the grid above. An empty add does nothing and
+            leaves the expander open. Same chevron vocabulary as the
+            portal's other expanders. */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setFreePropOpen(v => !v)}
+            aria-expanded={freePropOpen}
+            style={{
+              display:        'flex',
+              alignItems:     'center',
+              gap:            6,
+              width:          '100%',
+              background:     'none',
+              border:         'none',
+              padding:        '2px 0',
+              margin:         0,
+              fontFamily:     'inherit',
+              fontSize:       12.5,
+              fontWeight:     600,
+              color:          CHARCOAL,
+              cursor:         'pointer',
+              direction:      'rtl',
+              textAlign:      'right',
+            }}
+          >
+            <span>מאפיין חדש</span>
+            <span style={{
+              display:    'inline-flex',
+              transform:  freePropOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
+              color:      MUTED,
+              lineHeight: 1,
             }}>
-              {(room.freeProps || []).map((fp, i) => (
-                /* Free-prop chips use the same shared uniform button
-                   size (sage-filled variant + inline × when writable)
-                   so this list reads as part of the same tile family
-                   used everywhere else in step 2/3. */
-                <span key={i} style={roomButtonStyle({ selected: true, disabled: readOnly })} title={fp}>
-                  <RoomBtnLabel color="#ffffff">{fp}</RoomBtnLabel>
-                  {!readOnly && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); removeQueueRoomFreeProp(item, i) }}
-                      aria-label={`הסר ${fp}`}
-                      title={`הסר ${fp}`}
-                      style={{
-                        background:   'transparent',
-                        border:       'none',
-                        padding:      0,
-                        width:        18,
-                        height:       18,
-                        borderRadius: 999,
-                        display:      'inline-flex',
-                        alignItems:   'center',
-                        justifyContent:'center',
-                        color:        '#ffffff',
-                        cursor:       'pointer',
-                        fontSize:     14,
-                        lineHeight:   1,
-                        flexShrink:   0,
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
+              <IconChevron size={14} />
+            </span>
+          </button>
+
+          {freePropOpen && (
+            <div style={{
+              display:    'flex',
+              alignItems: 'center',
+              gap:        6,
+              direction:  'rtl',
+              marginTop:  8,
+            }}>
+              <TextInput
+                value={freePropText}
+                onChange={setFreePropText}
+                placeholder="הוסיפו מאפיין משלכם"
+                readOnly={readOnly}
+                ariaLabel="מאפיין חדש"
+                style={{ flex: '1 1 auto', minWidth: 0 }}
+              />
+              <button
+                type="button"
+                onClick={submitFreeProp}
+                disabled={readOnly || !freePropText.trim()}
+                aria-label="הוסף מאפיין"
+                style={{
+                  background:   SAGE,
+                  color:        '#ffffff',
+                  border:       `1px solid ${SAGE_DARK}`,
+                  borderRadius: 8,
+                  padding:      '8px 14px',
+                  fontFamily:   'inherit',
+                  fontSize:     13,
+                  fontWeight:   600,
+                  cursor:       (readOnly || !freePropText.trim()) ? 'not-allowed' : 'pointer',
+                  opacity:      (readOnly || !freePropText.trim()) ? 0.55 : 1,
+                  flexShrink:   0,
+                }}
+              >
+                ＋ הוסף
+              </button>
             </div>
           )}
         </div>
@@ -2918,13 +3536,325 @@ function Step3Characterization({
           disabled={index === 0}
           onClick={() => onIndexChange(index - 1)}
         />
+        {/* Centre: jump straight to any space on THIS floor instead
+            of paging. space-between with three children centres it. */}
+        <RoomPicker
+          items={floorItems}
+          currentIndex={index}
+          roomLabel={roomLabel}
+          onPick={(qi) => onIndexChange(qi)}
+        />
         <RoomNavLink
           label="לחלל הבא"
           disabled={index >= total - 1}
           onClick={() => onIndexChange(index + 1)}
         />
       </div>
+      </>
+      )}
     </div>
+  )
+}
+
+/* SummaryPanel — read-only overview of the CURRENTLY SELECTED
+   floor's rooms. Renders in place of the single-room card, directly
+   under the counter row. Two lines per room: the numbered name (V1
+   numbering) and all its characteristics comma-joined. Only rooms
+   that are actually characterized are listed — same rule the
+   "N אופיינו" counter on the row above uses, so the two agree. */
+function SummaryPanel({ floorItems, config, roomLabel }) {
+  /* Only characterized rooms appear — so a container whose children
+     all fail this filter contributes nothing and its block is never
+     created (no empty heading). */
+  const qualifying = floorItems.filter(x => hasCharacterization(x.r))
+
+  /* Group CONSECUTIVE items that share a container into one block.
+     The queue emits a container's children back-to-back at the
+     container's own position in the floor order, so grouping
+     consecutively preserves the overall ordering exactly. */
+  const blocks = []
+  for (const x of qualifying) {
+    const cid  = x.c ? x.c.id : null
+    const last = blocks[blocks.length - 1]
+    if (cid != null && last && last.containerId === cid) {
+      last.children.push(x)
+      continue
+    }
+    if (cid != null) {
+      blocks.push({
+        kind:        'container',
+        key:         `unit-${x.q.areaKey}-${cid}`,
+        containerId: cid,
+        container:   x.c,
+        children:    [x],
+      })
+    } else {
+      blocks.push({
+        kind: 'room',
+        key:  `${x.q.areaKey}-${x.q.roomId}`,
+        item: x,
+      })
+    }
+  }
+
+  /* The two-line shape every summary entry uses: bold name, then
+     comma-joined characteristics in the muted colour beneath. */
+  /* Row shape:
+       line 1 — name, plus the size in parentheses when the room has
+                one (a fixed-area type has no size selector, so it
+                gets no parentheses).
+       line 2 — "מאפיינים:" + every characteristic EXCEPT the size,
+                comma-separated, freeProps last. Omitted entirely
+                when there is nothing to list, so a room whose only
+                characteristic was its size shows just line 1 rather
+                than an empty "מאפיינים:" line.
+     The prefix carries the same muted styling as the rest of the
+     line — deliberately not bold, no new colour. */
+  const twoLine = (label, sizeLabel, chars) => (
+    <>
+      <div style={{ fontSize: 14, fontWeight: 700, color: CHARCOAL, lineHeight: 1.3 }}>
+        {label}
+        {sizeLabel && (
+          /* The size rides on the same line right after the name, but
+             steps down to the second line's styling — normal weight,
+             12.5px, muted — so only the room name reads as bold. */
+          <span style={{
+            fontSize:   12.5,
+            fontWeight: 400,
+            color:      INPUT_TEXT,
+          }}>{` (${sizeLabel})`}</span>
+        )}
+      </div>
+      {chars.length > 0 && (
+        <div style={{
+          marginTop:  3,
+          fontSize:   12.5,
+          color:      INPUT_TEXT,
+          lineHeight: 1.6,
+        }}>
+          {`מאפיינים: ${chars.join(', ')}`}
+        </div>
+      )}
+    </>
+  )
+
+  if (qualifying.length === 0) {
+    return (
+      <div style={{
+        background:   '#ffffff',
+        border:       `1px dashed ${BORDER}`,
+        borderRadius: 12,
+        padding:      '28px 20px',
+        textAlign:    'center',
+        color:        MUTED,
+        fontSize:     13.5,
+        lineHeight:   1.5,
+        direction:    'rtl',
+      }}>
+        עדיין לא אופיינו חללים במפלס זה.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      background:   '#ffffff',
+      border:       `1px solid ${BORDER}`,
+      borderRadius: 12,
+      padding:      '4px 14px',
+      direction:    'rtl',
+    }}>
+      {/* One entry per BLOCK. A container block is a single entry —
+          so it gets one separator above it (and the next entry's
+          separator closes it below), with NO separators between the
+          children inside. */}
+      {blocks.map((block, i) => (
+        <div
+          key={block.key}
+          style={{
+            padding:   '10px 0',
+            borderTop: i === 0 ? 'none' : `1px solid ${BORDER}`,
+          }}
+        >
+          {block.kind === 'room' ? (
+            twoLine(
+              roomLabel(block.item.r),
+              roomSizeLabel(block.item.r, config),
+              roomCharacteristics(block.item.r, config),
+            )
+          ) : (
+            <>
+              {/* Container heading — label only. A container has no
+                  properties, so no characteristics line. */}
+              <div style={{ fontSize: 14, fontWeight: 700, color: CHARCOAL, lineHeight: 1.3 }}>
+                {roomLabel(block.container)}
+              </div>
+              {/* Children, indented inward. RTL: paddingInlineStart
+                  is the visual RIGHT side, so the nesting reads
+                  correctly. The child name carries NO unit prefix —
+                  the heading above already states it. */}
+              <div style={{ paddingInlineStart: 12 }}>
+                {block.children.map((x, ci) => (
+                  <div
+                    key={`${x.q.areaKey}-${x.q.roomId}`}
+                    style={{ marginTop: ci === 0 ? 8 : 10 }}
+                  >
+                    {twoLine(
+                      roomLabel(x.r),
+                      roomSizeLabel(x.r, config),
+                      roomCharacteristics(x.r, config),
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* RoomPicker — "בחר חלל" dropdown sitting between the two room-nav
+   links. Lists every space on the CURRENTLY SELECTED floor in queue
+   order (the same order paging produces) and jumps straight to one.
+
+   · Entries reuse roomDisplayName, so a room inside a unit reads
+     "יחידת סוויטה - חדר רחצה" exactly as the card heading does.
+   · A ✓ marks spaces that are already characterized, via the shared
+     hasCharacterization predicate — no second definition.
+   · The current space is highlighted and marked aria-current.
+   · Closes on outside click and on Escape.
+   Trigger is a quiet TEXT control matching RoomNavLink's font size
+   and sage colour — it must not read as a heavy button competing
+   with the footer's step buttons. */
+function RoomPicker({ items, currentIndex, roomLabel, onPick }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <span ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        style={{
+          background:     'none',
+          border:         'none',
+          padding:        '2px 0',
+          margin:         0,
+          font:           'inherit',
+          fontSize:       12.5,
+          fontWeight:     600,
+          color:          SAGE_DARK,
+          textDecoration: 'underline',
+          cursor:         'pointer',
+          whiteSpace:     'nowrap',
+          display:        'inline-flex',
+          alignItems:     'center',
+          gap:            4,
+          direction:      'rtl',
+        }}
+      >
+        <span>בחר חלל</span>
+        <span style={{
+          display:    'inline-flex',
+          transform:  open ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.15s ease',
+          lineHeight: 1,
+        }}>
+          <IconChevron size={12} />
+        </span>
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position:     'absolute',
+            top:          'calc(100% + 6px)',
+            /* Centre the panel on the trigger. */
+            left:         '50%',
+            transform:    'translateX(-50%)',
+            zIndex:       20,
+            minWidth:     200,
+            maxWidth:     280,
+            maxHeight:    240,
+            overflowY:    'auto',
+            background:   '#ffffff',
+            border:       `1px solid ${BORDER}`,
+            borderRadius: 10,
+            boxShadow:    '0 4px 14px rgba(26,26,24,0.12)',
+            padding:      4,
+            direction:    'rtl',
+            textAlign:    'right',
+          }}
+        >
+          {items.map((x) => {
+            const isCurrent = x.qi === currentIndex
+            const done      = hasCharacterization(x.r)
+            return (
+              <button
+                key={`${x.q.areaKey}-${x.q.roomId}`}
+                type="button"
+                role="option"
+                aria-selected={isCurrent}
+                aria-current={isCurrent ? 'true' : undefined}
+                onClick={() => { onPick(x.qi); setOpen(false) }}
+                style={{
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          6,
+                  width:        '100%',
+                  boxSizing:    'border-box',
+                  background:   isCurrent ? SAGE_LITE : 'transparent',
+                  border:       'none',
+                  borderRadius: 6,
+                  padding:      '7px 8px',
+                  fontFamily:   'inherit',
+                  fontSize:     12.5,
+                  fontWeight:   isCurrent ? 700 : 400,
+                  color:        CHARCOAL,
+                  cursor:       'pointer',
+                  textAlign:    'right',
+                  direction:    'rtl',
+                  lineHeight:   1.4,
+                }}
+              >
+                {/* Fixed-width slot so labels align whether or not
+                    the ✓ is present. */}
+                <span style={{
+                  flexShrink: 0,
+                  width:      12,
+                  color:      SAGE_DARK,
+                  fontSize:   12,
+                }}>
+                  {done ? '✓' : ''}
+                </span>
+                <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {roomDisplayName(x.r, x.c, roomLabel)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </span>
   )
 }
 

@@ -23,6 +23,31 @@ import { DEFAULT_SIZE_KEY } from './houseSizeConfig'
    anything unrecognised back to DEFAULT_SIZE_KEY. */
 const VALID_SIZE_KEYS = new Set(['S', 'M', 'L'])
 
+/* Room props are now UNIFORM: one key per property group holding an
+   ARRAY of the selected option labels. Every option is an
+   independent toggle, so a group may hold zero, one, or many.
+   Normalised on READ only — houseToJSON keeps serialising whatever
+   the runtime holds.
+
+   Coercion rules (deliberately minimal, no migration machinery):
+     · array  → kept, filtered to strings
+     · string → wrapped as a one-element array. This is the legacy
+                single-select shape, so an old saved choice survives.
+     · anything else (e.g. the legacy per-option booleans) → dropped. */
+function normalizeProps(props) {
+  if (!props || typeof props !== 'object' || Array.isArray(props)) return {}
+  const out = {}
+  for (const [k, v] of Object.entries(props)) {
+    if (Array.isArray(v)) {
+      out[k] = v.filter(x => typeof x === 'string')
+    } else if (typeof v === 'string') {
+      out[k] = [v]
+    }
+    /* neither → drop the entry entirely */
+  }
+  return out
+}
+
 /* Fresh empty builder state — the safe fallback for hydration when
    the row has no house data yet, and the base object every hydration
    spreads onto. */
@@ -187,9 +212,7 @@ export function houseFromJSON(data) {
       id:        seq++,
       type:      r.type,
       sizeKey:   VALID_SIZE_KEYS.has(r.sizeKey) ? r.sizeKey : DEFAULT_SIZE_KEY,
-      props:     (r.props && typeof r.props === 'object' && !Array.isArray(r.props))
-                   ? { ...r.props }
-                   : {},
+      props:     normalizeProps(r.props),
       freeProps: Array.isArray(r.freeProps)
                    ? r.freeProps.filter(x => typeof x === 'string')
                    : [],

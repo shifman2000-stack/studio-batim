@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import QuotePreview from '../components/QuotePreview'
+import { signedQuoteOpenUrl, signedQuoteDownloadUrl } from '../lib/signedQuoteFile'
 
 // Fields the client is allowed to fill in / sign.
 // Everything else stays locked (rendered as static text).
@@ -227,6 +228,23 @@ export default function QuotePublic() {
     )
   }
 
+  /* Shared look for the two signed-document actions. */
+  const SIGNED_BTN = {
+    background:    '#1a1a18',
+    color:         '#f7f5f2',
+    border:        '1px solid #1a1a18',
+    padding:       '12px 28px',
+    fontFamily:    "'Heebo', sans-serif",
+    fontWeight:    300,
+    fontSize:      13,
+    letterSpacing: '0.12em',
+    borderRadius:  0,
+    cursor:        'pointer',
+  }
+  /* Feeds the ASCII download filename. Absent → the helper falls back to
+     "quote-signed.pdf", which is still a valid, readable name. */
+  const quoteNumber = version?.quote_number ?? null
+
   /* ── SUBMITTED — thank-you page ── */
   if (submitted) {
     return (
@@ -273,24 +291,33 @@ export default function QuotePublic() {
           }}>
             לכל שאלה אני זמינה: einav.studiob@gmail.com · 052-9593927
           </p>
+          {/* Offered whenever the version is signed — not only in the
+              moment after signing. A client returning to the same link
+              days later lands here (is_signed flips `submitted` on load)
+              and still gets the document. Two actions, because "open"
+              and "save a copy" are different needs.
+
+              An UNSIGNED quote never reaches this screen, so there is no
+              path here that offers a document without a signature. */}
           {signedFileUrl && (
-            <button
-              onClick={() => window.open(signedFileUrl, '_blank')}
-              style={{
-                background:    '#1a1a18',
-                color:         '#f7f5f2',
-                border:        '1px solid #1a1a18',
-                padding:       '12px 28px',
-                fontFamily:    "'Heebo', sans-serif",
-                fontWeight:    300,
-                fontSize:      13,
-                letterSpacing: '0.12em',
-                borderRadius:  0,
-                cursor:        'pointer',
-              }}
-            >
-              הורדת ההצעה החתומה
-            </button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => window.open(signedQuoteOpenUrl(signedFileUrl), '_blank', 'noopener,noreferrer')}
+                style={SIGNED_BTN}
+              >
+                צפייה בהצעה החתומה
+              </button>
+              <button
+                /* ?download=<ascii>.pdf — the storage server sends
+                   Content-Disposition: attachment. An <a download> would
+                   be ignored here because the file is on another origin. */
+                onClick={() => window.open(
+                  signedQuoteDownloadUrl(signedFileUrl, quoteNumber), '_blank', 'noopener,noreferrer')}
+                style={{ ...SIGNED_BTN, background: 'transparent', color: '#1a1a18' }}
+              >
+                הורדת ההצעה החתומה
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { generateUniqueAuthCode } from '../lib/generateAuthCode'
+import { signedQuoteOpenUrl, signedQuoteDownloadUrl } from '../lib/signedQuoteFile'
 import './Inquiries.css'
 
 /* ─────────── Status config ─────────── */
@@ -78,6 +79,35 @@ function IconCheckCircle({ size = 18, color = '#1D9E75' }) {
   )
 }
 
+/* Save icon for the signed-PDF download, sized to match QuoteIcon. */
+const IconDownload = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+    stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+)
+
+/* Where the הצעת מחיר icon goes.
+   A SIGNED quote opens the stored signed PDF — the document that
+   actually carries the client's signature. Every other status (and a
+   signed quote with no stored file) opens the builder exactly as
+   before. */
+function openQuote(inquiryId, quote) {
+  const signedUrl = quote?.status === 'signed'
+    ? signedQuoteOpenUrl(quote.signed_file_url)
+    : ''
+  const target = signedUrl || `/quote-builder/${inquiryId}`
+  window.open(target, '_blank', 'noopener,noreferrer')
+}
+
+function downloadSignedQuote(quote) {
+  const url = signedQuoteDownloadUrl(quote?.signed_file_url, quote?.quote_number)
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 /* ─────────── Quote status icon button ─────────── */
 function QuoteIcon({ quote, onClick }) {
   const formatHebrewDate = (iso) => {
@@ -129,9 +159,16 @@ function QuoteIcon({ quote, onClick }) {
     )
   }
 
-  // signed → green checkmark
+  // signed → green checkmark.
+  // Opens the STORED signed PDF when we have one; a signed quote with no
+  // signed_file_url (older row) keeps the old behaviour and opens the
+  // builder, so the tooltip tells the truth in both cases.
   return (
-    <button className="inq-status-trigger" onClick={onClick} title="נחתם — פתח עורך">
+    <button
+      className="inq-status-trigger"
+      onClick={onClick}
+      title={quote.signed_file_url ? 'נחתם — פתח מסמך חתום' : 'נחתם — פתח עורך'}
+    >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
         stroke="#1D9E75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -793,9 +830,12 @@ export default function Inquiries() {
     setLoading(true)
     const [{ data: inquiriesData }, { data: quotesData }, { data: versionsData }] = await Promise.all([
       supabase.from('inquiries').select('*').order('created_at', { ascending: false }),
-      supabase.from('quotes').select('id, inquiry_id, status, updated_at'),
+      // quote_number feeds the signed PDF's download filename.
+      supabase.from('quotes').select('id, inquiry_id, status, updated_at, quote_number'),
+      // ONE query for the whole table: the same rows carry both the
+      // latest sent_at and the signed version's stored PDF url.
       supabase.from('quote_versions')
-        .select('quote_id, sent_at, version_number')
+        .select('quote_id, sent_at, version_number, is_signed, signed_file_url')
         .not('form_token', 'is', null)
         .order('version_number', { ascending: false }),
     ])
@@ -804,16 +844,32 @@ export default function Inquiries() {
       const qMap = {}
       quotesData.forEach(q => { qMap[q.inquiry_id] = q })
 
-      // Attach the latest sent_at (versions already sorted desc by version_number,
-      // so first occurrence per quote_id is the most recent)
+      // quote_id → inquiry_id, built once instead of an Object.keys().find()
+      // per version row.
+      const inquiryIdByQuoteId = {}
+      quotesData.forEach(q => { inquiryIdByQuoteId[q.id] = q.inquiry_id })
+
       if (versionsData) {
-        const seen = new Set()
+        // Two independent picks over the SAME (version_number desc) list:
+        //   · sent_at        — first row per quote = the most recent version
+        //   · signed_file_url — first SIGNED row per quote that actually has
+        //     a file. A signed row without one (older quotes, signed before
+        //     the PDF was stored) simply leaves the field undefined, and the
+        //     icon falls back to opening the builder.
+        const seenSent   = new Set()
+        const seenSigned = new Set()
         versionsData.forEach(v => {
-          if (seen.has(v.quote_id)) return
-          seen.add(v.quote_id)
-          const inquiryId = Object.keys(qMap).find(iid => qMap[iid].id === v.quote_id)
-          if (inquiryId) {
+          const inquiryId = inquiryIdByQuoteId[v.quote_id]
+          if (!inquiryId || !qMap[inquiryId]) return
+
+          if (!seenSent.has(v.quote_id)) {
+            seenSent.add(v.quote_id)
             qMap[inquiryId] = { ...qMap[inquiryId], sent_at: v.sent_at }
+          }
+
+          if (v.is_signed && v.signed_file_url && !seenSigned.has(v.quote_id)) {
+            seenSigned.add(v.quote_id)
+            qMap[inquiryId] = { ...qMap[inquiryId], signed_file_url: v.signed_file_url }
           }
         })
       }
@@ -1118,8 +1174,19 @@ export default function Inquiries() {
                   <td className="inq-col-action" onClick={e => e.stopPropagation()}>
                     <QuoteIcon
                       quote={quotes[row.id] ?? null}
-                      onClick={() => window.open(`/quote-builder/${row.id}`, '_blank', 'noopener,noreferrer')}
+                      onClick={() => openQuote(row.id, quotes[row.id] ?? null)}
                     />
+                    {/* Explicit save, next to the open action. Only for a
+                        signed quote that actually has a stored file. */}
+                    {quotes[row.id]?.signed_file_url && (
+                      <button
+                        className="inq-status-trigger"
+                        title="הורד מסמך חתום"
+                        onClick={() => downloadSignedQuote(quotes[row.id])}
+                      >
+                        <IconDownload />
+                      </button>
+                    )}
                   </td>
 
                   {/* הפוך לפרויקט */}

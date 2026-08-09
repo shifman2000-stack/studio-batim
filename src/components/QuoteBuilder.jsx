@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import QuotePreview, { buildInitialData } from './QuotePreview'
+import { signedQuoteOpenUrl } from '../lib/signedQuoteFile'
 import { Send, Copy, Check, X } from 'lucide-react'
 import './QuoteBuilder.css'
 
@@ -16,6 +17,9 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
   const [sendResultModal,   setSendResultModal]   = useState(null)
   const [copied,            setCopied]            = useState(false)
   const [latestToken,       setLatestToken]       = useState(null)
+  /* Stored PDF of the signed version; '' when this quote isn't signed
+     or was signed before the file was kept. */
+  const [signedFileUrl,     setSignedFileUrl]     = useState('')
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   // Always-current reference to data, updated synchronously on every field change.
@@ -62,6 +66,20 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
           .limit(1)
           .maybeSingle()
         if (latestVer) setLatestToken(latestVer.form_token)
+
+        // The signed version's stored PDF — the only document that
+        // carries the signature. Absent for quotes signed before it
+        // was stored, which the PDF button handles by disabling itself.
+        const { data: signedVer } = await supabase
+          .from('quote_versions')
+          .select('signed_file_url')
+          .eq('quote_id', existing.id)
+          .eq('is_signed', true)
+          .not('signed_file_url', 'is', null)
+          .order('version_number', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (signedVer) setSignedFileUrl(signedVer.signed_file_url || '')
       } else {
         // No existing quote — show fresh data, create DB row only on first save
         const initial   = buildInitialData(inquiry)
@@ -205,6 +223,19 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
 
   /* ── Generate PDF via server-side Puppeteer ── */
   const handleGeneratePDF = async () => {
+    /* A SIGNED quote must never be exported through /quote-print/:quoteId.
+       That route renders draft_content WITHOUT the signature, so the PDF
+       it produces looks like a legitimate quote but is unsigned. Open the
+       stored signed document instead — the one the client actually
+       signed. The button is disabled when there is no stored file, so
+       this is belt-and-braces. */
+    if (isSigned) {
+      const url = signedQuoteOpenUrl(signedFileUrl)
+      if (!url) { flash('המסמך החתום אינו זמין') ; return }
+      window.open(url, '_blank', 'noopener,noreferrer')
+      return
+    }
+
     setIsPdfGenerating(true)
     flash('מייצר PDF…')
     try {
@@ -381,6 +412,7 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
 
   /* ── Derived read-only flag — true for any non-draft status ── */
   const isReadOnly = quoteStatus !== 'draft'
+  const isSigned   = quoteStatus === 'signed'
 
   /* ── Status label ── */
   const statusLabel = quoteStatus === 'draft' ? 'טיוטה'
@@ -432,12 +464,21 @@ export default function QuoteBuilder({ inquiry, onClose, onQuoteUpdated }) {
             תצוגה מקדימה
           </button>
 
+          {/* On a SIGNED quote this opens the stored signed document
+              rather than generating a fresh (unsigned) one. With no
+              stored file it is disabled — better a dead button with an
+              explanation than a PDF that silently lacks the signature. */}
           <button
             className="qb-btn qb-btn-ghost qp-no-print"
             onClick={handleGeneratePDF}
-            disabled={saving || isPdfGenerating}
+            disabled={saving || isPdfGenerating || (isSigned && !signedFileUrl)}
+            title={isSigned
+              ? (signedFileUrl ? 'פתח את המסמך החתום' : 'המסמך החתום אינו זמין')
+              : undefined}
           >
-            {isPdfGenerating ? 'מייצר PDF...' : 'שמירה כ־PDF'}
+            {isPdfGenerating ? 'מייצר PDF...'
+              : isSigned ? 'פתח מסמך חתום'
+              : 'שמירה כ־PDF'}
           </button>
 
           {!isReadOnly && (

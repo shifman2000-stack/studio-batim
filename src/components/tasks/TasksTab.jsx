@@ -371,74 +371,13 @@ export default function TasksTab({ projectId }) {
     setStagesLut(stagesLutData || [])
     setSubStages(subStagesData || [])
 
-    /* ── Step 1: clean up any duplicates (keep MIN id per project+template) ── */
-    const { data: allRows } = await supabase
+    /* ── Step 1: fetch current rows. Seeding from task_templates now
+       happens in a DB trigger at project-creation time, not here. ── */
+    const { data } = await supabase
       .from('project_tasks')
-      .select('id, project_id, template_id')
-      .not('template_id', 'is', null)
-      .order('id', { ascending: true })
-
-    if (allRows && allRows.length > 0) {
-      const seen     = new Map()
-      const toDelete = []
-      for (const row of allRows) {
-        const key = `${row.project_id}:${row.template_id}`
-        if (seen.has(key)) {
-          toDelete.push(row.id)
-        } else {
-          seen.set(key, row.id)
-        }
-      }
-      if (toDelete.length > 0) {
-        await supabase.from('project_tasks').delete().in('id', toDelete)
-      }
-    }
-
-    /* ── Step 2: use a count check before deciding to seed ── */
-    const { count } = await supabase
-      .from('project_tasks')
-      .select('*', { count: 'exact', head: true })
+      .select('*')
       .eq('project_id', projectId)
-
-    let data = null
-
-    if (count === 0) {
-      /* No rows yet — seed from templates */
-      const { data: templates } = await supabase
-        .from('task_templates')
-        .select('*')
-        .order('sort_order')
-
-      if (templates && templates.length > 0) {
-        const toInsert = templates.map(t => ({
-          project_id:   projectId,
-          template_id:  t.id,
-          stage:        t.stage,
-          stage_id:     t.stage_id ?? null,
-          sub_stage_id: t.sub_stage_id ?? null,
-          name:         t.name,
-          status:       'לא התחיל',
-          is_milestone: t.is_milestone ?? false,
-          sort_order:   t.sort_order ?? 0,
-        }))
-        const { data: inserted } = await supabase
-          .from('project_tasks')
-          .insert(toInsert)
-          .select('*')
-          .order('sort_order')
-        if (inserted) data = inserted
-      }
-    }
-
-    /* ── Step 3: fetch current rows if not already set from insert ── */
-    if (!data) {
-      const { data: fetched } = await supabase
-        .from('project_tasks')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('sort_order')
-      data = fetched
-    }
+      .order('sort_order')
 
     setTasks(data || [])
     const state = {}

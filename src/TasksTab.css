@@ -431,6 +431,15 @@
   opacity: 1;
 }
 
+/* Inline error when a whole-category delete is rejected — sits in the
+   category header next to the trash it belongs to. */
+.tt-cat-delete-error {
+  font-size: 11px;
+  font-weight: 500;
+  color: #a83232;
+  white-space: nowrap;
+}
+
 /* ── Inline delete confirmation ── */
 .tt-delete-confirm {
   display: flex;

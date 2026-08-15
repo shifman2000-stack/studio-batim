@@ -223,6 +223,20 @@ export function hasFixedArea(type) {
   return getFixedArea(type) !== null;
 }
 
+/* ─── Rooms excluded from the total house-area calculation ────────
+ * Room types whose area should NOT count toward the summed house
+ * size (e.g. a room type that overlaps another, or is otherwise
+ * outside what "house size" is meant to represent) — independent of
+ * whether the room is in fixed-area or sized (S/M/L) mode; whichever
+ * area it would otherwise contribute is simply skipped from the sum.
+ * None flagged today — the admin report is how these get added.
+ */
+export const EXCLUDE_FROM_AREA_CALC_TYPES = [];
+
+export function isExcludedFromAreaCalc(type) {
+  return EXCLUDE_FROM_AREA_CALC_TYPES.includes(type);
+}
+
 /* מאפייני ברירת מחדל לחלל שאין לו הגדרה ייעודית ב-ROOM_PROPS */
 export const DEFAULT_PROPS = [
   { t: 'אפיון', opts: ['דורש חלון', 'קרבה לחלל הציבורי', 'דגש מיוחד'] }

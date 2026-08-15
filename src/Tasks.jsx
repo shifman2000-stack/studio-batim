@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import NewTaskModal from './NewTaskModal'
+import { PdNotesCell } from './ProjectDetail'
 import './Tasks.css'
 
 // ── Constants (kept for display fallbacks) ──
@@ -649,7 +650,7 @@ export default function Tasks() {
                       </EditCell>
 
                       <EditCell {...editCellProps} task={task} field="notes" className="tasks-col-notes">
-                        <span className="tasks-cell-value">{task.notes || ''}</span>
+                        <PdNotesCell task={task} navigate={navigate} />
                       </EditCell>
 
                       <td className="tasks-col-delete" onClick={e => e.stopPropagation()}>

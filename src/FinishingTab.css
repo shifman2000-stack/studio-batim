@@ -37,7 +37,18 @@
 
 /* ── Category header row — LESS prominent than column header ── */
 .ft-category-header {
+  /* Flex so the category trash can sit in the same 28px slot the
+     per-row trash uses. RTL: the name is the first child (visual
+     right), the trash last (visual left), so the two read as one
+     affordance at two levels. */
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 12px;
+  /* Match .ft-row's inline-end padding (10px) so the category
+     trash lands in exactly the same column as every row trash
+     below it. RTL: inline-end is the visual LEFT edge. */
+  padding-inline-end: 10px;
   background: #fafaf8;                          /* lighter than column header */
   color: #1a1a18;
   font-weight: 600;
@@ -46,6 +57,11 @@
   direction: rtl;
   border-bottom: 1px solid rgba(26,26,24,0.06);
   border-top: 1px solid rgba(26,26,24,0.06);
+}
+
+.ft-category-name {
+  flex: 1;
+  min-width: 0;
 }
 
 .ft-table > .ft-category-header:first-of-type {

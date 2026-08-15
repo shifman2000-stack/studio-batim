@@ -41,8 +41,8 @@ import { useClient } from '../../components/ClientRoute'
 import { useClientNav } from '../ClientPortal'
 import { GROUPS, resolveGroup } from '../../lib/clientPortalGroups'
 import { GroupIcon, IconBack } from '../../components/icons/PortalIcons'
-import { loadOpenDocRequests } from '../../lib/openDocRequests'
-import OpenRequestsBadge from '../../components/OpenRequestsBadge'
+import { loadActionRequired } from '../../lib/actionRequired'
+import ActionRequiredBadge from '../../components/ActionRequiredBadge'
 
 /* Child-key → drawer label. Mirrors MENU_ITEMS in ClientPortal.jsx —
    kept inline so the home screen doesn't have to import the whole
@@ -70,29 +70,34 @@ export default function ClientHome({
   const { navigate } = useClientNav()
   const displayName = firstName || ctxFirstName || ''
 
-  /* Total count of open document requests for this project — the number
-     of view_edit rows that the CLIENT has not yet uploaded to. Staff
-     uploads don't close the request; the client's own upload does.
+  /* "דרוש טיפול" counts for every source, rolled up to screens and
+     groups by src/lib/actionRequired.js. Nothing is counted here — this
+     screen only draws what the module returns, so a tile's number can
+     never disagree with the screen it points at.
+
      Fetched fresh on every mount so navigating away and back (via
-     goBack) picks up newly-completed uploads. Never throws — errors
-     return zero and hide the badge. Same source of truth as the
-     per-stage counts inside ClientDocuments (they use
-     computeOpenRequests() on the same data). */
-  const [openTotal, setOpenTotal] = useState(0)
+     goBack) picks up work the client just completed. Never throws —
+     a failure yields zeros, which render as no badge.
+
+     Visibility is applied inside the module: a screen this client can't
+     open contributes zero to its own tile AND to its group's sum. */
+  const [actionRequired, setActionRequired] = useState({ byScreen: {}, byGroup: {} })
   useEffect(() => {
     let cancelled = false
-    if (!project_id) { setOpenTotal(0); return }
-    loadOpenDocRequests(project_id, clientUserId).then(res => {
-      if (!cancelled) setOpenTotal(res.total || 0)
+    if (!project_id) { setActionRequired({ byScreen: {}, byGroup: {} }); return }
+    loadActionRequired({
+      projectId:    project_id,
+      clientUserId,
+      clientVisibleTabs,
+      showProgrammingQuestionnaire,
+    }).then(res => {
+      if (!cancelled) setActionRequired(res)
     })
     return () => { cancelled = true }
-  }, [project_id, clientUserId])
+  }, [project_id, clientUserId, clientVisibleTabs, showProgrammingQuestionnaire])
 
-  /* Documents is the only source of open requests today, so the group
-     badge on progress_group == the documents-tile badge inside the sub-
-     screen. Kept as two named locals for readability at the call sites. */
-  const badgeForGroup = (group) => group.key === 'progress_group' ? openTotal : 0
-  const badgeForChild = (childKey) => childKey === 'documents'     ? openTotal : 0
+  const badgeForGroup = (group)    => actionRequired.byGroup[group.key] || 0
+  const badgeForChild = (childKey) => actionRequired.byScreen[childKey] || 0
 
   /* Sub-screen state — when set, the group grid is replaced by the
      children grid of that group + a back button. Initialized from a
@@ -192,7 +197,7 @@ export default function ClientHome({
                     style={{ position: 'relative' }}
                   >
                     {badge > 0 && (
-                      <OpenRequestsBadge
+                      <ActionRequiredBadge
                         count={badge}
                         style={{ position: 'absolute', top: 8, right: 8 }}
                       />
@@ -217,7 +222,7 @@ export default function ClientHome({
                     style={{ position: 'relative' }}
                   >
                     {badge > 0 && (
-                      <OpenRequestsBadge
+                      <ActionRequiredBadge
                         count={badge}
                         size="lg"
                         style={{ position: 'absolute', top: 10, right: 10 }}

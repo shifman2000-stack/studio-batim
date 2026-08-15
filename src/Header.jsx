@@ -276,7 +276,7 @@ function Header() {
             <NavLink to="/inquiries" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>פניות</NavLink>
           )}
           {role === 'admin' && (
-            <NavLink to="/reports" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>דוחות</NavLink>
+            <NavLink to="/reports" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>דוחות וניהול</NavLink>
           )}
         </nav>
 

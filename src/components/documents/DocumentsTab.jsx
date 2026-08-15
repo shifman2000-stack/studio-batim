@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import * as mammoth from 'mammoth'
+import PropagateAccessModal from './PropagateAccessModal'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -190,6 +191,20 @@ const IconPencilAccess = ({ size = 18 }) => (
   </svg>
 )
 
+/* Share2 — "propagate this permission to child projects" affordance.
+   Only rendered (parent projects, view/view_edit rows) next to the
+   ClientAccessPopover trigger; opens PropagateAccessModal. */
+const IconShare2 = ({ size = 14 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+)
+
 function accessIcon(value, size = 18) {
   if (value === 'view')      return <IconEyeAccess size={size} />
   if (value === 'view_edit') return <IconPencilAccess size={size} />
@@ -307,7 +322,7 @@ function StatusIcon({ status }) {
    Now supports MULTIPLE attached files per row (each surfaced from a
    document_versions row; a legacy row with only project_documents
    .file_url is shown as a synthetic pseudo-version — see loadDocs). */
-function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange }) {
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
@@ -417,6 +432,17 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
           docId={doc.id}
           onChange={onClientAccessChange}
         />
+        {isParentProject && doc.template_id != null &&
+          (doc.client_access === 'view' || doc.client_access === 'view_edit') && (
+          <button
+            type="button"
+            className="dt-propagate-btn"
+            title="שיתוף ההרשאה הזו גם עם פרויקטי-בן"
+            onClick={() => onOpenPropagate(doc)}
+          >
+            <IconShare2 />
+          </button>
+        )}
       </div>
 
       {/* מחק — כל השורות */}
@@ -477,8 +503,13 @@ function AddDocRow({ stage, stageId, subStageId, onAdd }) {
 }
 
 /* ── Main component ── */
-export default function DocumentsTab({ projectId }) {
+export default function DocumentsTab({ projectId, isParentProject }) {
   const [docs,        setDocs]        = useState([])
+  /* { docId, templateId, docName, accessValue } | null — controls
+     PropagateAccessModal. Only ever opened via the dt-propagate-btn,
+     which itself only renders for parent projects, so no extra gating
+     is needed here beyond what's already in openPropagate's caller. */
+  const [propagateTarget, setPropagateTarget] = useState(null)
   const [stagesLut,   setStagesLut]   = useState([])
   const [subStages,   setSubStages]   = useState([])
   const [loading,     setLoading]     = useState(true)
@@ -527,76 +558,15 @@ export default function DocumentsTab({ projectId }) {
     setStagesLut(stagesLutData || [])
     setSubStages(subStagesData || [])
 
-    /* ── Step 1: clean up any duplicates (keep MIN id per project+template) ── */
-    const { data: allRows } = await supabase
+    /* ── Step 1: fetch current rows. Seeding from document_templates now
+       happens in a DB trigger at project-creation time, not here. ── */
+    const { data } = await supabase
       .from('project_documents')
-      .select('id, project_id, template_id')
-      .not('template_id', 'is', null)
-      .order('id', { ascending: true })
-
-    if (allRows && allRows.length > 0) {
-      const seen     = new Map()
-      const toDelete = []
-      for (const row of allRows) {
-        const key = `${row.project_id}:${row.template_id}`
-        if (seen.has(key)) {
-          toDelete.push(row.id)
-        } else {
-          seen.set(key, row.id)
-        }
-      }
-      if (toDelete.length > 0) {
-        await supabase.from('project_documents').delete().in('id', toDelete)
-      }
-    }
-
-    /* ── Step 2: use a count check before deciding to seed ── */
-    const { count } = await supabase
-      .from('project_documents')
-      .select('*', { count: 'exact', head: true })
+      .select('*')
       .eq('project_id', projectId)
+      .order('sort_order')
 
-    let data = null
-
-    if (count === 0) {
-      /* No rows yet — seed from templates */
-      const { data: templates } = await supabase
-        .from('document_templates')
-        .select('*')
-        .order('sort_order')
-
-      if (templates && templates.length > 0) {
-        const toInsert = templates.map(t => ({
-          project_id:  projectId,
-          template_id: t.id,
-          stage:       t.stage,
-          stage_id:     t.stage_id ?? null,
-          sub_stage_id: t.sub_stage_id ?? null,
-          name:        t.name,
-          required:    true,
-          status:      'חסר',
-          sort_order:  t.sort_order ?? 0,
-        }))
-        const { data: inserted } = await supabase
-          .from('project_documents')
-          .insert(toInsert)
-          .select('*')
-          .order('sort_order')
-        if (inserted) data = inserted
-      }
-    }
-
-    /* ── Step 3: fetch current rows if not already set from insert ── */
-    if (!data) {
-      const { data: fetched } = await supabase
-        .from('project_documents')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('sort_order')
-      data = fetched
-    }
-
-    /* ── Step 4: load version list per doc.
+    /* ── Step 2: load version list per doc.
        One query, grouped in memory. Newest first per doc (uploaded_at DESC),
        which matches the parent's denormalized file_url — the latest upload
        always sits at the top of the list. */
@@ -678,6 +648,17 @@ export default function DocumentsTab({ projectId }) {
       setAccessError('לא הצלחנו לעדכן, נסה שוב')
       setTimeout(() => setAccessError(''), 3000)
     }
+  }
+
+  /* ── Open the "share this permission with child projects" modal for
+     one row — captures the row's template_id + the access value it
+     currently holds (parent's own row is untouched by this flow). ── */
+  const openPropagate = (doc) => {
+    setPropagateTarget({
+      templateId: doc.template_id,
+      docName:    doc.name,
+      accessValue: doc.client_access,
+    })
   }
 
   /* ── File upload — APPENDS a version, does NOT replace ──
@@ -964,6 +945,8 @@ export default function DocumentsTab({ projectId }) {
                                 onDocDelete={deleteDoc}
                                 onPreview={setPreviewFile}
                                 onClientAccessChange={patchClientAccess}
+                                isParentProject={isParentProject}
+                                onOpenPropagate={openPropagate}
                               />
                             ))}
                             <AddDocRow
@@ -989,6 +972,8 @@ export default function DocumentsTab({ projectId }) {
                             onDocDelete={deleteDoc}
                             onPreview={setPreviewFile}
                             onClientAccessChange={patchClientAccess}
+                            isParentProject={isParentProject}
+                            onOpenPropagate={openPropagate}
                           />
                         ))}
                         <AddDocRow
@@ -1041,6 +1026,17 @@ export default function DocumentsTab({ projectId }) {
           </>
         )}
       </div>
+
+      {/* ── Propagate client_access to child projects (parent projects only) ── */}
+      {propagateTarget && (
+        <PropagateAccessModal
+          parentProjectId={projectId}
+          templateId={propagateTarget.templateId}
+          docName={propagateTarget.docName}
+          accessValue={propagateTarget.accessValue}
+          onClose={() => setPropagateTarget(null)}
+        />
+      )}
 
     </div>
   )

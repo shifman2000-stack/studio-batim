@@ -148,6 +148,12 @@ export default function ClientPortal() {
      back to WHATSAPP_URL (the default wa.me link). */
   const [clientVisibleTabs, setClientVisibleTabs] = useState(null)
   const [whatsappGroupUrl,  setWhatsappGroupUrl]  = useState(null)
+  /* A CHILD project (this row's parent_project_id is set) shows no
+     sticky contact footer — the parent project is where contact lives.
+     null-safe by construction: undefined (column missing on an
+     un-migrated Prod, or the fallback SELECT below) and null (a
+     top-level project) both read as "not a child". */
+  const [parentProjectId,   setParentProjectId]   = useState(null)
   /* Per-project override for the programming-questionnaire tile.
      Default false — until an admin flips projects.show_programming_questionnaire
      on for this project (via the settings modal), the client doesn't
@@ -161,17 +167,20 @@ export default function ClientPortal() {
       let row = null
       const tryBoth = await supabase
         .from('projects')
-        .select('client_visible_tabs, whatsapp_group_url, show_programming_questionnaire')
+        .select('client_visible_tabs, whatsapp_group_url, show_programming_questionnaire, parent_project_id')
         .eq('id', project_id)
         .maybeSingle()
       if (tryBoth.error) {
         /* Most likely: prod row, one of the new columns not yet
            migrated. Re-run the visibility-only SELECT so the rest of
            the portal keeps working; whatsapp link silently stays at
-           the default and the questionnaire tile stays hidden. */
+           the default and the questionnaire tile stays hidden.
+           parent_project_id is a long-standing column (unlike the two
+           above), but it's included here too rather than left to
+           silently disappear on this path. */
         const fallback = await supabase
           .from('projects')
-          .select('client_visible_tabs')
+          .select('client_visible_tabs, parent_project_id')
           .eq('id', project_id)
           .maybeSingle()
         row = fallback.data || null
@@ -182,6 +191,7 @@ export default function ClientPortal() {
       setClientVisibleTabs(row?.client_visible_tabs || null)
       setWhatsappGroupUrl(row?.whatsapp_group_url ?? null)
       setShowProgrammingQuestionnaire(row?.show_programming_questionnaire === true)
+      setParentProjectId(row?.parent_project_id ?? null)
     }
     loadProjectMeta()
     return () => { cancelled = true }
@@ -293,6 +303,8 @@ export default function ClientPortal() {
                         shared one here keeps exactly ONE back control
                         visible on those screens. */
   const showBackArrow = activeKey !== 'home' && activeKey !== 'account' && activeKey !== 'questionnaire'
+
+  const isChildProject = !!parentProjectId
 
   return (
     <ClientFooterProvider whatsappGroupUrl={whatsappGroupUrl}>
@@ -479,8 +491,16 @@ export default function ClientPortal() {
           Lives as a flex-shrink:0 sibling of <main>, so .cp-content
           (the scroll container) is pushed up and the footer doesn't
           cover content. Hidden in screens that own a competing fixed
-          bottom bar — see ClientFooterProvider + useClientFooter. */}
-      <ClientFooter />
+          bottom bar — see ClientFooterProvider + useClientFooter.
+
+          Also simply not rendered for a CHILD project — no separate
+          CSS is needed to reclaim its space: .cp-footer takes part in
+          normal flex flow (flex-shrink:0 sibling of .cp-content, not
+          position:fixed — see the layout comment atop ClientPortal.css),
+          so omitting the element lets .cp-content's flex:1 fill the
+          freed height on its own, exactly as it already does for the
+          ClientFile-edit-mode hide case above. */}
+      {!isChildProject && <ClientFooter />}
 
     </div>
     </ClientNavContext.Provider>

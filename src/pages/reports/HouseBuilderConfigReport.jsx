@@ -38,12 +38,17 @@ const MUTED     = '#8a8680'
 const AMBER     = '#c98a3a'
 const DANGER    = '#c94b4b'
 
-/* "חלל אחר" is the free-text add-room affordance the builder renders
-   OUTSIDE the palette map. It's stored as a literal marker at the end
-   of every floor palette so downstream consumers know where the input
-   goes. Phase 2 keeps it pinned last and non-removable — every
-   mutator + save-time validation enforces that invariant. */
-const CUSTOM_MARKER = 'חלל אחר'
+/* The ONE hardcoded container-in-container exception. HouseBuilderV2.jsx
+   allows nesting "יחידת סוויטה" inside "יחידת דיור" UNCONDITIONALLY in
+   code (see DWELLING_UNIT_TYPE / SUITE_UNIT_TYPE there) — this config's
+   allowedChildren value for that pairing has NO effect on the live
+   builder either way. The literals are mirrored here only so the
+   report's allowedChildren editor and validators can recognize and
+   allow the one legitimate exception instead of flagging it as invalid
+   nesting; this is not a second source of truth for the behavior
+   itself, which stays entirely code-enforced. */
+const DWELLING_UNIT_TYPE = 'יחידת דיור'
+const SUITE_UNIT_TYPE    = 'יחידת סוויטה'
 
 export default function HouseBuilderConfigReport() {
   const navigate = useNavigate()
@@ -174,45 +179,31 @@ export default function HouseBuilderConfigReport() {
     }))
   }
 
-  /* Palette helper — filter any CUSTOM_MARKER from the input and
-     re-append it at the end. Every palette write goes through this
-     so the "חלל אחר" invariant is enforced by the mutator, not by
-     hoping the caller does the right thing. */
-  const withMarkerLast = (list) => {
-    const filtered = (Array.isArray(list) ? list : []).filter(t => t !== CUSTOM_MARKER)
-    return [...filtered, CUSTOM_MARKER]
-  }
-
   const addToFloorPalette = (floorKey, type) => {
-    if (!type || type === CUSTOM_MARKER) return
+    if (!type) return
     setConfig(c => {
       const cur = Array.isArray(c.palette?.[floorKey]) ? c.palette[floorKey] : []
       if (cur.includes(type)) return c
-      const next = withMarkerLast([...cur.filter(t => t !== CUSTOM_MARKER), type])
-      return { ...c, palette: { ...(c.palette || {}), [floorKey]: next } }
+      return { ...c, palette: { ...(c.palette || {}), [floorKey]: [...cur, type] } }
     })
   }
 
   const removeFromFloorPalette = (floorKey, index) => {
     setConfig(c => {
       const cur = Array.isArray(c.palette?.[floorKey]) ? c.palette[floorKey] : []
-      if (cur[index] === CUSTOM_MARKER) return c   // marker is not removable
-      const next = withMarkerLast(cur.filter((_, i) => i !== index))
+      const next = cur.filter((_, i) => i !== index)
       return { ...c, palette: { ...(c.palette || {}), [floorKey]: next } }
     })
   }
 
   const moveFloorPaletteItem = (floorKey, index, direction) => {
     setConfig(c => {
-      const cur = Array.isArray(c.palette?.[floorKey]) ? c.palette[floorKey] : []
-      if (cur[index] === CUSTOM_MARKER) return c   // marker is not reorderable
-      /* Only shuffle within the non-marker segment; marker stays last. */
-      const nonMarker = cur.filter(t => t !== CUSTOM_MARKER)
-      const target    = index + direction
-      if (target < 0 || target >= nonMarker.length) return c
-      const swap = [...nonMarker]
-      ;[swap[index], swap[target]] = [swap[target], swap[index]]
-      return { ...c, palette: { ...(c.palette || {}), [floorKey]: withMarkerLast(swap) } }
+      const cur    = Array.isArray(c.palette?.[floorKey]) ? c.palette[floorKey] : []
+      const target = index + direction
+      if (target < 0 || target >= cur.length) return c
+      const next = [...cur]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return { ...c, palette: { ...(c.palette || {}), [floorKey]: next } }
     })
   }
 
@@ -242,6 +233,7 @@ export default function HouseBuilderConfigReport() {
         name,
         sizes:            { S: 0, M: 0, L: 0 },
         fixedArea:        null,
+        excludeFromAreaCalc: false,
         showSize:         true,
         defaultSize:      'M',
         isContainer:      false,
@@ -693,10 +685,8 @@ function FloorPaletteCard({ floorKey, floorName, list, allRoomKeys, onAdd, onRem
      marker itself. That's the pool the "הוסף חלל" dropdown shows. */
   const alreadyHere = new Set(list)
   const addableTypes = allRoomKeys
-    .filter(t => t !== CUSTOM_MARKER && !alreadyHere.has(t))
+    .filter(t => !alreadyHere.has(t))
     .sort((a, b) => a.localeCompare(b, 'he'))
-
-  const nonMarkerCount = list.filter(t => t !== CUSTOM_MARKER).length
 
   const handleAdd = () => {
     if (!pendingType) return
@@ -736,7 +726,7 @@ function FloorPaletteCard({ floorKey, floorName, list, allRoomKeys, onAdd, onRem
         <div style={{ fontWeight: 600, color: CHARCOAL, flex: 1 }}>
           {floorName}
           <span style={{ fontSize: 12, color: MUTED, fontWeight: 400 }}>
-            &nbsp;· {nonMarkerCount} סוגי חללים
+            &nbsp;· {list.length} סוגי חללים
           </span>
         </div>
       </div>
@@ -757,45 +747,35 @@ function FloorPaletteCard({ floorKey, floorName, list, allRoomKeys, onAdd, onRem
           listStyle: 'none', direction: 'rtl',
         }}>
           {list.map((type, i) => {
-            const isMarker = type === CUSTOM_MARKER
-            const canUp   = !isMarker && i > 0
-            const canDown = !isMarker && i < nonMarkerCount - 1
+            const canUp   = i > 0
+            const canDown = i < list.length - 1
             return (
               <li key={`${type}-${i}`} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                background: isMarker ? '#eeebe6' : '#ffffff',
+                background: '#ffffff',
                 border: `1px solid ${BORDER}`,
                 borderRadius: 8, padding: '3px 8px', fontSize: 13,
                 color: CHARCOAL,
               }}>
                 <span style={{ color: MUTED, fontSize: 12, minWidth: 22 }}>{i + 1}.</span>
-                <span style={{ flex: 1, fontStyle: isMarker ? 'italic' : 'normal', color: isMarker ? MUTED : CHARCOAL }}>
+                <span style={{ flex: 1 }}>
                   {type}
-                  {isMarker && (
-                    <span style={{ color: MUTED, fontSize: 11, marginInlineStart: 6 }}>
-                      (סמן קלט חופשי — נעול)
-                    </span>
-                  )}
                 </span>
-                {!isMarker && (
-                  <>
-                    <IconBtn
-                      title="הזז למעלה (קדימה בסדר)"
-                      disabled={!canUp}
-                      onClick={() => onMove(floorKey, i, -1)}
-                    >▲</IconBtn>
-                    <IconBtn
-                      title="הזז למטה (אחורה בסדר)"
-                      disabled={!canDown}
-                      onClick={() => onMove(floorKey, i, +1)}
-                    >▼</IconBtn>
-                    <IconBtn
-                      title="הסר מפלטת המפלס"
-                      danger
-                      onClick={() => onRemove(floorKey, i)}
-                    >✕</IconBtn>
-                  </>
-                )}
+                <IconBtn
+                  title="הזז למעלה (קדימה בסדר)"
+                  disabled={!canUp}
+                  onClick={() => onMove(floorKey, i, -1)}
+                >▲</IconBtn>
+                <IconBtn
+                  title="הזז למטה (אחורה בסדר)"
+                  disabled={!canDown}
+                  onClick={() => onMove(floorKey, i, +1)}
+                >▼</IconBtn>
+                <IconBtn
+                  title="הסר מפלטת המפלס"
+                  danger
+                  onClick={() => onRemove(floorKey, i)}
+                >✕</IconBtn>
               </li>
             )
           })}
@@ -1148,26 +1128,44 @@ function SizeEditor({ def, isFixed, onUpdate }) {
     const v = raw === '' ? 0 : Number(raw)
     onUpdate(d => ({ ...d, fixedArea: Number.isFinite(v) ? v : 0 }))
   }
+  const setExcludeFromAreaCalc = (b) => onUpdate(d => ({ ...d, excludeFromAreaCalc: !!b }))
 
   return (
     <div style={{ marginBottom: 14 }}>
       <SectionLabel>גודל</SectionLabel>
 
-      {/* Fixed-area toggle */}
-      <label style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        fontSize: 13, color: CHARCOAL, marginBottom: 8, userSelect: 'none', cursor: 'pointer',
-      }}>
-        <input
-          type="checkbox"
-          checked={isFixed}
-          onChange={(e) => toggleFixed(e.target.checked)}
-        />
-        גודל קבוע
-        <span style={{ color: MUTED, fontSize: 11.5 }}>
-          (מסתיר את בורר ה-S/M/L אצל הלקוח)
-        </span>
-      </label>
+      {/* Fixed-area toggle + exclude-from-area-calc toggle — same row */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+        <label style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 13, color: CHARCOAL, userSelect: 'none', cursor: 'pointer',
+        }}>
+          <input
+            type="checkbox"
+            checked={isFixed}
+            onChange={(e) => toggleFixed(e.target.checked)}
+          />
+          גודל קבוע
+          <span style={{ color: MUTED, fontSize: 11.5 }}>
+            (מסתיר את בורר ה-S/M/L אצל הלקוח)
+          </span>
+        </label>
+
+        <label style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontSize: 13, color: CHARCOAL, userSelect: 'none', cursor: 'pointer',
+        }}>
+          <input
+            type="checkbox"
+            checked={def.excludeFromAreaCalc === true}
+            onChange={(e) => setExcludeFromAreaCalc(e.target.checked)}
+          />
+          שטח לא נספר
+          <span style={{ color: MUTED, fontSize: 11.5 }}>
+            (שטח חלל זה לא ייספר בעת חישוב שטח הבית)
+          </span>
+        </label>
+      </div>
 
       {isFixed ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1273,6 +1271,20 @@ function ContainerEditor({ type, def, allRooms, onUpdate }) {
     .filter(k => k !== type && allRooms[k]?.isContainer !== true)
     .sort((a, b) => a.localeCompare(b, 'he'))
 
+  /* The ONE exception: "יחידת סוויטה" is always allowed inside "יחידת
+     דיור" — enforced unconditionally in HouseBuilderV2.jsx regardless
+     of what's configured here. Shown in the pool (so the "no
+     containers" filter doesn't look inconsistent with the live
+     builder) but pinned via ChipMultiSelect's `locked` — toggling it
+     off here wouldn't change the live builder's behavior, so we don't
+     offer that false affordance. Defensive check on the type existing
+     as a container in case it's ever renamed/removed. */
+  const isDwelling = type === DWELLING_UNIT_TYPE && allRooms?.[SUITE_UNIT_TYPE]?.isContainer === true
+  const allowedChildrenPool = isDwelling
+    ? [...nonContainerPool, SUITE_UNIT_TYPE].sort((a, b) => a.localeCompare(b, 'he'))
+    : nonContainerPool
+  const lockedChildren = isDwelling ? new Set([SUITE_UNIT_TYPE]) : undefined
+
   const allowed = Array.isArray(def.allowedChildren) ? def.allowedChildren : []
 
   /* When allowedChildren shrinks we prune auto/required to stay valid;
@@ -1295,10 +1307,13 @@ function ContainerEditor({ type, def, allRooms, onUpdate }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <ChipMultiSelect
           label="allowedChildren"
-          hint="סוגי חללים שמותר להכניס לתוך היחידה (containers אינם ברשימה — אין nesting)."
-          pool={nonContainerPool}
+          hint={isDwelling
+            ? 'סוגי חללים שמותר להכניס לתוך היחידה (containers אינם ברשימה — אין nesting, פרט ל"יחידת סוויטה" שמותרת תמיד ביחידת דיור ומוטמעת בקוד; לא ניתן להסיר אותה כאן).'
+            : 'סוגי חללים שמותר להכניס לתוך היחידה (containers אינם ברשימה — אין nesting).'}
+          pool={allowedChildrenPool}
           value={allowed}
           onChange={setAllowed}
+          locked={lockedChildren}
         />
         <ChipMultiSelect
           label="autoChildren"
@@ -1321,22 +1336,33 @@ function ContainerEditor({ type, def, allRooms, onUpdate }) {
   )
 }
 
-function ChipMultiSelect({ label, hint, pool, value, onChange, disabledMsg }) {
-  const valueSet = new Set(value || [])
+/* `locked` (optional Set) — chips whose membership is enforced
+   elsewhere (in code, not by this config) and so must always render
+   as included and can't be toggled off here. Used for the "יחידת
+   סוויטה תמיד מותרת ביחידת דיור" exception; every other call site
+   passes no `locked` and behaves exactly as before. */
+function ChipMultiSelect({ label, hint, pool, value, onChange, disabledMsg, locked }) {
+  const valueSet  = new Set(value || [])
+  const lockedSet = locked instanceof Set ? locked : new Set()
   const toggle = (t) => {
+    if (lockedSet.has(t)) return
     const next = new Set(valueSet)
     if (next.has(t)) next.delete(t)
     else next.add(t)
     /* Preserve pool order in output so consumers see a stable list. */
     onChange(pool.filter(x => next.has(x)))
   }
+  /* Locked chips count as "on" for the header tally even when they're
+     not literally in `value`, so the count matches what's visibly
+     checked. */
+  const effectiveCount = new Set([...valueSet, ...lockedSet]).size
   return (
     <div>
       <div style={{
         display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 4,
       }}>
         <span style={{ fontSize: 12.5, color: SAGE_DARK, fontWeight: 600 }}>{label}</span>
-        <span style={{ fontSize: 11, color: MUTED }}>({value?.length || 0}/{pool.length})</span>
+        <span style={{ fontSize: 11, color: MUTED }}>({effectiveCount}/{pool.length})</span>
       </div>
       {hint && (
         <div style={{ color: MUTED, fontSize: 11.5, marginBottom: 6 }}>{hint}</div>
@@ -1350,21 +1376,25 @@ function ChipMultiSelect({ label, hint, pool, value, onChange, disabledMsg }) {
           display: 'flex', flexWrap: 'wrap', gap: 4, direction: 'rtl',
         }}>
           {pool.map(t => {
-            const on = valueSet.has(t)
+            const isLocked = lockedSet.has(t)
+            const on = valueSet.has(t) || isLocked
             return (
               <button
                 key={t}
                 type="button"
                 onClick={() => toggle(t)}
+                title={isLocked ? 'מותר תמיד — מוטמע בקוד, לא ניתן לשינוי כאן' : undefined}
                 style={{
                   background: on ? SAGE : '#ffffff',
                   color:      on ? '#ffffff' : CHARCOAL,
                   border: `1px solid ${on ? SAGE_DARK : BORDER}`,
                   borderRadius: 12, padding: '3px 10px',
-                  fontFamily: 'inherit', fontSize: 12, cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 12,
+                  cursor: isLocked ? 'default' : 'pointer',
+                  opacity: isLocked ? 0.85 : 1,
                 }}
               >
-                {t}
+                {t}{isLocked ? ' 🔒' : ''}
               </button>
             )
           })}
@@ -1670,10 +1700,7 @@ function paletteHasIssue(palette, roomKeys) {
   const known = roomKeys instanceof Set ? roomKeys : new Set(roomKeys || [])
   for (const [, list] of Object.entries(p)) {
     if (!Array.isArray(list)) return true
-    const markerIdx = list.indexOf(CUSTOM_MARKER)
-    if (markerIdx === -1 || markerIdx !== list.length - 1) return true
     for (const t of list) {
-      if (t === CUSTOM_MARKER) continue
       if (!known.has(t)) return true
     }
   }
@@ -1710,7 +1737,10 @@ function roomHasIssue(type, def, allRooms) {
     const allowedSet = new Set(allowed)
     for (const c of allowed) {
       if (!known.has(c)) return true
-      if (rooms[c] && rooms[c].isContainer === true) return true
+      if (rooms[c] && rooms[c].isContainer === true) {
+        const isAllowedException = type === DWELLING_UNIT_TYPE && c === SUITE_UNIT_TYPE
+        if (!isAllowedException) return true
+      }
     }
     for (const c of auto)     if (!allowedSet.has(c)) return true
     for (const c of required) if (!allowedSet.has(c)) return true
@@ -1762,8 +1792,7 @@ function validateConfig(cfg) {
     seen.add(k)
   }
 
-  /* Palette entries reference existing room keys AND the "חלל אחר"
-     marker sits LAST in every floor. */
+  /* Palette entries must reference existing room keys. */
   const palette = (cfg.palette && typeof cfg.palette === 'object') ? cfg.palette : {}
   const knownKeys = new Set(roomKeys)
   const floors    = Array.isArray(cfg.floors) ? cfg.floors : []
@@ -1781,14 +1810,7 @@ function validateConfig(cfg) {
       errors.push(`הפלטה של ${label} איננה מערך.`)
       continue
     }
-    const markerIdx = list.indexOf(CUSTOM_MARKER)
-    if (markerIdx === -1) {
-      errors.push(`ב-${label} חסר סמן "חלל אחר" בסוף הפלטה.`)
-    } else if (markerIdx !== list.length - 1) {
-      errors.push(`ב-${label} הסמן "חלל אחר" חייב להיות אחרון בפלטה.`)
-    }
     for (const type of list) {
-      if (type === CUSTOM_MARKER) continue
       if (!knownKeys.has(type)) {
         errors.push(`ב-${label} מוגדר סוג חלל "${type}" שאיננו קיים ברשימת החללים.`)
       }
@@ -1853,7 +1875,10 @@ function validateConfig(cfg) {
         if (!knownKeys.has(c)) {
           errors.push(`בחלל-על ${roomLabel}: allowedChildren מפנה לסוג "${c}" שאיננו קיים.`)
         } else if (rooms[c] && rooms[c].isContainer === true) {
-          errors.push(`בחלל-על ${roomLabel}: allowedChildren מכיל container ("${c}") — אין nesting של containers.`)
+          const isAllowedException = type === DWELLING_UNIT_TYPE && c === SUITE_UNIT_TYPE
+          if (!isAllowedException) {
+            errors.push(`בחלל-על ${roomLabel}: allowedChildren מכיל container ("${c}") — אין nesting של containers.`)
+          }
         }
       }
       for (const c of auto) {

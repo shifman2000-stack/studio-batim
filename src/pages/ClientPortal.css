@@ -1017,7 +1017,8 @@
   color: inherit;
 }
 
-.cp-doc-link:hover .cp-doc-name {
+.cp-doc-link:hover .cp-doc-name,
+.cp-doc-link:hover .cp-doc-file-name {
   color: #7a9478;
 }
 
@@ -1033,7 +1034,8 @@
   font-family: 'Heebo', sans-serif;
   font-weight: 600;
   font-size: 14px;
-  color: #1a1a18;
+  color: #7a9478;               /* sage — same value already used at
+                                    .cp-doc-link:hover just above */
   margin: 0 0 2px;
   line-height: 1.35;
   word-break: break-word;
@@ -1043,6 +1045,21 @@
 .cp-doc-name--unfilled {
   color: #8a8680;              /* no file yet → de-emphasize the name */
   font-weight: 500;
+}
+
+/* Per-FILE name (each attached file listed under the document title) —
+   split out from .cp-doc-name so the sage colour stays on the document
+   TITLE only. Same font/size/weight/spacing .cp-doc-name had; colour is
+   the original near-black, unaffected by the title's sage. */
+.cp-doc-file-name {
+  font-family: 'Heebo', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a18;
+  margin: 0 0 2px;
+  line-height: 1.35;
+  word-break: break-word;
+  transition: color 0.15s;
 }
 
 .cp-doc-meta {
@@ -1693,6 +1710,47 @@
      matches the manager view + the TipTap editor. */
   padding-inline-start: 10px;
 }
+/* Heading above a task section (משימות לקוח / משימות סטודיו). Mirrors
+   the manager card's .ms-tasks-heading so the two views read alike. */
+.cp-meetings-tasks-heading {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a18;
+  font-family: 'Heebo', sans-serif;
+  padding-inline-start: 10px;
+}
+
+/* The status line sits on its own line UNDER the client-tasks block,
+   indented like .cp-meetings-body so it lines up with the content above
+   it — in RTL that indent is the visual right, and the line reads
+   right to left: label, control, hint. */
+.cp-meetings-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px;
+  padding-inline-start: 10px;
+  font-size: 13px;
+  color: #55524b;
+  font-family: 'Heebo', sans-serif;
+}
+.cp-meetings-status-label { font-weight: 500; }
+.cp-meetings-status-hint  { color: #8a877f; }
+/* The shared control is width:100% so it centres in a table cell. Here
+   it is one item in a text line, so it must size to its icon instead —
+   otherwise it stretches and pushes "(לחץ לעידכון)" to the far edge.
+   Only the box is adjusted; icon, colour and dropdown stay as shipped. */
+.cp-meetings-status-row .tasks-status-wrap { width: auto; flex: 0 0 auto; }
+
+.cp-meetings-done-error {
+  margin: 2px 0 4px;
+  padding-inline-start: 10px;
+  font-size: 13px;
+  color: #b3261e;
+  font-family: 'Heebo', sans-serif;
+}
+
 .cp-meetings-body p { margin: 0 0 8px; }
 .cp-meetings-body p:last-child { margin-bottom: 0; }
 .cp-meetings-body strong { font-weight: 700; color: #1a1a18; }
@@ -1750,6 +1808,38 @@
 .cp-meetings-header-topic {
   font-weight: 700;
   color: #1a1a18;
+}
+
+/* ── Meeting-card header column ───────────────────────────────────
+   Title on the first line, the "דרוש טיפול" notice on a second line
+   beneath it. A column inside the flex header row, carrying the
+   flex/min-width the title span used to carry as a direct child so the
+   chevron keeps sitting at the visual LEFT via its own auto margin.
+   Content-sized: with no notice the column is exactly the title, so a
+   card with nothing outstanding is unchanged and reserves no space. */
+.cp-meetings-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* RTL: the dot is the FIRST child, so it paints at the visual right,
+   flush under the title's start, with the text running left from it. */
+.cp-meetings-todo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Quiet by design — smaller than the 15px title, regular weight, and
+   the same muted grey as the other secondary captions. The dot alone
+   carries the colour; red text would shout. */
+.cp-meetings-todo-text {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8a8680;
+  white-space: nowrap;
 }
 
 /* ── Meeting-card title line ──────────────────────────────────────

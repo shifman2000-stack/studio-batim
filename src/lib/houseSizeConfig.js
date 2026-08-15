@@ -75,6 +75,9 @@ export const SIZE_LABELS = {
  *   • sizeKey = 'S'|'M'|'L' (ברירת מחדל M) — לחלל רגיל.
  *   • fixedArea = מספר חיובי — לחלל בעל שטח קבוע (מוגדר ב-FIXED_AREAS
  *     בקונפיג של בונה הבית). כאשר קיים fixedArea הוא גובר על ROOM_SIZES.
+ *   • excludeFromAreaCalc = true — לחלל שסוגו מוגדר ב-EXCLUDE_FROM_AREA_CALC_TYPES
+ *     (בקונפיג של בונה הבית). השטח שלו מדולג לגמרי מהסכום, גם אם יש
+ *     לו fixedArea או sizeKey.
  * @param opts.sizesMap — אופציונלי. מפה מותאמת (למשל טעונה מ-Supabase)
  *   שגוברת על ROOM_SIZES הסטטי. אם לא סופק, נשתמש ב-ROOM_SIZES כברירת מחדל
  *   — כך שקריאה ללא אופציות שומרת על ההתנהגות הישנה בדיוק.
@@ -86,6 +89,9 @@ export function estimateArea(roomsFlat, opts = {}) {
     : ROOM_SIZES;
   let sum = 0;
   for (const r of roomsFlat) {
+    if (r.excludeFromAreaCalc === true) {
+      continue;
+    }
     if (typeof r.fixedArea === 'number' && Number.isFinite(r.fixedArea) && r.fixedArea > 0) {
       sum += r.fixedArea;
       continue;

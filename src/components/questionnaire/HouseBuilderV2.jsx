@@ -59,6 +59,18 @@ const propGroupKey = (gi) => 'r' + gi
 const SIZE_KEYS_IN_ORDER = ['L', 'M', 'S']
 const SIZE_LABELS_MAP    = { S: 'קטן', M: 'בינוני', L: 'גדול' }
 
+/* The ONE allowed container-in-container combination: יחידת סוויטה
+   may be added inside יחידת דיור. Every other combination (suite-in-
+   suite, dwelling-in-dwelling, dwelling-in-suite, or anything inside
+   an already-nested suite — whose own type is still יחידת סוויטה, not
+   יחידת דיור, so the same check forbids it) stays forbidden exactly as
+   before. See allowedChildTypes / addChildToContainer. Hardcoded
+   literals, matching how this codebase already hardcodes specific
+   type names elsewhere (e.g. "פינת משפחה" in FIXED_AREAS, "חלל אחר" as
+   the custom-room marker). */
+const DWELLING_UNIT_TYPE = 'יחידת דיור'
+const SUITE_UNIT_TYPE    = 'יחידת סוויטה'
+
 /* Preset segments for the "target size" selector. Each option stores
    a single number into answers.house.targetArea (same field V1
    writes) so data round-trips cleanly between builders. Values were
@@ -266,14 +278,14 @@ export default function HouseBuilderV2({
   }
   const setTargetCustom = (raw) => {
     if (readOnly) return
-    /* Text input — strip non-digits and parse. Empty / non-numeric →
-       clear the field. This automatically deselects the segmented
-       control (isPresetTarget goes false because targetArea is null
-       or a non-preset number). */
-    const digits = String(raw).replace(/[^0-9]/g, '')
-    if (digits === '') { patchState({ targetArea: null }); return }
-    const n = Number(digits)
-    if (Number.isFinite(n) && n > 0) patchState({ targetArea: n })
+    /* Native number input — empty / non-numeric → clear the field.
+       This automatically deselects the segmented control
+       (isPresetTarget goes false because targetArea is null or a
+       non-preset number). Whole numbers only, matching the existing
+       persisted data (see houseFromJSON's targetArea guard). */
+    if (raw === '') { patchState({ targetArea: null }); return }
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) patchState({ targetArea: Math.round(n) })
   }
 
   /* ── Block B — floors + yard ─────────────────────────────────── */
@@ -386,28 +398,103 @@ export default function HouseBuilderV2({
   }
 
   /* ── Container children ──────────────────────────────────────────
-     Children live in `container.children`, NOT in the floor's
-     top-level array, so these operate one level deeper than
-     addRoomToFloor / removeRoomFromFloor. */
+     Children live in `container.children`. With the one allowed
+     nesting exception (יחידת סוויטה inside יחידת דיור), a container id
+     can now live at ANY depth — top-level on the floor, or nested one
+     level inside another container's own children — so these can no
+     longer assume "one level deeper than addRoomToFloor" and search
+     the floor's top-level array only. */
+
+  /* Recursively find a room by id anywhere in a room tree — a
+     top-level room, or nested inside a container's children to any
+     depth — or null if it isn't there. Read-only; pairs with
+     updateRoomById below for the write side. */
+  const findRoomById = (list, id) => {
+    for (const r of list) {
+      if (r.id === id) return r
+      if (Array.isArray(r.children) && r.children.length > 0) {
+        const found = findRoomById(r.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  /* Recursively find a room by id anywhere in a room tree and return
+     a NEW tree with that room replaced by `updater(room)`. Returns
+     the SAME array reference when the id isn't found anywhere, so
+     callers can detect a no-op cheaply. Shared by addChildToContainer
+     / removeChildFromContainer (and reused by the step-3 queue
+     helpers further below) so a container nested inside another
+     container can be located and mutated exactly like a top-level
+     one. */
+  const updateRoomById = (list, id, updater) => {
+    let changed = false
+    const next = list.map(r => {
+      if (r.id === id) {
+        changed = true
+        return updater(r)
+      }
+      if (Array.isArray(r.children) && r.children.length > 0) {
+        const nextChildren = updateRoomById(r.children, id, updater)
+        if (nextChildren !== r.children) {
+          changed = true
+          return { ...r, children: nextChildren }
+        }
+      }
+      return r
+    })
+    return changed ? next : list
+  }
 
   const addChildToContainer = (floorKey, containerId, type) => {
     if (readOnly) return
     const t = String(type || '').trim()
     if (!floorKey || !t) return
-    /* Defence in depth: no container inside a container. The child
-       palette already excludes them, this refuses anyway. */
-    if (isContainerType(t)) return
     setHouseState(prev => {
       const list = (prev.rooms || {})[floorKey] || []
-      const [child, nextSeq] = makeRoom(t, prev.roomSeq || 1)
-      const nextList = list.map(r =>
-        r.id === containerId
-          ? { ...r, children: [...(r.children || []), child] }
-          : r
-      )
+      /* Defence in depth — mirrors allowedChildTypes' own filter: a
+         container child is refused unless this is the one allowed
+         exception (יחידת סוויטה inside יחידת דיור). The child palette
+         already excludes every other combination; this refuses
+         anyway — including double-nesting inside an already-nested
+         suite, whose own type is still יחידת סוויטה (not יחידת דיור),
+         so it fails this same check exactly like a top-level suite
+         would. */
+      if (isContainerType(t)) {
+        const container = findRoomById(list, containerId)
+        const isAllowedNesting = container
+          && container.type === DWELLING_UNIT_TYPE
+          && t === SUITE_UNIT_TYPE
+        if (!isAllowedNesting) return prev
+      }
+      let seq = prev.roomSeq || 1
+      const [child, afterChild] = makeRoom(t, seq)
+      seq = afterChild
+      /* A container child arrives holding its own configured auto
+         children too — exactly like addRoomToFloor does for a
+         top-level container (e.g. יחידת סוויטה always starts with a
+         חדר שינה, whether it's top-level or nested inside a יחידת
+         דיור). Children draw ids from the SAME shared sequence. */
+      if (isContainerType(t)) {
+        child.children = []
+        const autoKids = (config.getContainerAutoChildren
+          ? config.getContainerAutoChildren(t)
+          : []) || []
+        for (const autoType of autoKids) {
+          const [grandchild, afterGrandchild] = makeRoom(autoType, seq)
+          seq = afterGrandchild
+          child.children.push(grandchild)
+        }
+      }
+      const nextList = updateRoomById(list, containerId, (container) => ({
+        ...container,
+        children: [...(container.children || []), child],
+      }))
+      if (nextList === list) return prev   // containerId not found — no-op
       const next = {
         ...prev,
-        roomSeq: nextSeq,
+        roomSeq: seq,
         rooms:   { ...(prev.rooms || {}), [floorKey]: nextList },
       }
       if (typeof onChange === 'function') onChange(houseToJSON(next))
@@ -419,7 +506,9 @@ export default function HouseBuilderV2({
      in the container's requiredTypes cannot be removed when it is the
      LAST child of that type. Pure predicate — used to disable the UI
      control AND re-checked inside the mutation below, so the rule
-     holds even if the control is bypassed. */
+     holds even if the control is bypassed. Takes the DIRECT parent —
+     for a room inside a nested suite that's the suite, not the outer
+     dwelling. */
   const canRemoveChild = (container, child) => {
     if (!container || !child) return false
     const required = (config.getContainerRequiredTypes
@@ -434,17 +523,17 @@ export default function HouseBuilderV2({
     if (readOnly) return
     setHouseState(prev => {
       const list = (prev.rooms || {})[floorKey] || []
-      const container = list.find(r => r.id === containerId)
+      const container = findRoomById(list, containerId)
       if (!container) return prev
       const child = (container.children || []).find(c => c.id === childId)
       if (!child) return prev
       /* The guard lives HERE, not only in the UI — refuse the write. */
       if (!canRemoveChild(container, child)) return prev
-      const nextList = list.map(r =>
-        r.id === containerId
-          ? { ...r, children: (r.children || []).filter(c => c.id !== childId) }
-          : r
-      )
+      const nextList = updateRoomById(list, containerId, (c) => ({
+        ...c,
+        children: (c.children || []).filter(ch => ch.id !== childId),
+      }))
+      if (nextList === list) return prev
       const next = { ...prev, rooms: { ...(prev.rooms || {}), [floorKey]: nextList } }
       if (typeof onChange === 'function') onChange(houseToJSON(next))
       return next
@@ -524,23 +613,64 @@ export default function HouseBuilderV2({
   const [confirmRemoveUnit, setConfirmRemoveUnit] = useState(null)
 
   /* Allowed children for a container, minus any container type —
-     enforces "no container inside a container" at the palette level. */
+     enforces "no container inside a container" at the palette level,
+     with the ONE exception: יחידת סוויטה may be added inside יחידת
+     דיור. A nested suite's OWN allowedChildTypes still strips every
+     container (including סוויטה itself) because ITS type isn't יחידת
+     דיור — so a suite that's already nested can't itself receive a
+     nested container, automatically, with no extra check needed. */
   const allowedChildTypes = (containerType) => {
     const allowed = (config.getContainerAllowedChildren
       ? config.getContainerAllowedChildren(containerType)
       : []) || []
-    return allowed.filter(t => !isContainerType(t))
+    const filtered = allowed.filter(t => !isContainerType(t))
+    /* The ONE exception, added explicitly rather than merely passed
+       through: יחידת סוויטה may always be added inside יחידת דיור,
+       regardless of whether the admin-configured allowedChildren list
+       happens to include it. No existing config data COULD list it —
+       the combination was hard-blocked until this build, so no admin
+       ever had the option to configure it in. A nested suite's own
+       allowedChildTypes still strips every container (its type isn't
+       יחידת דיור), so this can't be exploited to double-nest. */
+    if (containerType === DWELLING_UNIT_TYPE && !filtered.includes(SUITE_UNIT_TYPE)) {
+      return [...filtered, SUITE_UNIT_TYPE]
+    }
+    return filtered
   }
 
   /* Remove a whole unit. With children it takes them along, so ask
-     first; an empty unit goes immediately. */
-  const requestRemoveUnit = (floorKey, room) => {
+     first; an empty unit goes immediately. `parentContainerId` is null
+     for a top-level unit (removed via removeRoomFromFloor) or the
+     owning container's id for a nested unit (removed via
+     removeChildFromContainer, which already re-checks canRemoveChild
+     — a nested unit generally isn't a requiredType of its parent, but
+     the guard applies uniformly regardless). */
+  const requestRemoveUnit = (floorKey, room, parentContainerId = null) => {
     if (readOnly) return
     if ((room.children || []).length > 0) {
-      setConfirmRemoveUnit({ floorKey, roomId: room.id })
+      setConfirmRemoveUnit({ floorKey, roomId: room.id, parentContainerId })
       return
     }
-    removeRoomFromFloor(floorKey, room.id)
+    if (parentContainerId) {
+      removeChildFromContainer(floorKey, parentContainerId, room.id)
+    } else {
+      removeRoomFromFloor(floorKey, room.id)
+    }
+  }
+
+  /* Confirm-remove-unit action — reads the pending target straight off
+     confirmRemoveUnit state (set by requestRemoveUnit above) so every
+     nesting level shares this ONE handler instead of each needing its
+     own closure. */
+  const confirmRemoveUnitNow = () => {
+    if (!confirmRemoveUnit) return
+    const { floorKey, roomId, parentContainerId } = confirmRemoveUnit
+    if (parentContainerId) {
+      removeChildFromContainer(floorKey, parentContainerId, roomId)
+    } else {
+      removeRoomFromFloor(floorKey, roomId)
+    }
+    setConfirmRemoveUnit(null)
   }
 
   /* "אחר" custom-room input on the active floor. Local text state;
@@ -576,18 +706,32 @@ export default function HouseBuilderV2({
      global roomLabel numbering are preserved — this ordering is
      ONLY for the guided characterization queue. */
   const CHARACTERIZATION_ORDER = ['ground', 'first', 'basement', 'yard']
+  /* Walk one container's children, recursing into a nested container
+     (the one allowed case: יחידת סוויטה inside יחידת דיור) instead of
+     skipping it — so the nested suite's own auto-created room enters
+     the queue exactly like a top-level suite's does. parentId is
+     always the DIRECT parent (the nested suite, not the outer
+     dwelling), matching roomDisplayName's "יחידת סוויטה - חדר רחצה"
+     heading convention. */
+  const collectCharacterizableChildren = (room, areaKey, items) => {
+    for (const child of (room.children || [])) {
+      if (isContainerType(child.type)) {
+        collectCharacterizableChildren(child, areaKey, items)
+      } else {
+        items.push({ areaKey, roomId: child.id, parentId: room.id })
+      }
+    }
+  }
   const characterizationQueue = useMemo(() => {
     const items = []
     for (const areaKey of CHARACTERIZATION_ORDER) {
       const list = (houseState.rooms || {})[areaKey] || []
       for (const room of list) {
         if (isContainerType(room.type)) {
-          /* Container itself is NOT characterized; enqueue each of
-             its regular children as separate items. */
-          for (const child of (room.children || [])) {
-            if (isContainerType(child.type)) continue
-            items.push({ areaKey, roomId: child.id, parentId: room.id })
-          }
+          /* Container itself is NOT characterized; enqueue its
+             characterizable descendants instead (recursing through
+             any nested container along the way). */
+          collectCharacterizableChildren(room, areaKey, items)
         } else {
           items.push({ areaKey, roomId: room.id, parentId: null })
         }
@@ -599,12 +743,14 @@ export default function HouseBuilderV2({
 
   /* Per-item lookup — returns the room object at (areaKey, roomId,
      parentId) in the CURRENT state, or null. Kept in state-scope so
-     Step 3 always reads the live values. */
+     Step 3 always reads the live values. parentId may itself be
+     nested (a suite inside a dwelling), so the parent is located via
+     findRoomById rather than a shallow top-level search. */
   const findQueueRoom = (item) => {
     if (!item) return null
     const list = (houseState.rooms || {})[item.areaKey] || []
     if (item.parentId != null) {
-      const parent = list.find(r => r.id === item.parentId)
+      const parent = findRoomById(list, item.parentId)
       if (!parent) return null
       return (parent.children || []).find(c => c.id === item.roomId) || null
     }
@@ -612,31 +758,32 @@ export default function HouseBuilderV2({
   }
 
   /* The container a queue item belongs to, or null for a top-level
-     room. Resolved straight off item.parentId — the queue already
-     carries it, so no re-scan of the tree is needed. */
+     room. Resolved straight off item.parentId via findRoomById, since
+     that container may itself be nested one level deep. */
   const findQueueContainer = (item) => {
     if (!item || item.parentId == null) return null
     const list = (houseState.rooms || {})[item.areaKey] || []
-    return list.find(r => r.id === item.parentId) || null
+    return findRoomById(list, item.parentId)
   }
 
   /* Immutable in-tree update — applies `updater(room)` to the room at
-     (areaKey, roomId, parentId), returning a new state tree. Only
-     rebuilds the touched area's list (and, when parentId is set, the
-     touched container's children). */
+     (areaKey, roomId, parentId), returning a new state tree. When
+     parentId is set, the owning container is located (and rebuilt) via
+     updateRoomById so a room inside a nested suite resolves correctly,
+     not just a room inside a top-level container. */
   const updateQueueRoom = (state, item, updater) => {
     if (!item) return state
     const list = (state.rooms || {})[item.areaKey] || []
-    const nextList = list.map(room => {
-      if (item.parentId != null) {
-        if (room.id !== item.parentId) return room
-        const kids = (room.children || []).map(c =>
+    if (item.parentId != null) {
+      const nextList = updateRoomById(list, item.parentId, (parent) => ({
+        ...parent,
+        children: (parent.children || []).map(c =>
           c.id === item.roomId ? updater(c) : c
-        )
-        return { ...room, children: kids }
-      }
-      return room.id === item.roomId ? updater(room) : room
-    })
+        ),
+      }))
+      return { ...state, rooms: { ...(state.rooms || {}), [item.areaKey]: nextList } }
+    }
+    const nextList = list.map(room => room.id === item.roomId ? updater(room) : room)
     return { ...state, rooms: { ...(state.rooms || {}), [item.areaKey]: nextList } }
   }
 
@@ -744,6 +891,22 @@ export default function HouseBuilderV2({
     })
     markCharacterized(item.roomId)
   }
+  /* Free-text "הערה" — a single note string per room, distinct from
+     freeProps (a list of short selected-chip tags). Written straight
+     through on every change, same as every other characterization
+     control on this screen; the outer debounced auto-save / manual
+     "שמור טיוטה" persists it like anything else in houseState. Does
+     NOT call markCharacterized — a note is supplementary, not a
+     "characteristic" (mirrors hasCharacterization's existing rule
+     that sizeKey alone doesn't count either). */
+  const setQueueRoomNote = (item, text) => {
+    if (readOnly || !item) return
+    setHouseState(prev => {
+      const next = updateQueueRoom(prev, item, r => ({ ...r, note: text }))
+      if (typeof onChange === 'function') onChange(houseToJSON(next))
+      return next
+    })
+  }
 
   /* Step-3 queue cursor. Clamped in render if the queue shrinks
      (e.g., user goes back to step 2 and removes rooms). */
@@ -759,6 +922,43 @@ export default function HouseBuilderV2({
 
   /* Wizard step index (0 / 1 / 2 → STEPS entry). */
   const [stepIndex, setStepIndex] = useState(0)
+
+  /* Reset scroll to the top on every step change (הבא/הקודם, or the
+     step-number chips). Which thing actually needs resetting depends
+     on how this component is hosted, and it isn't always the same:
+       · The step body's own overflowY:auto (below) IS the scroller
+         when nothing above bounds its height.
+       · The standalone client portal has no internal height cap at
+         all — the WINDOW scrolls.
+       · The admin split-screen embed (MeetingSummariesTab) wraps this
+         whole component in ITS OWN fixed-height, internally-scrolling
+         panel — our own overflow never actually engages there, and
+         the window doesn't move either.
+     Rather than special-case each host, walk up from the step body to
+     find whichever ancestor is ACTUALLY scrolled (scrollHeight >
+     clientHeight) within a few hops and reset it; only fall back to
+     the window when none is found, so we don't yank an unrelated
+     outer page to the top when an inner container already owns it. */
+  const stepBodyRef = useRef(null)
+  useEffect(() => {
+    stepBodyRef.current?.scrollTo(0, 0)
+
+    let scrolledAncestor = false
+    let node = stepBodyRef.current?.parentElement
+    let hops = 0
+    while (node && hops < 8) {
+      const cs = window.getComputedStyle(node)
+      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+        node.scrollTo(0, 0)
+        scrolledAncestor = true
+      }
+      node = node.parentElement
+      hops++
+    }
+    if (!scrolledAncestor) {
+      window.scrollTo({ top: 0 })
+    }
+  }, [stepIndex])
 
   /* Intro / opening screen — shown once per mount BEFORE the wizard.
      Mirrors V1's INTRO landing (איך בונים את הבית? + 3 numbered
@@ -1171,13 +1371,16 @@ export default function HouseBuilderV2({
       )}
 
       {/* ── Step body ─────────────────────────────────────────────── */}
-      <div style={{
-        flex:      '1 1 auto',
-        padding:   '14px 12px 20px',
-        overflowY: 'auto',
-        minHeight: 200,
-        opacity:   readOnly ? 0.75 : 1,
-      }}>
+      <div
+        ref={stepBodyRef}
+        style={{
+          flex:      '1 1 auto',
+          padding:   '14px 12px 20px',
+          overflowY: 'auto',
+          minHeight: 200,
+          opacity:   readOnly ? 0.75 : 1,
+        }}
+      >
         {stepIndex === 0 ? (
           /* ─── Step 1 body — general/big-picture form.
                 Compact, form-only (no schematic — that lives in step 2).
@@ -1192,6 +1395,8 @@ export default function HouseBuilderV2({
                 answers.house.targetArea (number|null). */}
             <Section title="גודל הבית" subtitle="הזינו גודל רצוי במ״ר (בערך) — ניתן לשנות מאוחר יותר">
               <TextInput
+                type="number"
+                min={1}
                 value={customTargetText}
                 onChange={setTargetCustom}
                 placeholder="גודל במ״ר"
@@ -1398,27 +1603,22 @@ export default function HouseBuilderV2({
                         <ContainerGroup
                           key={room.id}
                           room={room}
-                          label={roomLabel(room)}
-                          childLabel={roomLabel}
-                          childTypes={allowedChildTypes(room.type)}
+                          parentContainerId={null}
+                          floorKey={activeAreaKey}
+                          roomLabel={roomLabel}
+                          isContainerType={isContainerType}
+                          getChildTypes={allowedChildTypes}
                           displayType={displayType}
-                          canRemoveChild={(child) => canRemoveChild(room, child)}
-                          paletteOpen={childPaletteFor === room.id}
-                          onTogglePalette={() =>
-                            setChildPaletteFor(v => (v === room.id ? null : room.id))
+                          canRemoveChild={canRemoveChild}
+                          childPaletteFor={childPaletteFor}
+                          onTogglePalette={(id) =>
+                            setChildPaletteFor(v => (v === id ? null : id))
                           }
-                          onAddChild={(t) => addChildToContainer(activeAreaKey, room.id, t)}
-                          onRemoveChild={(childId) =>
-                            removeChildFromContainer(activeAreaKey, room.id, childId)
-                          }
-                          onRemoveUnit={() => requestRemoveUnit(activeAreaKey, room)}
-                          confirming={
-                            !!confirmRemoveUnit && confirmRemoveUnit.roomId === room.id
-                          }
-                          onConfirmRemoveUnit={() => {
-                            removeRoomFromFloor(activeAreaKey, room.id)
-                            setConfirmRemoveUnit(null)
-                          }}
+                          onAddChild={addChildToContainer}
+                          onRemoveChild={removeChildFromContainer}
+                          onRequestRemoveUnit={requestRemoveUnit}
+                          confirmRemoveUnit={confirmRemoveUnit}
+                          onConfirmRemoveUnit={confirmRemoveUnitNow}
                           onCancelRemoveUnit={() => setConfirmRemoveUnit(null)}
                           disabled={readOnly}
                         />
@@ -1461,6 +1661,7 @@ export default function HouseBuilderV2({
             toggleQueueRoomOption={toggleQueueRoomOption}
             addQueueRoomFreeProp={addQueueRoomFreeProp}
             removeQueueRoomFreeProp={removeQueueRoomFreeProp}
+            setQueueRoomNote={setQueueRoomNote}
             onFinish={() => { if (typeof onDone === 'function') onDone() }}
             readOnly={readOnly}
           />
@@ -1783,15 +1984,17 @@ function ToggleRow({ label, checked, onToggle, disabled, hint }) {
       to browser default (soft muted gray, matches V1). */
 function TextInput({
   value, onChange, placeholder, readOnly, inputMode, ariaLabel, style,
+  type = 'text', min,
 }) {
   return (
     <input
-      type="text"
+      type={type}
       value={value}
       onChange={(e) => onChange && onChange(e.target.value)}
       placeholder={placeholder}
       readOnly={readOnly}
       inputMode={inputMode}
+      min={min}
       aria-label={ariaLabel}
       dir="rtl"
       style={{
@@ -2320,17 +2523,37 @@ function PropChip({ label, selected, disabled, onClick, onRemove }) {
       Spans the full width of the parent 3-column grid so it reads as
       a box holding chips rather than as another chip.
 
+      RECURSIVE — the one allowed nesting case (יחידת סוויטה inside
+      יחידת דיור) means a child can itself be a container. When it is,
+      this renders ANOTHER ContainerGroup for it (same visual style,
+      one level deeper) instead of a flat RoomChip. `parentContainerId`
+      is null for the top-level render and the OWNING container's id
+      for a nested one, so this single component's own remove/add/
+      confirm handlers stay correctly scoped at every depth without
+      each level needing its own pre-curried callbacks. childPaletteFor
+      / confirmRemoveUnit are shared single-value state (only one
+      container's palette, or one pending remove-confirm, can be open
+      anywhere at a time) — the same design childPaletteFor already
+      used before nesting existed.
+
       RTL note: the header is a flex row whose FIRST child (the unit
       label) paints on the visual RIGHT, and `marginInlineStart:auto`
       pushes the remove control to the visual LEFT edge. */
 function ContainerGroup({
-  room, label, childLabel, childTypes, displayType,
-  canRemoveChild, paletteOpen, onTogglePalette,
-  onAddChild, onRemoveChild, onRemoveUnit,
-  confirming, onConfirmRemoveUnit, onCancelRemoveUnit,
+  room, parentContainerId, floorKey,
+  roomLabel, isContainerType, getChildTypes, displayType,
+  canRemoveChild,
+  childPaletteFor, onTogglePalette,
+  onAddChild, onRemoveChild,
+  onRequestRemoveUnit,
+  confirmRemoveUnit, onConfirmRemoveUnit, onCancelRemoveUnit,
   disabled,
 }) {
   const kids = room.children || []
+  const label = roomLabel(room)
+  const childTypes = getChildTypes(room.type)
+  const paletteOpen = childPaletteFor === room.id
+  const confirming = !!confirmRemoveUnit && confirmRemoveUnit.roomId === room.id
   return (
     <div style={{
       gridColumn:   '1 / -1',
@@ -2362,7 +2585,7 @@ function ContainerGroup({
         </span>
         <button
           type="button"
-          onClick={onRemoveUnit}
+          onClick={() => onRequestRemoveUnit(floorKey, room, parentContainerId)}
           disabled={disabled}
           aria-label={`הסר ${label}`}
           title={`הסר ${label}`}
@@ -2455,11 +2678,40 @@ function ContainerGroup({
           gap:                 8,
         }}>
           {kids.map(child => {
-            const removable = canRemoveChild(child)
+            if (isContainerType(child.type)) {
+              /* The one allowed nested case — render another
+                 ContainerGroup, scoped to THIS child, one level
+                 deeper. Same visual container style; parentContainerId
+                 becomes room.id so its own remove/add actions target
+                 the right node in the tree. */
+              return (
+                <ContainerGroup
+                  key={child.id}
+                  room={child}
+                  parentContainerId={room.id}
+                  floorKey={floorKey}
+                  roomLabel={roomLabel}
+                  isContainerType={isContainerType}
+                  getChildTypes={getChildTypes}
+                  displayType={displayType}
+                  canRemoveChild={canRemoveChild}
+                  childPaletteFor={childPaletteFor}
+                  onTogglePalette={onTogglePalette}
+                  onAddChild={onAddChild}
+                  onRemoveChild={onRemoveChild}
+                  onRequestRemoveUnit={onRequestRemoveUnit}
+                  confirmRemoveUnit={confirmRemoveUnit}
+                  onConfirmRemoveUnit={onConfirmRemoveUnit}
+                  onCancelRemoveUnit={onCancelRemoveUnit}
+                  disabled={disabled}
+                />
+              )
+            }
+            const removable = canRemoveChild(room, child)
             return (
               <RoomChip
                 key={child.id}
-                label={childLabel(child)}
+                label={roomLabel(child)}
                 isContainer={false}
                 disabled={disabled || !removable}
                 blockedReason={
@@ -2467,7 +2719,7 @@ function ContainerGroup({
                     ? 'לא ניתן להסיר — לפחות אחד מסוג זה נדרש ביחידה'
                     : null
                 }
-                onRemove={() => onRemoveChild(child.id)}
+                onRemove={() => onRemoveChild(floorKey, room.id, child.id)}
               />
             )
           })}
@@ -2479,7 +2731,7 @@ function ContainerGroup({
         <div>
           <button
             type="button"
-            onClick={onTogglePalette}
+            onClick={() => onTogglePalette(room.id)}
             style={{
               background:   '#ffffff',
               color:        SAGE_DARK,
@@ -2512,7 +2764,7 @@ function ContainerGroup({
                     label={displayType(t)}
                     count={kids.filter(c => c.type === t).length}
                     disabled={disabled}
-                    onClick={() => onAddChild(t)}
+                    onClick={() => onAddChild(floorKey, room.id, t)}
                   />
                 ))}
               </div>
@@ -3118,12 +3370,15 @@ function Step3Characterization({
   toggleQueueRoomOption,
   addQueueRoomFreeProp,
   removeQueueRoomFreeProp,
+  setQueueRoomNote,
   onFinish, readOnly,
 }) {
   const total = queue.length
   const [freePropText, setFreePropText] = useState('')
   /* "מאפיין חדש" expander — collapsed by default. */
   const [freePropOpen, setFreePropOpen] = useState(false)
+  /* "הערה" expander — collapsed by default, same vocabulary. */
+  const [noteOpen, setNoteOpen] = useState(false)
   /* Read-only at-a-glance overview of every characterized room.
      Swaps the guided body while open. */
   const [showSummary, setShowSummary] = useState(false)
@@ -3135,6 +3390,7 @@ function Step3Characterization({
   useEffect(() => {
     setFreePropText('')
     setFreePropOpen(false)
+    setNoteOpen(false)
   }, [index])
 
   /* Empty queue — user has no rooms yet. Prompt them back to step 2. */
@@ -3514,6 +3770,78 @@ function Step3Characterization({
             </div>
           )}
         </div>
+
+        {/* "הערה" — free-text note, collapsed by default. Same chevron
+            expander vocabulary as "מאפיין חדש" above. Unlike freeProps
+            (a list of short selected tags), this is ONE longer note
+            string, so it's a plain controlled textarea rather than an
+            add/remove chip list — written straight through on every
+            keystroke via setQueueRoomNote, same as every other control
+            on this screen. */}
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            onClick={() => setNoteOpen(v => !v)}
+            aria-expanded={noteOpen}
+            style={{
+              display:        'flex',
+              alignItems:     'center',
+              gap:            6,
+              width:          '100%',
+              background:     'none',
+              border:         'none',
+              padding:        '2px 0',
+              margin:         0,
+              fontFamily:     'inherit',
+              fontSize:       12.5,
+              fontWeight:     600,
+              color:          CHARCOAL,
+              cursor:         'pointer',
+              direction:      'rtl',
+              textAlign:      'right',
+            }}
+          >
+            <span>הערה</span>
+            <span style={{
+              display:    'inline-flex',
+              transform:  noteOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
+              color:      MUTED,
+              lineHeight: 1,
+            }}>
+              <IconChevron size={14} />
+            </span>
+          </button>
+
+          {noteOpen && (
+            <textarea
+              value={room.note || ''}
+              onChange={(e) => setQueueRoomNote(item, e.target.value)}
+              placeholder="כאן אפשר לרשום הערה, כמו לדוגמא: חייב להיות בצמוד לחלל מסויים"
+              readOnly={readOnly}
+              dir="rtl"
+              aria-label="הערה"
+              rows={3}
+              style={{
+                display:      'block',
+                width:        '100%',
+                marginTop:    8,
+                padding:      '8px 10px',
+                border:       `1px solid ${INPUT_BORDER}`,
+                borderRadius: 8,
+                fontFamily:   'inherit',
+                fontSize:     14,
+                lineHeight:   1.4,
+                color:        CHARCOAL,
+                background:   '#ffffff',
+                textAlign:    'right',
+                resize:       'vertical',
+                boxSizing:    'border-box',
+                outline:      'none',
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── ROOM navigation — inline text links, NOT buttons ──
@@ -3598,7 +3926,8 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
   }
 
   /* The two-line shape every summary entry uses: bold name, then
-     comma-joined characteristics in the muted colour beneath. */
+     comma-joined characteristics in the muted colour beneath, then
+     (when present) the free-text note on its own line. */
   /* Row shape:
        line 1 — name, plus the size in parentheses when the room has
                 one (a fixed-area type has no size selector, so it
@@ -3608,9 +3937,13 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
                 when there is nothing to list, so a room whose only
                 characteristic was its size shows just line 1 rather
                 than an empty "מאפיינים:" line.
+       line 3 — "הערה:" + the room's note, on its own line rather than
+                folded into the comma-separated characteristics list
+                (it's free text, not a short tag). Omitted entirely
+                when there's no note — no empty placeholder line.
      The prefix carries the same muted styling as the rest of the
      line — deliberately not bold, no new colour. */
-  const twoLine = (label, sizeLabel, chars) => (
+  const twoLine = (label, sizeLabel, chars, note) => (
     <>
       <div style={{ fontSize: 14, fontWeight: 700, color: CHARCOAL, lineHeight: 1.3 }}>
         {label}
@@ -3633,6 +3966,16 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
           lineHeight: 1.6,
         }}>
           {`מאפיינים: ${chars.join(', ')}`}
+        </div>
+      )}
+      {note && note.trim() && (
+        <div style={{
+          marginTop:  3,
+          fontSize:   12.5,
+          color:      INPUT_TEXT,
+          lineHeight: 1.6,
+        }}>
+          {`הערה: ${note.trim()}`}
         </div>
       )}
     </>
@@ -3681,6 +4024,7 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
               roomLabel(block.item.r),
               roomSizeLabel(block.item.r, config),
               roomCharacteristics(block.item.r, config),
+              block.item.r.note,
             )
           ) : (
             <>
@@ -3703,6 +4047,7 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
                       roomLabel(x.r),
                       roomSizeLabel(x.r, config),
                       roomCharacteristics(x.r, config),
+                      x.r.note,
                     )}
                   </div>
                 ))}

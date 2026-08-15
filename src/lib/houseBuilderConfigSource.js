@@ -51,6 +51,8 @@ export function getFallbackConfig() {
     getContainerRequiredTypes:   staticCfg.getContainerRequiredTypes,
     getFixedArea:                staticCfg.getFixedArea,
     hasFixedArea:                staticCfg.hasFixedArea,
+    EXCLUDE_FROM_AREA_CALC_TYPES: staticCfg.EXCLUDE_FROM_AREA_CALC_TYPES,
+    isExcludedFromAreaCalc:      staticCfg.isExcludedFromAreaCalc,
     /* No per-type defaultSize in the static in-code config — every
        type falls through to the caller's own DEFAULT_SIZE_KEY. */
     getDefaultSize:              () => null,
@@ -93,6 +95,7 @@ function adaptDbConfig(dbConfig) {
   const roomProps         = {}
   const roomSizes         = {}
   const fixedAreas        = {}
+  const excludeFromAreaCalcTypes = []
   const displayMap        = {}
   const defaultSizes      = {}
   const containerTypes    = []
@@ -120,6 +123,12 @@ function adaptDbConfig(dbConfig) {
     /* Fixed area — a positive finite number wins over the size selector. */
     if (typeof def.fixedArea === 'number' && Number.isFinite(def.fixedArea) && def.fixedArea > 0) {
       fixedAreas[type] = def.fixedArea
+    }
+
+    /* Excluded from total house-area calc — only enable when the flag
+       is strictly true (mirrors the isContainer flag below). */
+    if (def.excludeFromAreaCalc === true) {
+      excludeFromAreaCalcTypes.push(type)
     }
 
     /* Per-type defaultSize (S/M/L). Only recorded when the DB row
@@ -188,6 +197,8 @@ function adaptDbConfig(dbConfig) {
       const v = fixedAreas[t]
       return typeof v === 'number' && Number.isFinite(v) && v > 0
     },
+    EXCLUDE_FROM_AREA_CALC_TYPES: excludeFromAreaCalcTypes,
+    isExcludedFromAreaCalc: (t) => excludeFromAreaCalcTypes.includes(t),
     /* Per-type default size — returns 'S'|'M'|'L' when the DB row
        carries a valid key, else null so callers fall through to
        their own default. */

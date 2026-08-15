@@ -464,6 +464,33 @@
   display: block;
 }
 
+/* Links inside a cell value. Clicking one navigates instead of opening
+   the inline editor. */
+.tasks-cell-link {
+  color: #4F86C6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.tasks-cell-link:hover { color: #35618f; }
+
+/* Notes cell for a task that came from a meeting summary: the derived
+   link on its own line, the typed notes underneath. Block children stack
+   even under the row's nowrap, so each line still ellipsises on its own
+   rather than wrapping. */
+.tasks-cell-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.tasks-cell-stack > * {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tasks-meeting-link { display: block; }
+
 /* ── Inline cell inputs ── */
 .tasks-cell-input {
   width: 100%;

@@ -1,0 +1,321 @@
+/* src/components/childinquiries/ChildInquiriesTab.css
+   Visual feel mirrors Inquiries.css (inq-*) — same table rhythm,
+   modal shell, delete-confirm and convert-button treatment — under a
+   cit- prefix, same pattern SharedFilesTab.css already uses to mirror
+   DocumentsTab.css from a different file. */
+
+.cit-empty,
+.cit-loading {
+  color: #888;
+  font-size: 14px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+/* ── Table ── */
+.cit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+  direction: rtl;
+}
+
+.cit-table thead,
+.cit-table tbody {
+  display: block;
+  width: 100%;
+}
+
+.cit-table tr {
+  display: flex;
+  width: 100%;
+}
+
+.cit-table th {
+  background: #e8e3dc;
+  color: #1a1a18;
+  font-weight: 500;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  padding: 12px 14px;
+  white-space: nowrap;
+  border-top: 0.5px solid rgba(26,26,24,0.1);
+  border-left: 0.5px solid rgba(26,26,24,0.1);
+  overflow: hidden;
+}
+
+.cit-table th:last-child {
+  border-left: none;
+}
+
+.cit-table td {
+  padding: 10px 14px;
+  color: #1a1a18;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 14px;
+  border-bottom: 0.5px solid rgba(26,26,24,0.1);
+  border-left: 0.5px solid rgba(26,26,24,0.1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cit-table td:last-child {
+  border-left: none;
+}
+
+.cit-table tbody tr:nth-child(odd) td  { background: #f8f6f3; }
+.cit-table tbody tr:nth-child(even) td { background: #faf9f7; }
+
+.cit-row--converted td {
+  opacity: 0.55;
+}
+
+.cit-row--converted {
+  cursor: pointer;
+}
+
+/* ── Column widths ── */
+.cit-col-name    { flex: 1.5; min-width: 0; }
+.cit-col-phone   { flex: 1;   min-width: 0; justify-content: center; text-align: center; }
+.cit-col-date    { flex: 1;   min-width: 0; }
+.cit-col-action  { flex: 1;   min-width: 0; display: flex; align-items: center; justify-content: center; }
+.cit-col-convert { flex: 1.2; min-width: 0; display: flex; align-items: center; justify-content: center; }
+.cit-col-delete  { flex: 0 0 56px; display: flex; align-items: center; justify-content: center; }
+
+/* ── "טופס הפנייה" open-detail button ── */
+.cit-view-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a9478;
+}
+
+/* ── Convert to project button — icon-only, matches Inquiries.css's
+   inq-convert-btn / inq-converted-icon convention exactly. ── */
+.cit-convert-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+
+.cit-convert-btn:hover {
+  color: #6b7280;
+}
+
+.cit-converted-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+/* ── Delete button + inline confirm ── */
+.cit-delete-btn {
+  background: none;
+  border: none;
+  padding: 3px;
+  cursor: pointer;
+  color: #E24B4A;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+
+.cit-delete-btn:hover {
+  opacity: 1;
+}
+
+.cit-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.cit-delete-confirm-text {
+  color: #E24B4A;
+  font-weight: 600;
+}
+
+.cit-delete-confirm-yes {
+  background: #E24B4A;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.cit-delete-confirm-no {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #666;
+  cursor: pointer;
+}
+
+/* ── Modal (shared shell for the detail view + convert confirm) ── */
+.cit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.cit-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 460px;
+  direction: rtl;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.cit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.cit-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.cit-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.cit-modal-close:hover {
+  color: #555;
+}
+
+.cit-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cit-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.cit-detail-label {
+  color: #8a8680;
+  flex-shrink: 0;
+}
+
+.cit-detail-value {
+  color: #1a1a18;
+  text-align: left;
+}
+
+.cit-detail-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 2px 0;
+}
+
+.cit-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.cit-modal-save {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cit-modal-save:hover:not(:disabled) {
+  background: #1a2535;
+}
+
+.cit-modal-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cit-modal-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.cit-modal-cancel:hover:not(:disabled) {
+  border-color: #aaa;
+}
+
+.cit-modal-error {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #a83232;
+  background: #fff5f5;
+  border: 1px solid #f4c8c8;
+  border-radius: 6px;
+}

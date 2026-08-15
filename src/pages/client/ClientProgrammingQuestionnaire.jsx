@@ -52,6 +52,8 @@ import {
   AGE_RANGES,
   KNOWN_PEOPLE_FALLBACK,
 } from '../../lib/programmingConfig'
+import { estimateArea } from '../../lib/houseSizeConfig'
+import { getFallbackConfig, loadHouseBuilderConfig } from '../../lib/houseBuilderConfigSource'
 
 /* ── Hub-tile icons (Feather-style, stroke="currentColor") ─────────
    Small inline SVGs so the hub renders without pulling in a heavier
@@ -559,9 +561,11 @@ function YesNoRow({ label, value, onChange, isLocked }) {
    (NOT answers.questionnaire.*) so the fields keep their existing
    home in the jsonb.
 
-   Both questions are simple yes/no now:
-     · general.floorHeating (bool|null) — heating yes/no.
-     · general.elevator     (bool|null) — elevator yes/no.
+   All four questions are simple yes/no:
+     · general.floorHeating     (bool|null) — floor heating yes/no.
+     · general.elevator         (bool|null) — elevator yes/no.
+     · general.fireplace        (bool|null) — fireplace yes/no.
+     · general.gasWaterHeating  (bool|null) — gas water heating yes/no.
 
    Legacy data compatibility: earlier versions stored heating as
    general.floorHeatingFloors (string[] of floor keys). On READ, if
@@ -582,6 +586,12 @@ function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
   const elevatorValue = (general.elevator === true || general.elevator === false)
     ? general.elevator
     : null
+  const fireplaceValue = (general.fireplace === true || general.fireplace === false)
+    ? general.fireplace
+    : null
+  const gasWaterHeatingValue = (general.gasWaterHeating === true || general.gasWaterHeating === false)
+    ? general.gasWaterHeating
+    : null
 
   const patchGeneral = (partial) => {
     if (isLocked) return
@@ -590,8 +600,10 @@ function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
       general: { ...general, ...partial },
     })
   }
-  const setHeating  = (v) => patchGeneral({ floorHeating: v })
-  const setElevator = (v) => patchGeneral({ elevator:     v })
+  const setHeating         = (v) => patchGeneral({ floorHeating:    v })
+  const setElevator        = (v) => patchGeneral({ elevator:        v })
+  const setFireplace       = (v) => patchGeneral({ fireplace:       v })
+  const setGasWaterHeating = (v) => patchGeneral({ gasWaterHeating: v })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -607,6 +619,218 @@ function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
         onChange={setElevator}
         isLocked={isLocked}
       />
+      <YesNoRow
+        label="האם מעוניינים בקמין"
+        value={fireplaceValue}
+        onChange={setFireplace}
+        isLocked={isLocked}
+      />
+      <YesNoRow
+        label="האם מעוניינים בחימום מים בגז"
+        value={gasWaterHeatingValue}
+        onChange={setGasWaterHeating}
+        isLocked={isLocked}
+      />
+    </div>
+  )
+}
+
+/* ── Inspiration images (last questionnaire chapter) ────────────────
+   Bucket + small helpers — duplicated locally rather than imported
+   from ClientSharedFiles.jsx, matching that file's own stated
+   convention ("small and stable" helpers get copied, not shared). */
+const INSPIRATION_BUCKET = 'questionnaire-inspiration-images'
+const MAX_INSPIRATION_IMAGES = 10
+
+function inspirationFileExt(name) {
+  if (!name) return 'jpg'
+  const dot = name.lastIndexOf('.')
+  if (dot === -1 || dot === name.length - 1) return 'jpg'
+  return name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+}
+
+function inspirationStoragePath(url) {
+  const marker = `/object/public/${INSPIRATION_BUCKET}/`
+  const idx = (url || '').indexOf(marker)
+  return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length))
+}
+
+const IconTrashSmall = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+)
+
+/* InspirationImagesSection — upload/grid/delete for the last
+   questionnaire chapter. Any family member on the project may manage
+   these (RLS on the bucket is scoped to client_users → project_id,
+   not per-uploader), so unlike ClientSharedFiles' trash icon there is
+   no "isOwn" gate here — every image's delete icon is visible to every
+   viewer with edit access. */
+function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
+  const list = Array.isArray(images) ? images : []
+  const isMountedRef = useRef(true)
+  const fileInputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const [pageError, setPageError] = useState('')
+  const [confirmIdx, setConfirmIdx] = useState(null)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  const atMax = list.length >= MAX_INSPIRATION_IMAGES
+
+  const handlePick = () => {
+    if (isLocked || uploading || atMax) return
+    setPageError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (isLocked || uploading || atMax) return
+    if (!file.type || !file.type.startsWith('image/')) {
+      setPageError('נא לבחור קובץ תמונה')
+      return
+    }
+
+    setUploading(true)
+    setPageError('')
+    try {
+      if (!project_id) throw new Error('no project_id')
+
+      const ext  = inspirationFileExt(file.name)
+      const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      const path = `${project_id}/${uuid}.${ext}`
+
+      const { error: upErr } = await supabase.storage.from(INSPIRATION_BUCKET).upload(path, file)
+      if (upErr) throw upErr
+
+      const { data: { publicUrl } } = supabase.storage.from(INSPIRATION_BUCKET).getPublicUrl(path)
+
+      onChange([...list, { url: publicUrl, fileName: file.name, uploadedAt: new Date().toISOString() }])
+    } catch (err) {
+      console.error('inspiration image upload error:', err)
+      if (isMountedRef.current) setPageError('שגיאה בהעלאה, נסה שוב')
+    }
+    if (isMountedRef.current) setUploading(false)
+  }
+
+  const handleDelete = async (idx) => {
+    const img = list[idx]
+    if (!img) return
+    try {
+      const path = inspirationStoragePath(img.url)
+      if (path) {
+        const { error: rmErr } = await supabase.storage.from(INSPIRATION_BUCKET).remove([path])
+        if (rmErr) console.warn('inspiration image storage remove warning:', rmErr) /* non-fatal */
+      }
+      onChange(list.filter((_, i) => i !== idx))
+      setConfirmIdx(null)
+    } catch (err) {
+      console.error('inspiration image delete error:', err)
+      if (isMountedRef.current) {
+        setPageError('שגיאה במחיקה, נסה שוב')
+        setTimeout(() => isMountedRef.current && setPageError(''), 3000)
+      }
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        {!isLocked && !atMax && (
+          <button
+            type="button"
+            className="cp-shared-upload-btn"
+            onClick={handlePick}
+            disabled={uploading}
+          >
+            {uploading ? 'מעלה...' : '+ הוסף תמונה'}
+          </button>
+        )}
+        {!isLocked && atMax && (
+          <span style={{ fontSize: 13, color: '#8a8680' }}>הגעתם למספר המקסימלי של תמונות</span>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileSelected}
+        />
+      </div>
+
+      {pageError && <div className="cp-save-error" role="alert" style={{ marginBottom: 12 }}>{pageError}</div>}
+
+      {list.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))', gap: 10 }}>
+          {list.map((img, idx) => (
+            <div key={img.url || idx} style={{ position: 'relative' }}>
+              <a href={img.url} target="_blank" rel="noopener noreferrer">
+                <div style={{
+                  aspectRatio: '1 / 1', borderRadius: 8, overflow: 'hidden',
+                  border: '1px solid #d9d6cd', background: '#f2f0eb',
+                }}>
+                  <img
+                    src={img.url}
+                    alt={img.fileName || ''}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                </div>
+              </a>
+              <div
+                title={img.fileName}
+                style={{
+                  marginTop: 4, fontSize: 11, color: '#8a8680', textAlign: 'center',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {img.fileName}
+              </div>
+
+              {!isLocked && (
+                confirmIdx === idx ? (
+                  <div style={{
+                    position: 'absolute', top: 4, left: 4,
+                    display: 'flex', gap: 4, background: 'rgba(255,255,255,0.95)',
+                    borderRadius: 6, padding: '3px 4px',
+                  }}>
+                    <button type="button" className="cp-shared-card-confirm-yes" onClick={() => handleDelete(idx)}>כן</button>
+                    <button type="button" className="cp-shared-card-confirm-no" onClick={() => setConfirmIdx(null)}>לא</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmIdx(idx)}
+                    aria-label="מחק"
+                    title="מחק"
+                    style={{
+                      position: 'absolute', top: 4, left: 4,
+                      width: 26, height: 26, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'rgba(255,255,255,0.9)', border: '1px solid rgba(168,50,50,0.25)',
+                      borderRadius: 6, color: '#a83232', cursor: 'pointer',
+                    }}
+                  >
+                    <IconTrashSmall />
+                  </button>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -686,6 +910,21 @@ export default function ClientProgrammingQuestionnaire({
      (admin split-screen embed), skip the probe entirely and start as
      admin — the caller has already vouched for the viewer's role. */
   const [isAdmin, setIsAdmin] = useState(!!forceAdminEdit)
+
+  /* House-builder config — needed here (outside the builder itself)
+     to compute the hub's "estimated size" line via estimateArea(),
+     which needs each room type's fixedArea / excludeFromAreaCalc /
+     size-in-m² from config. Same seed-then-upgrade pattern
+     HouseBuilderV2 uses: render immediately with the in-code
+     fallback, swap to the DB-sourced config once it resolves. */
+  const [houseConfig, setHouseConfig] = useState(() => getFallbackConfig())
+  useEffect(() => {
+    let cancelled = false
+    loadHouseBuilderConfig()
+      .then(cfg => { if (!cancelled) setHouseConfig(cfg) })
+      .catch(e => console.warn('hub house config load failed:', e))
+    return () => { cancelled = true }
+  }, [])
 
   /* Questionnaire-scoped state: the shape from the config, live-edited. */
   const [qData,          setQData]          = useState(() => makeEmptyQData())
@@ -954,6 +1193,14 @@ export default function ClientProgrammingQuestionnaire({
 
   const handleHouseChange = (json) => {
     setAnswers(prev => ({ ...(prev || {}), house: json }))
+  }
+
+  /* Inspiration-images setter — mirrors handleHouseChange: writes
+     straight into answers.inspirationImages (NOT answers.questionnaire)
+     so the existing debounced auto-save + "שמור טיוטה" picks it up
+     alongside everything else, no separate save path needed. */
+  const handleInspirationImagesChange = (nextImages) => {
+    setAnswers(prev => ({ ...(prev || {}), inspirationImages: nextImages }))
   }
 
   const handleHouseBack = async (jsonFromBuilder) => {
@@ -1227,6 +1474,44 @@ export default function ClientProgrammingQuestionnaire({
     : hasHouseDraft ? { text: 'יש טיוטה שמורה',    color: '#8a8680' }
     : null
 
+  /* ── "בונה הבית" tile — computed size line (once houseDone) ───────
+     X = estimateArea() over every placed room, flattened out of the
+     nested rooms-by-area / children tree (estimateArea itself expects
+     a flat list — it does not recurse). fixedArea / excludeFromAreaCalc
+     are TYPE-level flags from houseConfig, not stored per room
+     instance, so each flattened room is annotated from config before
+     the call. Y = the Step-1 target (answers.house.targetArea),
+     already persisted as a plain number (see HouseBuilderV2's
+     targetArea field) — null/0/missing means "not filled in yet". */
+  const computedHouseArea = useMemo(() => {
+    const roomsByArea = answers && answers.house && answers.house.rooms
+    if (!roomsByArea || typeof roomsByArea !== 'object') return 0
+    const flat = []
+    const visit = (list) => {
+      for (const r of (Array.isArray(list) ? list : [])) {
+        flat.push(r)
+        if (Array.isArray(r.children)) visit(r.children)
+      }
+    }
+    for (const areaKey of Object.keys(roomsByArea)) visit(roomsByArea[areaKey])
+
+    const annotated = flat.map(r => ({
+      type:                r.type,
+      sizeKey:              r.sizeKey,
+      fixedArea:            houseConfig.getFixedArea ? houseConfig.getFixedArea(r.type) : null,
+      excludeFromAreaCalc:  houseConfig.isExcludedFromAreaCalc ? houseConfig.isExcludedFromAreaCalc(r.type) : false,
+    }))
+    return estimateArea(annotated, { sizesMap: houseConfig.ROOM_SIZES })
+  }, [answers, houseConfig])
+
+  const targetAreaY = (
+    typeof answers?.house?.targetArea === 'number'
+    && Number.isFinite(answers.house.targetArea)
+    && answers.house.targetArea > 0
+  ) ? answers.house.targetArea : null
+
+  const houseAreaMatches = targetAreaY != null && computedHouseArea <= targetAreaY * 1.10
+
   /* ── Render ─────────────────────────────────────────────────────── */
 
   if (loading) {
@@ -1466,14 +1751,36 @@ export default function ClientProgrammingQuestionnaire({
                   <IconHouse size={28} />
                 </span>
                 <span style={hubTileTitle}>בונה הבית</span>
-                <span style={hubTileDesc}>מבנה הבית והחללים</span>
-                {houseStatusLine && (
-                  <span style={{
-                    fontSize: 12.5, fontWeight: 500, marginTop: 2,
-                    color: houseStatusLine.color,
-                  }}>
-                    {houseStatusLine.text}
-                  </span>
+                {houseDone ? (
+                  <>
+                    <span style={hubTileDesc}>
+                      בחישוב החללים והמאפיינים גודל הבית יוצא כ-{computedHouseArea} מ״ר
+                    </span>
+                    {targetAreaY != null && (
+                      <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4a4a48' }}>
+                        שימו לב שהגודל{' '}
+                        <span style={{
+                          color:      houseAreaMatches ? '#4a7f4a' : '#a83232',
+                          fontWeight: 600,
+                        }}>
+                          {houseAreaMatches ? 'תואם' : 'חורג'}
+                        </span>
+                        {' '}{houseAreaMatches ? 'למה' : 'ממה'} שרשמתם בהתחלה ({targetAreaY} מ״ר)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span style={hubTileDesc}>מבנה הבית והחללים</span>
+                    {houseStatusLine && (
+                      <span style={{
+                        fontSize: 12.5, fontWeight: 500, marginTop: 2,
+                        color: houseStatusLine.color,
+                      }}>
+                        {houseStatusLine.text}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             </div>
@@ -1622,6 +1929,21 @@ export default function ClientProgrammingQuestionnaire({
                     onHouseChange={handleHouseChange}
                     isLocked={isLockedForViewer}
                   />
+                ) : step.key === 'inspiration' ? (
+                  /* Last chapter — the config-driven textarea block
+                     PLUS a bespoke image-upload section. Images live at
+                     answers.inspirationImages (NOT answers.questionnaire),
+                     mirroring how house_general reaches past qData into
+                     answers directly. */
+                  <>
+                    {step.blocks.map((block, idx) => renderBlock(block, idx, qData, updateQ, isLockedForViewer))}
+                    <InspirationImagesSection
+                      images={answers && answers.inspirationImages}
+                      project_id={project_id}
+                      onChange={handleInspirationImagesChange}
+                      isLocked={isLockedForViewer}
+                    />
+                  </>
                 ) : (
                   step.blocks.map((block, idx) => renderBlock(block, idx, qData, updateQ, isLockedForViewer))
                 )}

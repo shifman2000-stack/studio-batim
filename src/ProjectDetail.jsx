@@ -9,7 +9,10 @@ import TasksTab from './components/tasks/TasksTab'
 import FinishingTab from './components/finishing/FinishingTab'
 import QuantitiesTab from './components/quantities/QuantitiesTab'
 import ContractorSpecTab from './components/contractorspec/ContractorSpecTab'
-import MeetingSummariesTab from './components/meetings/MeetingSummariesTab'
+import MeetingSummariesTab, { MEETINGS_TAB_ID, buildMeetingDeepLink } from './components/meetings/MeetingSummariesTab'
+import ChildInquiriesTab from './components/childinquiries/ChildInquiriesTab'
+import ParentModelsPanel from './components/parentmodels/ParentModelsPanel'
+import TaskStatusControl from './components/tasks/TaskStatusControl'
 import NewTaskModal from './NewTaskModal'
 import ProjectGantt from './components/ProjectGantt'
 import {
@@ -49,30 +52,6 @@ const STAGE_COLORS = {
   'השהייה':        { bg: '#bcaaae', text: '#000' },
 }
 
-// ── Tasks tab constants ──
-const PD_STATUS_META = {
-  'דחוף':  { color: '#E24B4A' },
-  'פעיל':  { color: '#F6BF26' },
-  'הושלם': { color: '#1D9E75' },
-}
-function pdStatusColorByName(name) {
-  return PD_STATUS_META[name]?.color || PD_STATUS_META['פעיל'].color
-}
-
-const PdIconClock = ({ size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <polyline points="12 6 12 12 16 14"/>
-  </svg>
-)
-const PdIconCheckCircle = ({ size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-    <polyline points="22 4 12 14.01 9 11.01"/>
-  </svg>
-)
 const PdIconTrash2 = ({ size = 15 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -83,77 +62,100 @@ const PdIconTrash2 = ({ size = 15 }) => (
   </svg>
 )
 
-function pdStatusIcon(status, size = 18) {
-  if (status === 'הושלם') return <PdIconCheckCircle size={size} />
-  return <PdIconClock size={size} />
+/* ── Notes cell ──
+   Two separate things share this cell:
+
+     1. A DERIVED link back to the meeting summary, shown whenever the
+        task carries meeting_summary_id. The FK is the source of truth —
+        nothing is stored in `notes`, so the column stays free for real
+        notes and the href can never go stale.
+     2. Whatever text the user typed, rendered below it.
+
+   The whole <td> is an edit trigger (PdEditCell's onClick), so every
+   anchor MUST stopPropagation — otherwise clicking one opens the inline
+   editor instead of navigating. Internal paths go through the router,
+   not a raw href, so there is no full page reload. Clicking anywhere
+   else in the cell still starts editing, exactly as before. */
+
+/* A link inside typed text: a full http(s) URL, or an app-relative path
+   starting with "/". The path form only counts at the start of a token,
+   otherwise plain text like "24/7" or "1/2 מהתקציב" would linkify its
+   tail. */
+const PD_LINK_RE = /(https?:\/\/\S+|\/\S+)/g
+
+function pdSplitNotes(value) {
+  const out = []
+  let last = 0
+  for (const m of value.matchAll(PD_LINK_RE)) {
+    const start = m.index
+    const before = start === 0 ? '' : value[start - 1]
+    /* "/..." only starts a link at a token boundary. */
+    if (m[0][0] === '/' && before !== '' && !/\s/.test(before)) continue
+    if (start > last) out.push({ text: value.slice(last, start), link: false })
+    out.push({ text: m[0], link: true })
+    last = start + m[0].length
+  }
+  if (last < value.length) out.push({ text: value.slice(last), link: false })
+  return out
 }
 
-function PdStatusPopover({ statusId, statusName, taskStatuses, onSelect }) {
-  const [open, setOpen] = useState(false)
-  const [pos,  setPos]  = useState({ top: 0, right: 0 })
-  const triggerRef = useRef(null)
-  const popoverRef = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handler(e) {
-      if (
-        triggerRef.current && !triggerRef.current.contains(e.target) &&
-        popoverRef.current && !popoverRef.current.contains(e.target)
-      ) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  function handleOpen() {
-    if (open) { setOpen(false); return }
-    const rect  = triggerRef.current.getBoundingClientRect()
-    const popH  = 116
-    const below = rect.bottom + 4
-    const above = rect.top - popH - 4
-    const top   = below + popH > window.innerHeight ? above : below
-    setPos({ top, right: window.innerWidth - rect.right })
-    setOpen(true)
-  }
-
-  const curName = statusName || 'פעיל'
-
+function PdNotesText({ text, navigate }) {
+  const value = text || ''
+  if (!value) return null
   return (
-    <div className="tasks-status-wrap">
-      <button
-        ref={triggerRef}
-        type="button"
-        className="tasks-status-trigger"
-        style={{ color: pdStatusColorByName(curName) }}
-        onClick={handleOpen}
-        title={curName}
+    <span className="tasks-cell-value">
+      {pdSplitNotes(value).map((part, i) => {
+        if (!part.link) return <span key={i}>{part.text}</span>
+        const internal = part.text.startsWith('/')
+        return (
+          <a
+            key={i}
+            className="tasks-cell-link"
+            href={part.text}
+            onClick={(e) => {
+              /* Keep the click off the cell's edit trigger. */
+              e.stopPropagation()
+              if (internal) {
+                e.preventDefault()
+                navigate(part.text)
+              }
+            }}
+            {...(internal ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+          >
+            {part.text}
+          </a>
+        )
+      })}
+    </span>
+  )
+}
+
+/* The cell itself. A task with no meeting_summary_id renders exactly
+   what it rendered before — just the notes text, no link, no extra
+   wrapper. Exported so the general /tasks table (Tasks.jsx) can reuse
+   the exact same rendering for the same notes column, instead of a
+   second, drifting implementation. */
+export function PdNotesCell({ task, navigate }) {
+  const summaryId = task.meeting_summary_id
+  if (!summaryId) return <PdNotesText text={task.notes} navigate={navigate} />
+
+  const href = buildMeetingDeepLink(task.project_id, summaryId)
+  return (
+    <span className="tasks-cell-value tasks-cell-stack">
+      <a
+        className="tasks-cell-link tasks-meeting-link"
+        href={href}
+        onClick={(e) => {
+          /* Keep the click off the cell's edit trigger. */
+          e.stopPropagation()
+          e.preventDefault()
+          navigate(href)
+        }}
       >
-        {pdStatusIcon(curName)}
-      </button>
-      {open && createPortal(
-        <div
-          ref={popoverRef}
-          className="tasks-status-popover"
-          style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
-        >
-          {(taskStatuses || []).map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              className={'tasks-status-option' + (opt.id === statusId ? ' tasks-status-option--active' : '')}
-              onClick={() => { setOpen(false); onSelect(opt.id, opt.name) }}
-            >
-              <span style={{ color: pdStatusColorByName(opt.name), display: 'flex', alignItems: 'center' }}>
-                {pdStatusIcon(opt.name, 15)}
-              </span>
-              <span>{opt.name}</span>
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
+        למעבר לסיכום הפגישה לחץ כאן
+      </a>
+      <PdNotesText text={task.notes} navigate={navigate} />
+    </span>
   )
 }
 
@@ -216,11 +218,20 @@ function PdEditCell({ task, field, className, children,
   )
 }
 
+/* Fixed id for the parent-projects-only "פרויקטי בנים" tab — appended
+   to TABS conditionally at render time (see visibleTabs below), never
+   part of the static TABS array since it must only show for projects
+   flagged is_parent_project. */
+const CHILD_INQUIRIES_TAB_ID = 12
+const MODELS_TAB_ID = 13
+
 const TABS = [
   { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
   { id: 3, label: 'מעקב פרויקט' },
-  { id: 11, label: 'סיכומי פגישות' },
+  /* Id comes from the meetings module so the deep links it builds
+     (?tab=…) can never drift from the tab they're meant to open. */
+  { id: MEETINGS_TAB_ID, label: 'סיכומי פגישות' },
   { id: 2, label: 'מעקב מסמכים' },
   { id: 6, label: 'כתב כמויות' },
   { id: 7, label: 'חומרי גמר' },
@@ -228,6 +239,12 @@ const TABS = [
   { id: 10, label: 'מרחב משותף' },
   { id: 8, label: 'שלבי התקדמות' },
 ]
+
+/* Tabs hidden entirely for parent projects — construction-detail tabs
+   that don't apply to a project whose only "content" is its models and
+   child inquiries. Gated on is_parent_project alone (never on
+   parent_project_id — a project can in theory be both). */
+const PARENT_HIDDEN_TAB_IDS = [10, 8, 6, 9, 7] // מרחב משותף, שלבי התקדמות, כתב כמויות, מפרט לקבלן, חומרי גמר
 
 /* ── Professional roles (card 3) ── */
 const PROF_ROLES = [
@@ -279,9 +296,53 @@ function ProjectDetail() {
   const fromTasks   = location.state?.from === 'tasks'
   const fromArchive = location.state?.fromArchive === true
 
+  /* ── Deep-link params (READ-ONLY) ──
+     `?tab=<id>&summary=<uuid>` opens this page straight on a tab with
+     one meeting summary expanded — that is what the משימות tab's
+     "למעבר לסיכום הפגישה" link points at.
+
+     Read-only in one direction only: we never WRITE the URL when the
+     user switches tabs by hand, so the back-navigation flows that
+     depend on location.state (fromTasks / fromArchive) are untouched.
+     An absent or unknown tab id falls back to today's default (1). */
+  const deepLink = (() => {
+    const params  = new URLSearchParams(location.search)
+    const rawTab  = Number(params.get('tab'))
+    const validTab = TABS.some(t => t.id === rawTab) ? rawTab : null
+    return { tab: validTab, summaryId: params.get('summary') || null }
+  })()
+
   const [project, setProject]       = useState(null)
   const [userRole, setUserRole]     = useState(null)
-  const [activeTab, setActiveTab]   = useState(1)
+  const [activeTab, setActiveTab]   = useState(deepLink.tab ?? 1)
+  /* The useState above only runs on MOUNT, and the notes-cell link
+     points at the project we are usually already on, so React Router
+     reuses this component and never remounts it. This effect is what
+     makes the link work at all.
+
+     Keyed on location.KEY, not on location.search. The tasks link below
+     switches tab in component state and deliberately leaves the URL
+     alone, so after the first meeting link the address bar keeps
+     ?tab=11&summary=… forever. Clicking the meeting link again then
+     navigates to a byte-identical URL — search never changes, and a
+     search-keyed effect would never fire again. location.key is a fresh
+     token per navigation even when the URL is unchanged, so it tracks
+     the navigation itself rather than the string.
+
+     Manual tab switches perform NO navigation, so they mint no new key
+     and are still never overridden.
+
+     Falls back to today's default (1, פרטי תיק) rather than only acting
+     when deepLink.tab is set — otherwise a navigation with no ?tab=
+     param (e.g. double-clicking a converted row in "פרויקטי בנים", or
+     the "פרויקט בן של X" parent link) would leave activeTab at whatever
+     tab id happened to be active on the PREVIOUS project, which may not
+     even exist as a tab here (e.g. a parent-only tab id on a non-parent
+     project) and render nothing at all. */
+  useEffect(() => {
+    setActiveTab(deepLink.tab ?? 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
   /* Sub-header collapse — hides the parent/child subtitle line, the
      stage/archive badge, and the favorite star to free vertical space
      while writing a summary. Project name + back link stay visible.
@@ -377,7 +438,7 @@ function ProjectDetail() {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id, client_visible_tabs')
+        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id, is_parent_project, client_visible_tabs, selected_model_id')
         .eq('id', id)
         .single()
       if (data) {
@@ -390,8 +451,12 @@ function ProjectDetail() {
 
   /* ── Parent / child relationship (2-level rule, mutually exclusive).
      parentInfo: { id, name } when THIS project is a child.
-     childCount: number of non-archived children when this project is a parent.
-     One of them resolves to a truthy value to drive the subtitle line. ── */
+     childCount: real, live count of non-archived children — still always
+     computed the same way regardless of is_parent_project, since a
+     boolean flag can't supply a count. The subtitle line's VISIBILITY,
+     though, now reads project.is_parent_project directly (see below)
+     rather than childCount > 0, so a flagged parent with zero children
+     still shows "פרויקט אב של 0 פרויקטים" instead of nothing. ── */
   const [parentInfo, setParentInfo] = useState(null)
   const [childCount, setChildCount] = useState(0)
   useEffect(() => {
@@ -423,6 +488,25 @@ function ProjectDetail() {
     run()
     return () => { cancelled = true }
   }, [project])
+
+  /* ── פרטי דגם: models belonging to THIS project's parent, only
+     relevant when this project is a child. Scoped strictly to
+     parent_project_id — never this project's own id. ── */
+  const [parentModels, setParentModels] = useState([])
+  useEffect(() => {
+    if (!project?.parent_project_id) { setParentModels([]); return }
+    let cancelled = false
+    const loadParentModels = async () => {
+      const { data } = await supabase
+        .from('project_models')
+        .select('id, name')
+        .eq('project_id', project.parent_project_id)
+        .order('created_at', { ascending: true })
+      if (!cancelled) setParentModels(data || [])
+    }
+    loadParentModels()
+    return () => { cancelled = true }
+  }, [project?.parent_project_id])
 
   /* ── fetch employees (for "אחראית פרויקט") ── */
   const [employees, setEmployees] = useState([])
@@ -539,6 +623,13 @@ function ProjectDetail() {
     const value = newId || null
     await supabase.from('projects').update({ responsible_id: value }).eq('id', id)
     setProject(prev => prev ? { ...prev, responsible_id: value } : prev)
+  }
+
+  /* ── פרטי דגם: save this (child) project's chosen model ── */
+  const saveSelectedModel = async (newId) => {
+    const value = newId || null
+    await supabase.from('projects').update({ selected_model_id: value }).eq('id', id)
+    setProject(prev => prev ? { ...prev, selected_model_id: value } : prev)
   }
 
   /* ── Client info helper ── */
@@ -690,6 +781,18 @@ function ProjectDetail() {
     ? STAGE_COLORS[project.current_stage] || { bg: '#e0e0e0', text: '#000' }
     : null
 
+  /* Parent projects: hide the construction-detail tabs that don't apply,
+     and append the two parent-only tabs (models, then the inquiries that
+     reference them) — kept out of the static TABS array since both only
+     show for projects flagged is_parent_project. */
+  const visibleTabs = project?.is_parent_project
+    ? [
+        ...TABS.filter(t => !PARENT_HIDDEN_TAB_IDS.includes(t.id)),
+        { id: MODELS_TAB_ID, label: 'דגמים' },
+        { id: CHILD_INQUIRIES_TAB_ID, label: 'פרויקטי בנים' },
+      ]
+    : TABS
+
   /* ── Committee fields ── */
   const committeeFields = [
     { label: 'ועדה',                      field: 'committee' },
@@ -787,7 +890,7 @@ function ProjectDetail() {
                 פרויקט בן של {parentInfo.name}
               </span>
             )}
-            {!subHeaderCollapsed && !parentInfo && childCount > 0 && (
+            {!subHeaderCollapsed && !parentInfo && project?.is_parent_project && (
               <span
                 onClick={() => navigate(`/פרויקטים/אב/${id}`)}
                 style={{
@@ -860,7 +963,7 @@ function ProjectDetail() {
 
       {/* ── Tabs bar ── */}
       <div className="pd-tabs-bar">
-        {TABS.map(tab => {
+        {visibleTabs.map(tab => {
           const ctrl    = CONTROLLABLE_BY_MANAGER_ID[tab.id]
           const visible = ctrl ? isClientTabVisible(ctrl.clientKey, clientVisibleTabs) : null
           return (
@@ -987,10 +1090,10 @@ function ProjectDetail() {
                       return (
                         <tr key={task.id} className={`tasks-row${isUrgent ? ' tasks-row--urgent' : ''}`}>
                           <td className="tasks-col-status" onClick={e => e.stopPropagation()}>
-                            <PdStatusPopover
+                            <TaskStatusControl
                               statusId={task.status_id}
                               statusName={taskStatusName}
-                              taskStatuses={pdTaskStatuses}
+                              options={pdTaskStatuses}
                               onSelect={(id, name) => handlePdStatusChange(task.id, id, name)}
                             />
                           </td>
@@ -1007,7 +1110,7 @@ function ProjectDetail() {
                             <span className="tasks-cell-value">{pdFormatDate(task.due_date)}</span>
                           </PdEditCell>
                           <PdEditCell {...pdEditCellProps} task={task} field="notes" className="tasks-col-notes">
-                            <span className="tasks-cell-value">{task.notes || ''}</span>
+                            <PdNotesCell task={task} navigate={navigate} />
                           </PdEditCell>
                           <td className="tasks-col-delete" onClick={e => e.stopPropagation()}>
                             <button
@@ -1037,7 +1140,8 @@ function ProjectDetail() {
 
             <div className="pd-info-cards-row">
 
-              {/* Right 50%: פרטים אישיים */}
+              {/* Right 50%: פרטים אישיים, with פרטי דגם stacked directly below it */}
+              <div className="pd-info-col">
               <div className="pd-info-card">
                 <div className="pd-card-title">פרטים אישיים</div>
 
@@ -1069,6 +1173,38 @@ function ProjectDetail() {
                   <button className="pd-add-btn" onClick={addContact}>+ הוסף איש קשר</button>
                 )}
               </div>
+
+              {/* פרטי דגם — only for child projects (non-null parent_project_id),
+                  stacked directly below פרטים אישיים in the same column.
+                  Dropdown scoped strictly to the PARENT's project_models. */}
+              {project?.parent_project_id && (
+                <div className="pd-info-card">
+                  <div className="pd-card-title">פרטי דגם</div>
+                  {parentModels.length === 0 ? (
+                    <span className="pd-field-value pd-field-empty" style={{ cursor: 'default', display: 'inline-block' }}>
+                      לפרויקט האב אין עדיין דגמים מוגדרים
+                    </span>
+                  ) : (
+                    <div className="pd-field-row">
+                      <span className="pd-field-label">דגם</span>
+                      <div className="pd-field-cell">
+                        <select
+                          className="pd-field-input"
+                          value={project.selected_model_id || ''}
+                          onChange={e => saveSelectedModel(e.target.value)}
+                          disabled={fromArchive}
+                        >
+                          <option value="">— בחר דגם —</option>
+                          {parentModels.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              </div>{/* end pd-info-col */}
 
               {/* Middle 25%: פרטי מגרש */}
               <div className="pd-info-card">
@@ -1198,7 +1334,7 @@ function ProjectDetail() {
 
         {/* ── Tab 2 — מעקב מסמכים ── */}
         {activeTab === 2 && (
-          <DocumentsTab projectId={id} />
+          <DocumentsTab projectId={id} isParentProject={!!project?.is_parent_project} />
         )}
 
         {/* ── Tab 3 — מעקב שלבי התקדמות ── */}
@@ -1208,7 +1344,21 @@ function ProjectDetail() {
 
         {/* ── Tab 11 — סיכומי פגישות ── */}
         {activeTab === 11 && (
-          <MeetingSummariesTab projectId={id} />
+          <MeetingSummariesTab
+            projectId={id}
+            /* Opens this summary once the list loads (see the
+               seeding effect inside the tab). Null when absent. */
+            initialOpenSummaryId={deepLink.summaryId}
+            /* Fresh per navigation, unchanged by re-renders. Lets the
+               accordion tell "the user clicked the link again" apart
+               from "React re-rendered", even when the target summary is
+               the one already named in the URL. */
+            navToken={location.key}
+            /* The studio-tasks status is changed in the משימות tab, so
+               that block links here. Switches tab in place rather than
+               through the URL — the URL is read, never written. */
+            onOpenTasksTab={() => setActiveTab(5)}
+          />
         )}
 
         {/* ── Tab 6 — כתב כמויות ── */}
@@ -1242,6 +1392,16 @@ function ProjectDetail() {
               setProject(prev => ({ ...prev, gantt_state: newState }))
             }}
           />
+        )}
+
+        {/* ── Tab 13 — דגמים (parent projects only) ── */}
+        {activeTab === MODELS_TAB_ID && project?.is_parent_project && (
+          <ParentModelsPanel projectId={id} projectName={project?.name} />
+        )}
+
+        {/* ── Tab 12 — פרויקטי בנים (parent projects only) ── */}
+        {activeTab === CHILD_INQUIRIES_TAB_ID && project?.is_parent_project && (
+          <ChildInquiriesTab projectId={id} />
         )}
 
       </div>{/* end pd-tab-content */}

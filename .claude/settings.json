@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "WebSearch",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__list_tables",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__list_extensions",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__list_migrations",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__list_projects",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__get_project",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__list_branches",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__get_advisors",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__get_logs"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./.env.local)",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__execute_sql",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__apply_migration",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__deploy_edge_function",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__create_branch",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__delete_branch",
+      "mcp__b66ad38a-7b46-43a4-99fa-d3225ac777fb__merge_branch"
+    ],
+    "defaultMode": "bypassPermissions"
+  }
+}

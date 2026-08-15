@@ -230,9 +230,17 @@
   min-width: 0;
 }
 
-/* אנשי קשר — right 50% */
-.pd-info-cards-row > .pd-info-card:first-child {
+/* אנשי קשר (+ פרטי דגם, stacked below it) — right 50% */
+.pd-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   flex: 2;
+  min-width: 0;
+}
+
+.pd-info-col > .pd-info-card {
+  flex: none;
 }
 /* פרטי מגרש + בעלי מקצוע — 25% each (flex: 1 each, so ratio 2:1:1) */
 

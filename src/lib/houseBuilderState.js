@@ -8,7 +8,7 @@
 //   {
 //     floors: { first: bool, ground: bool, basement: bool },
 //     yard:   bool,
-//     rooms:  { [areaKey]: [ { type, props, freeProps } ] }
+//     rooms:  { [areaKey]: [ { type, props, freeProps, note } ] }
 //   }
 //
 // Transient runtime fields (mode, selection, id, roomSeq, done) are
@@ -123,6 +123,7 @@ export function houseToJSON(state) {
                    ? r.props
                    : {},
       freeProps: Array.isArray(r.freeProps) ? [...r.freeProps] : [],
+      note:      typeof r.note === 'string' ? r.note : '',
     }
     if (Array.isArray(r.children)) {
       out.children = r.children.map(serializeRoom)
@@ -216,6 +217,7 @@ export function houseFromJSON(data) {
       freeProps: Array.isArray(r.freeProps)
                    ? r.freeProps.filter(x => typeof x === 'string')
                    : [],
+      note:      typeof r.note === 'string' ? r.note : '',
     }
     if (Array.isArray(r.children)) {
       out.children = r.children.filter(isValidRoom).map(hydrateRoom)

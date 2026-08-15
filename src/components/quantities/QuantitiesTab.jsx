@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { DEFAULT_QUANTITIES_NOTES } from '../../lib/projectNotesDefaults'
+import CategoryHeaderRow from '../common/CategoryHeaderRow'
 import '../../QuantitiesTab.css'
 import '../../TasksTab.css'       /* reuse .tt-col-delete, .tt-row-delete-btn, .tt-delete-confirm-*, .tt-add-row-* */
 import '../../FinishingTab.css'   /* reuse .ft-notes-* and .ft-pdf-* visual styles */
@@ -149,6 +150,8 @@ export default function QuantitiesTab({ projectId }) {
   /* Categories the user created via "+ קטגוריה חדשה" that have no row yet.
      They render as empty groups; vanish on reload if no row was ever added. */
   const [pendingCategories, setPendingCategories] = useState([])
+  /* category name → inline error from a failed category delete */
+  const [categoryErrors, setCategoryErrors] = useState({})
 
   /* General-notes section (projects.quantities_notes) */
   const [notes,         setNotes]         = useState('')
@@ -287,75 +290,13 @@ export default function QuantitiesTab({ projectId }) {
   const loadItems = async () => {
     setLoading(true)
 
-    /* ── Step 1: clean up any duplicates (keep MIN id per project+template) ── */
-    const { data: allRows } = await supabase
+    /* ── Step 1: fetch current rows. Seeding from quantities_templates now
+       happens in a DB trigger at project-creation time, not here. ── */
+    const { data } = await supabase
       .from('project_quantities')
-      .select('id, project_id, template_id')
-      .not('template_id', 'is', null)
-      .order('id', { ascending: true })
-
-    if (allRows && allRows.length > 0) {
-      const seen     = new Map()
-      const toDelete = []
-      for (const row of allRows) {
-        const key = `${row.project_id}:${row.template_id}`
-        if (seen.has(key)) {
-          toDelete.push(row.id)
-        } else {
-          seen.set(key, row.id)
-        }
-      }
-      if (toDelete.length > 0) {
-        await supabase.from('project_quantities').delete().in('id', toDelete)
-      }
-    }
-
-    /* ── Step 2: use a count check before deciding to seed ── */
-    const { count } = await supabase
-      .from('project_quantities')
-      .select('*', { count: 'exact', head: true })
+      .select('*')
       .eq('project_id', projectId)
-
-    let data = null
-
-    if (count === 0) {
-      /* No rows yet — seed from templates */
-      const { data: templates } = await supabase
-        .from('quantities_templates')
-        .select('*')
-        .order('sort_order')
-
-      if (templates && templates.length > 0) {
-        const toInsert = templates.map(t => ({
-          project_id:  projectId,
-          template_id: t.id,
-          category:    t.category,
-          item:        t.item,
-          qty_sqm:     null,
-          units:       null,
-          dimensions:  null,
-          description: null,
-          image_url:   null,
-          sort_order:  t.sort_order,
-        }))
-        const { data: inserted } = await supabase
-          .from('project_quantities')
-          .insert(toInsert)
-          .select('*')
-          .order('sort_order')
-        if (inserted) data = inserted
-      }
-    }
-
-    /* ── Step 3: fetch current rows if not already set from insert ── */
-    if (!data) {
-      const { data: fetched } = await supabase
-        .from('project_quantities')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('sort_order')
-      data = fetched
-    }
+      .order('sort_order')
 
     setItems(data || [])
     setPendingCategories([])   /* drop any pending categories on reload from DB */
@@ -372,6 +313,45 @@ export default function QuantitiesTab({ projectId }) {
   const deleteItem = async (id) => {
     await supabase.from('project_quantities').delete().eq('id', id)
     setItems(prev => prev.filter(it => it.id !== id))
+  }
+
+  /* ── Delete a WHOLE category — this project's rows only ──
+     One request: a single DELETE filtered by project_id + category, so
+     no other project is touched and the template table is never read or
+     written. Optimistic, with the previous list restored and an inline
+     error shown if the DB rejects it — the screen must never show a
+     category as gone while the row is still there. */
+  const deleteCategory = async (category) => {
+    setCategoryErrors(prev => {
+      if (!(category in prev)) return prev
+      const next = { ...prev }
+      delete next[category]
+      return next
+    })
+
+    const doomed = items.filter(it => it.category === category)
+    if (doomed.length === 0) {
+      /* A pending category has no DB rows at all — local removal only. */
+      setPendingCategories(prev => prev.filter(c => c !== category))
+      return
+    }
+
+    const backup = items
+    setItems(prev => prev.filter(it => it.category !== category))
+
+    const { error } = await supabase
+      .from('project_quantities')
+      .delete()
+      .eq('project_id', projectId)
+      .eq('category',   category)
+
+    if (error) {
+      console.error('QuantitiesTab — category delete failed:', error)
+      setItems(backup)
+      setCategoryErrors(prev => ({ ...prev, [category]: 'מחיקת הקטגוריה נכשלה' }))
+      return
+    }
+    setPendingCategories(prev => prev.filter(c => c !== category))
   }
 
   /* ── Add a new empty row under a category (existing, brand-new, or pending) ── */
@@ -446,7 +426,13 @@ export default function QuantitiesTab({ projectId }) {
           {/* Category groups */}
           {groups.map(({ category, items: catItems }) => (
             <Fragment key={category}>
-              <div className="qt-category-header">{category}</div>
+              <CategoryHeaderRow
+                prefix="qt"
+                category={category}
+                itemCount={catItems.length}
+                onDelete={() => deleteCategory(category)}
+                error={categoryErrors[category]}
+              />
               {catItems.map((item, i) => (
                 <QuantitiesRow
                   key={item.id}

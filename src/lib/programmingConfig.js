@@ -103,7 +103,7 @@ export const QUESTIONNAIRE_STEPS = [
        step.key === 'house_general'). */
     key: 'house_general',
     title: 'החלטות כלליות לבית',
-    intro: 'שני פרטים טכניים שיעזרו לנו לתכנן — חימום רצפתי ומעלית.',
+    intro: 'פרטים טכניים שיעזרו לנו לתכנן',
     blocks: []
   },
   {

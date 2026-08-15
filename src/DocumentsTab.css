@@ -261,6 +261,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   text-align: center;
 }
 .dt-col-delete   { flex: 0 0 24px;  display: flex; justify-content: center; }
@@ -612,6 +613,225 @@
   white-space: nowrap;
   flex-shrink: 0;
   transition: border-color 0.15s;
+}
+
+/* ── Propagate-to-children button (dt-col-client-access, parent
+   projects only) — same tiny-icon-button recipe as .dt-access-trigger,
+   just muted by default and sage on hover so it doesn't compete
+   visually with the access icon it sits beside. ── */
+.dt-propagate-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #c8c4be;
+  transition: color 0.15s;
+}
+
+.dt-propagate-btn:hover {
+  color: #7a9478;
+}
+
+/* ── Propagate modal — same shell recipe as .ppm-modal-* / .cit-modal-* ── */
+.dt-propagate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.dt-propagate-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 420px;
+  direction: rtl;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.dt-propagate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.dt-propagate-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.dt-propagate-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.dt-propagate-close:hover {
+  color: #555;
+}
+
+.dt-propagate-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.dt-propagate-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.dt-propagate-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dt-propagate-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #1a1a18;
+  cursor: pointer;
+}
+
+.dt-propagate-mode-row input[type="radio"] {
+  accent-color: #7a9478;
+  cursor: pointer;
+}
+
+.dt-propagate-select {
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+  font-family: inherit;
+  color: #1a1a2e;
+  width: 100%;
+  box-sizing: border-box;
+  direction: rtl;
+}
+
+.dt-propagate-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.dt-propagate-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #1a1a18;
+  cursor: pointer;
+}
+
+.dt-propagate-check-row input[type="checkbox"] {
+  accent-color: #7a9478;
+  cursor: pointer;
+}
+
+.dt-propagate-loading,
+.dt-propagate-empty {
+  color: #888;
+  font-size: 13px;
+  margin: 0;
+}
+
+.dt-propagate-error {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #a83232;
+  background: #fff5f5;
+  border: 1px solid #f4c8c8;
+  border-radius: 6px;
+}
+
+.dt-propagate-result {
+  margin: 0;
+  font-size: 14px;
+  color: #1D9E75;
+  font-weight: 600;
+}
+
+.dt-propagate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.dt-propagate-save {
+  background: #2D3748;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dt-propagate-save:hover:not(:disabled) {
+  background: #1a2535;
+}
+
+.dt-propagate-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dt-propagate-cancel {
+  background: none;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.dt-propagate-cancel:hover:not(:disabled) {
+  border-color: #aaa;
 }
 
 .dt-add-row-cancel:hover {

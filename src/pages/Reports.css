@@ -1,13 +1,28 @@
 .reports-page {
-  padding: 32px 40px;
+  /* Top padding bumped from 32px to 40px now that the page has no H1 —
+     without it the first section header sat flush against the page
+     edge, which read as an awkward, too-tight gap where the removed
+     title used to give the page room to breathe. */
+  padding: 40px 40px 32px;
   direction: rtl;
 }
 
-.reports-title {
-  font-size: 24px;
+/* ── Sections — each is one header + one card grid ── */
+.reports-section {
+  margin-bottom: 32px;
+}
+
+.reports-section:last-child {
+  margin-bottom: 0;
+}
+
+.reports-section-title {
+  font-size: 18px;
   font-weight: 700;
   color: #111;
-  margin-bottom: 24px;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .reports-grid {
@@ -35,6 +50,32 @@
   border-color: #aaa;
 }
 
+/* Placeholder card — same "בקרוב" treatment ProjectDetail.jsx uses for
+   a disabled tab (.pd-tab--disabled / .pd-tab-soon), reused here rather
+   than inventing a new disabled style. */
+.report-card--disabled {
+  cursor: not-allowed;
+}
+
+.report-card--disabled:hover {
+  box-shadow: none;
+  border-color: #e0e0e0;
+}
+
+/* opacity (not color) fades the icon — emoji glyphs mostly ignore
+   `color`, so this is the only property that visibly dims them. */
+.report-card--disabled .report-card-icon {
+  opacity: 0.5;
+}
+
+/* color (not opacity) fades the title text — unlike opacity, an
+   explicit color on a descendant (the "בקרוב" badge below) overrides
+   this inherited value instead of compounding with it, so the badge
+   stays fully legible next to the faded title. */
+.report-card--disabled .report-card-title {
+  color: #bbb;
+}
+
 .report-card-icon {
   font-size: 28px;
 }
@@ -43,6 +84,19 @@
   font-size: 16px;
   font-weight: 700;
   color: #111;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-card-soon {
+  font-size: 10px;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: #888;
+  border-radius: 8px;
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
 }
 
 .report-card-desc {

@@ -52,6 +52,32 @@
   margin-bottom: 12px;
 }
 
+/* Non-blocking notice — the save SUCCEEDED, only the auto-task side
+   effect failed. Deliberately amber rather than the error red so it
+   doesn't read as a failed save. */
+.ms-task-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fdf6e8;
+  border: 1px solid #e6d5ae;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #8a6d1f;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.ms-task-notice-close {
+  margin-inline-start: auto;   /* RTL: visual LEFT edge */
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 /* ── Loading + empty ── */
 .ms-loading,
 .ms-empty {
@@ -332,10 +358,13 @@
 }
 
 /* ── Edit form ── */
+/* Tightened from 12px — the visible field labels are gone, so the
+   rows no longer need as much air between them. The space saved here
+   plus the removed labels is handed to the summary editor below. */
 .ms-edit-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .ms-edit-row {
@@ -345,6 +374,16 @@
 }
 .ms-edit-row--md {
   gap: 6px;
+}
+
+/* Topic + date share one row. RTL: the first child (topic) paints on
+   the visual RIGHT and grows; the date sits last (visual LEFT) at its
+   natural width. Wraps to two rows on a narrow screen. */
+.ms-edit-row--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .ms-edit-label {
@@ -363,6 +402,36 @@
   color: #1a1a18;
   outline: none;
   transition: border-color 0.12s;
+}
+/* Topic: soak up whatever the date leaves. min-width lets it shrink
+   far enough to wrap instead of overflowing. */
+.ms-edit-input--grow {
+  flex: 1 1 200px;
+  min-width: 140px;
+}
+/* Date: sized to its content, never stretched. */
+/* Date + stage share ONE declared width, so they form a straight edge
+   down the visual-left of the form and can never drift apart. The value
+   is the date input's own intrinsic width (measured in-browser), so the
+   date renders exactly as it did before; the stage — which used to size
+   to its content and jump between 67px and 122px depending on the stage
+   name — now matches it. Change this one number and both move. */
+.ms-edit-form {
+  --ms-inline-field-w: 142px;
+}
+.ms-edit-input--date,
+.ms-edit-input--stage {
+  flex: 0 0 var(--ms-inline-field-w);
+  width: var(--ms-inline-field-w);
+}
+/* Stage: inherits .ms-edit-input, so border/radius/font/height match the
+   text inputs. A long stage name clips inside the fixed box rather than
+   widening it — the participants field keeps the remaining width. */
+.ms-edit-input--stage {
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .ms-edit-input:focus { border-color: #7a9478; }
 
@@ -423,13 +492,33 @@
   font-size: 13.5px;
   color: #1a1a18;
   line-height: 1.6;
-  min-height: 140px;
+  /* Raised from 140px. Removing four field labels, merging topic+date
+     onto one row and tightening the form gaps frees ~140px; this hands
+     back more than that, so the writing area is visibly larger. */
+  min-height: 300px;
   outline: none;
   transition: border-color 0.12s;
   direction: rtl;
   text-align: right;
+  /* Anchor for the placeholder ::before below. */
+  position: relative;
 }
 .rte-content:focus { border-color: #7a9478; }
+
+/* CSS-only placeholder — shown only while the editor is empty. The
+   text comes from data-placeholder on the editable surface, set by
+   RichTextEditor. pointer-events:none keeps clicks falling through to
+   the contenteditable underneath. */
+.rte-root--empty .rte-content::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: 10px;
+  inset-inline-start: 10px;
+  color: #a9a49c;
+  pointer-events: none;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
 .rte-content p { margin: 0 0 8px; }
 .rte-content p:last-child { margin-bottom: 0; }
 .rte-content strong { font-weight: 700; }
@@ -472,7 +561,87 @@
   gap: 8px;
   justify-content: flex-start;   /* RTL: visual right */
   margin-top: 4px;
+  align-items: center;
+  flex-wrap: wrap;
 }
+/* RTL: pushes שמור/ביטול to the visual LEFT end, leaving the two task
+   toggles at the visual right where שמור used to sit. */
+.ms-edit-actions-end {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* An open task section's toggle reads as pressed — reuses the sage
+   border already used for focus, no new colour. */
+.ms-btn-toggle--open {
+  border-color: #7a9478;
+}
+/* Quiet "this field has content" dot. Same sage as the rest of the file. */
+.ms-has-content-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #7a9478;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+/* Heading above a rendered task section, in the manager card. */
+.ms-tasks-heading {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a18;
+}
+
+/* The lines that sit UNDER a tasks block — the status line and the link
+   to the משימות tab. Both indent like .ms-md-body so they line up with
+   the content above; RTL makes that indent the visual right. */
+.ms-status-row,
+.ms-tasks-link-row {
+  margin: 7px 0 2px;
+  padding-inline-start: 10px;
+}
+
+/* RTL, reading right to left: "סטטוס משימה:" then the status control
+   then "(לחץ לעידכון)". The control is the SAME widget the משימות tab
+   uses; only the spacing around it belongs to this screen. */
+.ms-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #55524b;
+}
+.ms-status-label { font-weight: 500; }
+.ms-status-hint  { color: #8a877f; }
+/* The shared control is width:100% so it centres in a table cell. Here
+   it is one item in a text line, so it must size to its icon instead —
+   otherwise it stretches and pushes "(לחץ לעידכון)" to the far edge.
+   Only the box is adjusted; icon, colour and dropdown stay as shipped. */
+.ms-status-row .tasks-status-wrap { width: auto; flex: 0 0 auto; }
+
+.ms-done-error {
+  margin: 2px 0 4px;
+  padding-inline-start: 10px;
+  font-size: 12px;
+  color: #b3261e;
+}
+
+/* Points at the משימות tab, where the studio status is actually
+   changed. A button, not an anchor — it switches tab in place. */
+.ms-tasks-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-family: inherit;
+  color: #4F86C6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ms-tasks-link:hover { color: #35618f; }
 
 .ms-btn-primary,
 .ms-btn-secondary {
@@ -553,6 +722,12 @@
   border: 1px solid #e5e3dd;
   border-radius: 10px;
   overflow: hidden;                /* body handles the scroll */
+}
+
+/* A regular summary has no questionnaire beside it, so its single pane
+   takes the whole width instead of half. Same chrome otherwise. */
+.ms-program-pane--full {
+  flex: 1 1 100%;
 }
 
 .ms-program-pane-header {

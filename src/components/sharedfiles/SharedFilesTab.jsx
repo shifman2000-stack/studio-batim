@@ -24,6 +24,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+import { resolveUserNames } from '../../lib/resolveUserNames'
 import './SharedFilesTab.css'
 
 const BUCKET = 'project-shared-files'
@@ -206,80 +207,13 @@ export default function SharedFilesTab({ projectId }) {
     setItems(merged)
 
     /* ── Names lookup over MERGED uploader ids ──────────────────
-       Same up-to-three-query dance as before, but the input id set now
-       spans both files and notes — so it runs exactly once regardless
-       of how many rows of each kind there are.
-
-       Order:
-         1) profiles      — staff uploaders.
-         2) client_users  — leftover uuids; pulls project_id + email
-                            + the (stale!) first_name snapshot.
-         3) project_contacts — the LIVE name source for clients,
-                            fetched by the project_ids gathered in (2)
-                            so we can match case-insensitively in JS.
-       client_users.first_name is a one-time snapshot from
-       link_client_on_login; project_contacts is the source of truth
-       after any rename. We only fall back to the snapshot when no live
-       contact row matches. */
+       The input id set spans both files and notes, so the resolver runs
+       exactly once regardless of how many rows of each kind there are.
+       The profiles → client_users → project_contacts dance itself now
+       lives in lib/resolveUserNames — same helper the meeting summaries
+       use for "מי סימן בוצע". */
     const uploaderIds = Array.from(new Set(merged.map(r => r.uploaded_by).filter(Boolean)))
-    const nameMap = {}
-    if (uploaderIds.length > 0) {
-      /* 1. Staff via profiles */
-      const { data: staffRows } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('id', uploaderIds)
-
-      const staffIds = new Set((staffRows || []).map(s => s.id))
-      for (const s of staffRows || []) {
-        const fn = (s.first_name || '').trim()
-        const ln = (s.last_name || '').trim()
-        const full = [fn, ln].filter(Boolean).join(' ')
-        if (full) nameMap[s.id] = full
-      }
-
-      /* 2. Clients via client_users — get project_id + email + snapshot */
-      const remaining = uploaderIds.filter(id => !staffIds.has(id))
-      if (remaining.length > 0) {
-        const { data: clientRows } = await supabase
-          .from('client_users')
-          .select('id, project_id, email, first_name')
-          .in('id', remaining)
-
-        const clientList = clientRows || []
-
-        /* 3. project_contacts for the involved project_ids — LIVE name. */
-        const projectIds = Array.from(new Set(
-          clientList.map(c => c.project_id).filter(Boolean)
-        ))
-        let liveContacts = []
-        if (projectIds.length > 0) {
-          const { data: contactRows } = await supabase
-            .from('project_contacts')
-            .select('project_id, email, first_name')
-            .in('project_id', projectIds)
-          liveContacts = contactRows || []
-        }
-
-        for (const cu of clientList) {
-          const cuEmail = (cu.email || '').trim().toLowerCase()
-          let liveName = null
-          if (cuEmail) {
-            const match = liveContacts.find(pc =>
-              pc.project_id === cu.project_id &&
-              (pc.email || '').trim().toLowerCase() === cuEmail
-            )
-            if (match) {
-              const fn = (match.first_name || '').trim()
-              if (fn) liveName = fn
-            }
-          }
-          const display = liveName || ((cu.first_name || '').trim() || null)
-          if (display) nameMap[cu.id] = display
-        }
-      }
-    }
-    setNamesByUserId(nameMap)
+    setNamesByUserId(await resolveUserNames(uploaderIds))
     setLoading(false)
   }
 

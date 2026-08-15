@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { generateUniqueAuthCode } from './lib/generateAuthCode'
+import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentProjectInheritance'
 import NewTaskModal from './NewTaskModal'
 import './ProjectsKanban.css'
 
@@ -160,8 +161,13 @@ function ProjectsKanban() {
      prod don't carry the property, so the seed uses `?? ''` and the
      diff treats missing/null/'' as the same baseline. ── */
   const [settingsTarget, setSettingsTarget] = useState(null) // project | null
-  const [settingsDraft,  setSettingsDraft]  = useState(null) // { name, is_favorite, responsible_id, whatsapp_group_url } | null
+  const [settingsDraft,  setSettingsDraft]  = useState(null) // { name, is_favorite, responsible_id, whatsapp_group_url, is_parent_project } | null
   const [settingsSaving, setSettingsSaving] = useState(false)
+  // Inline warning shown when the admin tries to uncheck "פרויקט אב" on a
+  // project that still has real children — see the checkbox's onChange.
+  const [settingsError,  setSettingsError]  = useState('')
+  // "הועתק" confirmation for the פרויקטי בנים token link's copy button.
+  const [tokenLinkCopied, setTokenLinkCopied] = useState(false)
 
   // ── Parent-view mode (route /פרויקטים/אב/:parentId).
   // When the URL carries a parentId, this same Kanban renders only the
@@ -439,6 +445,14 @@ function ProjectsKanban() {
     if (error) { setModalError(`שגיאה: ${error.message}`); return }
     if (!data) return
 
+    /* Preserve the existing "assign a parent when creating a child"
+       workflow: flag the chosen parent as is_parent_project so it keeps
+       showing up as a parent everywhere that now reads the flag, without
+       requiring the admin to separately tick the checkbox on it. */
+    if (isChild) {
+      await markProjectAsParent(newParentId)
+    }
+
     const { data: fullProject } = await supabase
       .from('projects')
       .select('*, profiles!responsible_id(first_name, last_name), stages!stage_id(id, name, color)')
@@ -483,6 +497,15 @@ function ProjectsKanban() {
         if (!parentId) showArchiveToast(`הפרויקט נוצר כבן של "${parentName}"`)
       }
     }
+
+    /* One-time client_info field inheritance from the chosen parent.
+       Placed after both branches above (rather than right after the
+       parent_project_id insert) so it runs AFTER the selectedInquiry
+       branch's own client_info insert — otherwise this would race that
+       insert and hit the project_id unique constraint. */
+    if (isChild) {
+      await inheritClientInfoFromParent(newParentId, data.id)
+    }
   }
 
   function splitCoupledFirstName(firstName) {
@@ -523,11 +546,14 @@ function ProjectsKanban() {
   }
 
   // loadChildCounts: map of top-level project id -> number of non-archived
-  // children, used to hide the "פרויקט בן" checkbox on cards that are
-  // already parents and to render the folder badge on those cards. As a
-  // side-effect also rebuilds parentProjectsList — { id, name } of every
-  // project that currently has at least one child — feeding the parent-view
-  // header dropdown and the "תצוגת פרויקטי אב" toolbar button.
+  // children, used ONLY for the real folder-badge counts on parent cards
+  // (childCounts[id] still reflects actual live children — this number
+  // can't come from a boolean flag). As a side-effect also rebuilds
+  // parentProjectsList — { id, name } of every project flagged
+  // is_parent_project=true — feeding the parent-view header dropdown and
+  // the "תצוגת פרויקטי אב" toolbar button. A flagged project with zero
+  // children still appears here on purpose (item 4 of the parent-flag
+  // change: a project can be marked as a parent ahead of having children).
   const loadChildCounts = async () => {
     const { data } = await supabase
       .from('projects')
@@ -542,17 +568,13 @@ function ProjectsKanban() {
     }
     setChildCounts(counts)
 
-    const distinctIds = Object.keys(counts)
-    if (distinctIds.length > 0) {
-      const { data: parents } = await supabase
-        .from('projects')
-        .select('id, name')
-        .in('id', distinctIds)
-        .order('name', { ascending: true })
-      setParentProjectsList(parents || [])
-    } else {
-      setParentProjectsList([])
-    }
+    const { data: parents } = await supabase
+      .from('projects')
+      .select('id, name')
+      .eq('is_parent_project', true)
+      .eq('archived', false)
+      .order('name', { ascending: true })
+    setParentProjectsList(parents || [])
   }
 
   const handleParentConfirm = async () => {
@@ -560,6 +582,14 @@ function ProjectsKanban() {
     const { mode, project, parentId } = parentConfirm
     const nextParent = mode === 'attach' ? parentId : null
     await supabase.from('projects').update({ parent_project_id: nextParent }).eq('id', project.id)
+    /* Same auto-flag as handleAddProject: attaching to an existing
+       project as its child marks that project is_parent_project, so the
+       existing "pick a parent" flow keeps working without a separate
+       manual checkbox step. */
+    if (mode === 'attach') {
+      await markProjectAsParent(parentId)
+      await inheritClientInfoFromParent(parentId, project.id)
+    }
     setParentConfirm(null)
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
@@ -714,11 +744,18 @@ ${authCode || '—'}
          a row without the column reads as undefined and normalises to
          false so the modal shows an unchecked box on unmigrated rows. */
       show_programming_questionnaire: project.show_programming_questionnaire === true,
+      is_parent_project:              project.is_parent_project === true,
     })
+    setSettingsError('')
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
     setContextMenu(null)
-    if (!parentId && !(childCounts[project.id] > 0)) {
+    /* Pre-warm the parent-options dropdown only when the "הפוך לפרויקט
+       בן" attach flow could actually be used from this modal: the
+       project isn't already someone's child, and it isn't itself
+       flagged as a parent (attaching a flagged parent as a child would
+       recreate the 3-level nesting the app doesn't support). */
+    if (!parentId && !project.parent_project_id && !project.is_parent_project) {
       loadParentOptions()
     }
   }
@@ -771,6 +808,13 @@ ${authCode || '—'}
     const spqOrig  = settingsTarget.show_programming_questionnaire === true
     if (spqDraft !== spqOrig) patch.show_programming_questionnaire = spqDraft
 
+    /* is_parent_project — boolean diff. The checkbox's own onChange
+       already refuses to draft an uncheck while real children exist
+       (see the JSX below), so no re-check is needed here. */
+    const parentFlagDraft = !!settingsDraft.is_parent_project
+    const parentFlagOrig  = settingsTarget.is_parent_project === true
+    if (parentFlagDraft !== parentFlagOrig) patch.is_parent_project = parentFlagDraft
+
     /* No-op shortcut. */
     if (Object.keys(patch).length === 0) {
       setSettingsTarget(null)
@@ -798,6 +842,8 @@ ${authCode || '—'}
   const handleSettingsCancel = () => {
     setSettingsTarget(null)
     setSettingsDraft(null)
+    setSettingsError('')
+    setTokenLinkCopied(false)
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
   }
@@ -1141,7 +1187,7 @@ ${authCode || '—'}
                       <div className="kanban-card-top-row">
                         <div className="kanban-card-name">
                           {project.name}
-                          {!parentId && childCounts[project.id] > 0 && (
+                          {!parentId && (childCounts[project.id] > 0 || project.is_parent_project) && (
                             <span
                               role="button"
                               tabIndex={0}
@@ -1166,10 +1212,10 @@ ${authCode || '—'}
                                 cursor: 'pointer',
                                 transition: 'opacity 0.12s',
                               }}
-                              title={`${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים`}
+                              title={childCounts[project.id] > 0 ? `${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים` : 'פרויקט אב — לחיצה למעבר לתצוגת הילדים'}
                             >
                               <IconFolder size={12} />
-                              <span>{childCounts[project.id]}</span>
+                              {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                             </span>
                           )}
                         </div>
@@ -1304,7 +1350,7 @@ ${authCode || '—'}
                             <div className="kanban-card-top-row">
                               <div className="kanban-card-name">
                                 {project.name}
-                                {!parentId && childCounts[project.id] > 0 && (
+                                {!parentId && (childCounts[project.id] > 0 || project.is_parent_project) && (
                                   <span
                                     role="button"
                                     tabIndex={0}
@@ -1329,10 +1375,10 @@ ${authCode || '—'}
                                       cursor: 'pointer',
                                       transition: 'opacity 0.12s',
                                     }}
-                                    title={`${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים`}
+                                    title={childCounts[project.id] > 0 ? `${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים` : 'פרויקט אב — לחיצה למעבר לתצוגת הילדים'}
                                   >
                                     <IconFolder size={12} />
-                                    <span>{childCounts[project.id]}</span>
+                                    {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                                   </span>
                                 )}
                               </div>
@@ -1729,11 +1775,82 @@ ${authCode || '—'}
                 </button>
               </div>
 
-              {/* 5. פרויקט בן — independent (its own two-step parentConfirm
-                  flow). Hidden in parent view and on projects that already
-                  have children. The picker opens parentConfirm; that
-                  handler closes this modal entirely on success. */}
-              {!parentId && !(childCounts[settingsTarget.id] > 0) && (
+              {/* 5. פרויקט אב — explicit, independent flag (single source of
+                  truth for "is this project a parent"). Toggleable even
+                  with zero children, so a project can be flagged ahead of
+                  having any. Unchecking is blocked while real children
+                  still point at this project — that would make it stop
+                  being recognised as a parent everywhere despite live
+                  children existing, so the checkbox refuses the change and
+                  shows settingsError instead of silently drafting it. */}
+              <div style={pdSettingsRow}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0, fontSize: 14, color: '#1a1a2e' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!settingsDraft.is_parent_project}
+                    onChange={e => {
+                      setSettingsError('')
+                      if (!e.target.checked && childCounts[settingsTarget.id] > 0) {
+                        setSettingsError('לא ניתן להסיר סימון "פרויקט אב" מפרויקט עם פרויקטי בן פעילים')
+                        return
+                      }
+                      setSettingsDraft(d => ({ ...d, is_parent_project: e.target.checked }))
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span>פרויקט אב</span>
+                </label>
+                {settingsError && (
+                  <p style={{ color: 'red', fontSize: '13px', margin: '6px 0 0', textAlign: 'right' }}>{settingsError}</p>
+                )}
+              </div>
+
+              {/* פרויקטי בנים — public inquiry link, only meaningful once
+                  this project is flagged as a parent. Same read-only-input
+                  + copy-button pattern as the regular inquiry's "קישור
+                  לטופס הלקוח" (Inquiries.jsx), reimplemented here with this
+                  modal's own pdSettingsRow/pdInputBorder styling instead of
+                  importing Inquiries.css cross-file. */}
+              {!!settingsDraft.is_parent_project && (
+                <div style={pdSettingsRow}>
+                  <label className="modal-label" style={{ display: 'block', marginBottom: 4 }}>קישור לטופס פנייה לפרויקט בן</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="modal-input"
+                      style={{ ...pdInputBorder, flex: 1, background: '#f7f8fa', color: '#555', cursor: 'default' }}
+                      readOnly
+                      dir="ltr"
+                      value={`${import.meta.env.VITE_APP_URL}/child-inquiry/${settingsTarget.child_inquiry_token}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${import.meta.env.VITE_APP_URL}/child-inquiry/${settingsTarget.child_inquiry_token}`)
+                        setTokenLinkCopied(true)
+                        setTimeout(() => setTokenLinkCopied(false), 2000)
+                      }}
+                      style={{
+                        flexShrink: 0, background: '#000', color: '#fff', border: 'none',
+                        borderRadius: 8, padding: '9px 16px', fontFamily: 'inherit', fontSize: 13,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {tokenLinkCopied ? '✓ הועתק' : 'העתק'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 6. פרויקט בן — independent (its own two-step parentConfirm
+                  flow). Hidden in parent view and on projects that are
+                  flagged is_parent_project — EXCEPT a project that already
+                  has a parent_project_id always keeps this block, so the
+                  "detach" option never disappears just because someone
+                  separately flagged it as a parent above. The picker opens
+                  parentConfirm; that handler closes this modal entirely on
+                  success. */}
+              {!parentId && (!!settingsTarget.parent_project_id || !settingsTarget.is_parent_project) && (
                 <div style={pdSettingsRow}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0, fontSize: 14, color: '#1a1a2e' }}>
                     <input

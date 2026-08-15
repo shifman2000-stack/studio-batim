@@ -17,11 +17,13 @@ import ProjectStagesReport from './pages/reports/ProjectStagesReport'
 import HoursReport from './pages/reports/HoursReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
 import HouseBuilderConfigReport from './pages/reports/HouseBuilderConfigReport'
+import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport'
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
 import ClientRoute from './components/ClientRoute'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
+import ChildInquiryForm from './pages/ChildInquiryForm'
 import QuotePrintView from './pages/QuotePrintView'
 import QuotePrintSigned from './pages/QuotePrintSigned'
 import FinishingPrintView from './pages/FinishingPrintView'
@@ -49,6 +51,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/client" element={<ClientRoute><ClientPortal /></ClientRoute>} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
+        <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
         <Route path="/quote-print-signed/:token" element={<QuotePrintSigned />} />
         <Route path="/finishing-print/:projectId" element={<FinishingPrintView />} />
@@ -71,6 +74,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/inquiries" element={<Inquiries />} />
           <Route path="/reports/inquiries" element={<InquiriesReport />} />
           <Route path="/reports/house-builder-config" element={<HouseBuilderConfigReport />} />
+          <Route path="/reports/parent-project-models" element={<ParentProjectModelsReport />} />
           <Route path="/quote-builder/:inquiryId" element={<QuoteBuilderPage />} />
         </Route>
       </Routes>

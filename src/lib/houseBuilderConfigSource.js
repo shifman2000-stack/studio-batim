@@ -19,7 +19,7 @@
 
 import { supabase }         from '../supabaseClient'
 import * as staticCfg       from './houseBuilderConfig'
-import { ROOM_SIZES as STATIC_ROOM_SIZES } from './houseSizeConfig'
+import { ROOM_SIZES as STATIC_ROOM_SIZES, DEFAULT_CALC_PARAMS } from './houseSizeConfig'
 
 /* The 'חלל אחר' marker lives in the palette arrays in the DB so a
    downstream reader knows WHERE the free-text "custom room" affordance
@@ -43,6 +43,7 @@ export function getFallbackConfig() {
     displayType:                 staticCfg.displayType,
     ROOM_PROPS:                  staticCfg.ROOM_PROPS,
     ROOM_SIZES:                  STATIC_ROOM_SIZES,
+    calcParams:                  { ...DEFAULT_CALC_PARAMS },
     FIXED_AREAS:                 staticCfg.FIXED_AREAS,
     CONTAINER_TYPES:             staticCfg.CONTAINER_TYPES,
     isContainer:                 staticCfg.isContainer,
@@ -170,6 +171,20 @@ function adaptDbConfig(dbConfig) {
      estimateArea can still resolve them. */
   const mergedSizes = { ...fallback.ROOM_SIZES, ...roomSizes }
 
+  /* Calculator params ("פרמטרי מחשבון") — corridorsPct / wallsPct /
+     toleranceDeviationPct. Each key merges independently over the
+     fallback default so a partial/malformed calcParams object (or one
+     missing entirely, e.g. an older row saved before this feature)
+     can't wipe out the other two values. */
+  const rawCalcParams = (dbConfig.calcParams && typeof dbConfig.calcParams === 'object' && !Array.isArray(dbConfig.calcParams))
+    ? dbConfig.calcParams
+    : {}
+  const calcParams = { ...fallback.calcParams }
+  for (const k of ['corridorsPct', 'wallsPct', 'toleranceDeviationPct']) {
+    const v = rawCalcParams[k]
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) calcParams[k] = v
+  }
+
   return {
     FLOOR_DEFS:      floorDefs.length ? floorDefs : fallback.FLOOR_DEFS,
     AREA_KEYS:       areaKeys.length  ? areaKeys  : fallback.AREA_KEYS,
@@ -183,6 +198,7 @@ function adaptDbConfig(dbConfig) {
     displayType: (t) => (t && displayMap[t]) || t,
     ROOM_PROPS:      roomProps,
     ROOM_SIZES:      mergedSizes,
+    calcParams,
     FIXED_AREAS:     fixedAreas,
     CONTAINER_TYPES: containerTypes.length ? containerTypes : fallback.CONTAINER_TYPES,
     isContainer: (t) => containerTypes.includes(t),

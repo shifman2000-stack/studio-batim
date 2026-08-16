@@ -1501,7 +1501,7 @@ export default function ClientProgrammingQuestionnaire({
       fixedArea:            houseConfig.getFixedArea ? houseConfig.getFixedArea(r.type) : null,
       excludeFromAreaCalc:  houseConfig.isExcludedFromAreaCalc ? houseConfig.isExcludedFromAreaCalc(r.type) : false,
     }))
-    return estimateArea(annotated, { sizesMap: houseConfig.ROOM_SIZES })
+    return estimateArea(annotated, { sizesMap: houseConfig.ROOM_SIZES, calcParams: houseConfig.calcParams })
   }, [answers, houseConfig])
 
   const targetAreaY = (
@@ -1510,7 +1510,16 @@ export default function ClientProgrammingQuestionnaire({
     && answers.house.targetArea > 0
   ) ? answers.house.targetArea : null
 
-  const houseAreaMatches = targetAreaY != null && computedHouseArea <= targetAreaY * 1.10
+  /* Tolerance ("אחוז סטייה מותר") — admin-editable via "פרמטרי מחשבון",
+     defaults to 10% (DEFAULT_CALC_PARAMS.toleranceDeviationPct) when the
+     active config row doesn't carry a valid override. */
+  const toleranceDeviationPct = (
+    houseConfig.calcParams
+    && typeof houseConfig.calcParams.toleranceDeviationPct === 'number'
+    && Number.isFinite(houseConfig.calcParams.toleranceDeviationPct)
+  ) ? houseConfig.calcParams.toleranceDeviationPct : 10
+
+  const houseAreaMatches = targetAreaY != null && computedHouseArea <= targetAreaY * (1 + toleranceDeviationPct / 100)
 
   /* ── Render ─────────────────────────────────────────────────────── */
 

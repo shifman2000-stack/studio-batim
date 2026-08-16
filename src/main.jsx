@@ -15,6 +15,7 @@ import Reports from './pages/Reports'
 import Inquiries from './pages/Inquiries'
 import ProjectStagesReport from './pages/reports/ProjectStagesReport'
 import HoursReport from './pages/reports/HoursReport'
+import ProjectHoursReport from './pages/reports/ProjectHoursReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
 import HouseBuilderConfigReport from './pages/reports/HouseBuilderConfigReport'
 import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport'
@@ -71,6 +72,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reports" element={<Reports />} />
           <Route path="/reports/project-stages" element={<ProjectStagesReport />} />
           <Route path="/reports/hours" element={<HoursReport />} />
+          <Route path="/reports/project-hours" element={<ProjectHoursReport />} />
           <Route path="/inquiries" element={<Inquiries />} />
           <Route path="/reports/inquiries" element={<InquiriesReport />} />
           <Route path="/reports/house-builder-config" element={<HouseBuilderConfigReport />} />

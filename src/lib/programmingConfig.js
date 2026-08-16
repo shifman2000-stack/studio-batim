@@ -84,9 +84,10 @@ export const QUESTIONNAIRE_STEPS = [
          so offering it here too was redundant. Existing rows that already
          stored roof_tile/roof_flat/roof_mix keep those keys in
          answers.questionnaire.arch; they simply no longer render. */
-      { type: 'options', store: 'arch', sectionLabel: 'אלמנטים אדריכליים', options: [
+      { type: 'options', store: 'arch', sectionLabel: 'אלמנטים אדריכליים וחומרי גמר', options: [
         ['קורות חשופות','beams'],
-        ['קשתות','arches'], ['חלונות גדולים','bigwin'], ['תקרה גבוהה','highceil'], ['חלל כפול','double_h']
+        ['קשתות','arches'], ['חלונות גדולים','bigwin'], ['תקרה גבוהה','highceil'], ['חלל כפול','double_h'],
+        ['אבן','stone'], ['בריקים','bricks'], ['עץ','wood'], ['טיח מינרלי','mineral_plaster'], ['ברזל','iron']
       ] },
       { type: 'textarea', key: 'style_notes', label: 'עוד על האווירה והסגנון',
         placeholder: 'כל דבר שיעזור לנו להבין את הטעם שלכם' }

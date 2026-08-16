@@ -5,7 +5,11 @@
  * המשתמש בוחר תצורה לכל חלל (מאפיין בפירוט). ברירת מחדל: M.
  * חלל שאין לו ערך כאן (כולל "חלל אחר" חופשי) → DEFAULT_ROOM_SIZE.
  *
- * החישוב: סכום שטחי כל החללים × 1.10 (תוספת 10% למסדרונות, מעברים, קירות).
+ * החישוב: סכום שטחי כל החללים × (1 + (מעברים% + עובי קירות%) / 100).
+ * שני האחוזים (וכן אחוז הסטייה המותר מול יעד הלקוח) ניתנים לעריכה במסך
+ * "אפיון מערכת בונה הבית" → "פרמטרי מחשבון", ונשמרים ב-
+ * house_builder_config.config.calcParams. DEFAULT_CALC_PARAMS למטה הם
+ * רק ה-fallback כשאין קונפיג פעיל ב-DB (ראו houseBuilderConfigSource.js).
  *
  * ⚠️ המספרים הם טיוטה ראשונית לפי גדלים מקובלים למגורים — לתיקון לפי שיקול אדריכלי.
  */
@@ -56,8 +60,17 @@ export const ROOM_SIZES = {
 /* ערך ברירת מחדל לחלל לא-מוכר או "חלל אחר" חופשי */
 export const DEFAULT_ROOM_SIZE = { S: 8, M: 12, L: 18 };
 
-/* מקדם תוספת למסדרונות, מעברים, קירות */
-export const CIRCULATION_FACTOR = 1.10;
+/* פרמטרי מחשבון — ברירות מחדל (fallback כשאין קונפיג פעיל ב-DB, וגם
+   הערכים המשמשים חלל שאין לו ערך מוגדר בקונפיג). corridorsPct = "מעברים",
+   wallsPct = "עובי קירות" — שני אחוזים שמתווספים על סכום שטחי החללים.
+   10 כברירת מחדל ל-corridorsPct משמר את ההתנהגות הישנה (היה
+   CIRCULATION_FACTOR קבוע = 1.10). toleranceDeviationPct = אחוז הסטייה
+   המותר בין השטח המחושב ליעד הלקוח בשאלון (ClientProgrammingQuestionnaire). */
+export const DEFAULT_CALC_PARAMS = {
+  corridorsPct: 10,
+  wallsPct: 0,
+  toleranceDeviationPct: 10,
+};
 
 /* תצורת ברירת מחדל לחלל חדש */
 export const DEFAULT_SIZE_KEY = 'M';
@@ -81,12 +94,24 @@ export const SIZE_LABELS = {
  * @param opts.sizesMap — אופציונלי. מפה מותאמת (למשל טעונה מ-Supabase)
  *   שגוברת על ROOM_SIZES הסטטי. אם לא סופק, נשתמש ב-ROOM_SIZES כברירת מחדל
  *   — כך שקריאה ללא אופציות שומרת על ההתנהגות הישנה בדיוק.
- * @returns מ"ר מעוגל (כולל תוספת מסדרונות)
+ * @param opts.calcParams — אופציונלי. { corridorsPct, wallsPct } (אחוזים,
+ *   למשל טעונים מ-house_builder_config.config.calcParams). כל ערך חסר/לא
+ *   תקין נופל בחזרה לברירת המחדל שלו ב-DEFAULT_CALC_PARAMS.
+ * @returns מ"ר מעוגל (כולל תוספת מעברים + עובי קירות)
  */
 export function estimateArea(roomsFlat, opts = {}) {
   const sizesMap = (opts && opts.sizesMap && typeof opts.sizesMap === 'object')
     ? opts.sizesMap
     : ROOM_SIZES;
+  const calcParams = (opts && opts.calcParams && typeof opts.calcParams === 'object')
+    ? opts.calcParams
+    : {};
+  const corridorsPct = (typeof calcParams.corridorsPct === 'number' && Number.isFinite(calcParams.corridorsPct))
+    ? calcParams.corridorsPct
+    : DEFAULT_CALC_PARAMS.corridorsPct;
+  const wallsPct = (typeof calcParams.wallsPct === 'number' && Number.isFinite(calcParams.wallsPct))
+    ? calcParams.wallsPct
+    : DEFAULT_CALC_PARAMS.wallsPct;
   let sum = 0;
   for (const r of roomsFlat) {
     if (r.excludeFromAreaCalc === true) {
@@ -100,5 +125,5 @@ export function estimateArea(roomsFlat, opts = {}) {
     const key = r.sizeKey || DEFAULT_SIZE_KEY;
     sum += sizes[key] != null ? sizes[key] : sizes.M;
   }
-  return Math.round(sum * CIRCULATION_FACTOR);
+  return Math.round(sum * (1 + (corridorsPct + wallsPct) / 100));
 }

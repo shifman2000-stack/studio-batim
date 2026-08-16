@@ -36,6 +36,11 @@ export default function Reports() {
             <div className="report-card-title">דוח שעות עבודה</div>
             <div className="report-card-desc">דוח חודשי של שעות עבודה, ימי חופש ומחלה לפי עובד</div>
           </div>
+          <div className="report-card" onClick={() => navigate('/reports/project-hours')}>
+            <div className="report-card-icon">📅</div>
+            <div className="report-card-title">דוח שעות לפי פרויקט</div>
+            <div className="report-card-desc">חיפוש פרויקט וטווח תאריכים לצפייה בשעות העבודה שדווחו עבורו</div>
+          </div>
           <div className="report-card" onClick={() => navigate('/reports/inquiries')}>
             <div className="report-card-icon">📋</div>
             <div className="report-card-title">דוח פניות</div>

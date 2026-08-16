@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
+import { DEFAULT_CALC_PARAMS } from '../../lib/houseSizeConfig'
 import '../ReportTable.css'
 
 /* Design tokens (mirrors theme.css). Kept as constants so the inline
@@ -146,9 +147,20 @@ export default function HouseBuilderConfigReport() {
         /* Deep-clone via JSON so the local working copy is fully
            detached from the DB object. A SECOND deep-clone into
            `originalConfig` freezes what "clean" means for dirty
-           tracking — mutations to `config` never leak into it. */
-        const cloneCurrent  = JSON.parse(JSON.stringify(data.config || {}))
-        const cloneOriginal = JSON.parse(JSON.stringify(data.config || {}))
+           tracking — mutations to `config` never leak into it.
+           calcParams is normalized identically into BOTH clones — a
+           row saved before "פרמטרי מחשבון" existed (or with only some
+           of the three keys) shows the fallback defaults without
+           tripping the dirty indicator on load. */
+        const normalizeCalcParams = (c) => ({
+          ...c,
+          calcParams: {
+            ...DEFAULT_CALC_PARAMS,
+            ...((c && c.calcParams && typeof c.calcParams === 'object') ? c.calcParams : {}),
+          },
+        })
+        const cloneCurrent  = normalizeCalcParams(JSON.parse(JSON.stringify(data.config || {})))
+        const cloneOriginal = normalizeCalcParams(JSON.parse(JSON.stringify(data.config || {})))
         setConfig(cloneCurrent)
         setOriginalConfig(cloneOriginal)
         setPhase('ready')
@@ -166,6 +178,15 @@ export default function HouseBuilderConfigReport() {
      All mutators use functional setState so callers don't have to
      sequence updates. Nothing here touches the DB — mutations stay
      in the local working copy until "שמור" runs the UPDATE. */
+
+  /* Calculator params ("פרמטרי מחשבון") — corridorsPct / wallsPct /
+     toleranceDeviationPct. Each field updates independently. */
+  const updateCalcParam = (key, value) => {
+    setConfig(c => ({
+      ...c,
+      calcParams: { ...(c.calcParams || DEFAULT_CALC_PARAMS), [key]: value },
+    }))
+  }
 
   /* Floors: update just the display name of one floor. Adding /
      removing floors and changing key/isYard are OUT OF SCOPE for
@@ -293,6 +314,7 @@ export default function HouseBuilderConfigReport() {
     const rooms = config.rooms || {}
     const roomKeys = new Set(Object.keys(rooms))
     return {
+      calcParams: calcParamsHasIssue(config.calcParams),
       /* No section-1 (floor structure) validation runs today; the flag
          stays false so no misleading dot appears. */
       floors:  false,
@@ -444,6 +466,19 @@ export default function HouseBuilderConfigReport() {
               </ul>
             </div>
           )}
+
+          {/* Section 0 — calculator params (מעברים / עובי קירות / אחוז סטייה מותר) */}
+          <Section
+            title="פרמטרי מחשבון"
+            isOpen={openSections.has('calcParams')}
+            onToggle={() => toggleSection('calcParams')}
+            hasIssue={sectionWarnings.calcParams}
+          >
+            <CalcParamsEditor
+              calcParams={config.calcParams || DEFAULT_CALC_PARAMS}
+              onUpdate={updateCalcParam}
+            />
+          </Section>
 
           {/* Section 1 — floors (name inline-editable) */}
           <Section
@@ -603,6 +638,52 @@ function IssueDot({ title }) {
         flexShrink: 0,
       }}
     />
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   CalcParamsEditor — three numeric % fields feeding the house-size
+   calculator (מעברים + עובי קירות added on top of the summed room
+   areas — see estimateArea() in houseSizeConfig.js) and the
+   questionnaire hub's target-size match/exceeds comparison
+   (אחוז סטייה מותר — see ClientProgrammingQuestionnaire.jsx). Rendered
+   with direction: rtl in a 3-column grid, so the FIRST field (מעברים)
+   lands rightmost — matches the RTL convention used across this page.
+   ───────────────────────────────────────────────────────────────── */
+const CALC_PARAM_FIELDS = [
+  { key: 'corridorsPct',           label: 'מעברים (%)',            hint: 'אחוז שמתווסף על סכום שטחי החללים בחישוב שטח הבית.' },
+  { key: 'wallsPct',                label: 'עובי קירות (%)',        hint: 'אחוז נוסף שמתווסף על סכום שטחי החללים, לצד מעברים.' },
+  { key: 'toleranceDeviationPct',  label: 'אחוז סטייה מותר (%)',   hint: 'הסטייה המותרת בין השטח המחושב ליעד הלקוח (שאלון פרוגרמה) — קובעת התאמה (ירוק) מול חריגה (אדום).' },
+]
+
+function CalcParamsEditor({ calcParams, onUpdate }) {
+  const cp = (calcParams && typeof calcParams === 'object') ? calcParams : DEFAULT_CALC_PARAMS
+  const setParam = (key, raw) => {
+    const v = raw === '' ? 0 : Number(raw)
+    onUpdate(key, Number.isFinite(v) ? v : 0)
+  }
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))',
+      gap: 12, direction: 'rtl',
+    }}>
+      {CALC_PARAM_FIELDS.map(f => (
+        <div key={f.key}>
+          <label style={formLabelStyle}>{f.label}</label>
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={cp[f.key] ?? 0}
+            onChange={(e) => setParam(f.key, e.target.value)}
+            style={formInputStyle}
+          />
+          {f.hint && (
+            <div style={{ color: MUTED, fontSize: 11, marginTop: 4 }}>{f.hint}</div>
+          )}
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -1695,6 +1776,15 @@ const formInputStyle = {
    flag which collapsed panel(s) contain problems. Short-circuit as
    soon as any issue is found. The full error text still comes from
    validateConfig — this is purely a navigation aid. */
+function calcParamsHasIssue(calcParams) {
+  const cp = (calcParams && typeof calcParams === 'object') ? calcParams : {}
+  for (const key of ['corridorsPct', 'wallsPct', 'toleranceDeviationPct']) {
+    const v = cp[key]
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return true
+  }
+  return false
+}
+
 function paletteHasIssue(palette, roomKeys) {
   const p = (palette && typeof palette === 'object') ? palette : {}
   const known = roomKeys instanceof Set ? roomKeys : new Set(roomKeys || [])
@@ -1775,6 +1865,20 @@ function validateConfig(cfg) {
   }
   const rooms = (cfg.rooms && typeof cfg.rooms === 'object') ? cfg.rooms : {}
   const roomKeys = Object.keys(rooms)
+
+  /* Calculator params — must be non-negative finite numbers. */
+  const calcParams = (cfg.calcParams && typeof cfg.calcParams === 'object') ? cfg.calcParams : {}
+  const calcParamLabels = {
+    corridorsPct:          'מעברים',
+    wallsPct:               'עובי קירות',
+    toleranceDeviationPct: 'אחוז סטייה מותר',
+  }
+  for (const [key, label] of Object.entries(calcParamLabels)) {
+    const v = calcParams[key]
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
+      errors.push(`הפרמטר "${label}" חייב להיות מספר לא-שלילי.`)
+    }
+  }
 
   /* Empty room-type keys — Object keys can't collide (JS overwrites),
      but an empty string is possible via user input. */

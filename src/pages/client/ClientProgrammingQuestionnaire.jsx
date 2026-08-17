@@ -47,6 +47,7 @@ import { IconBack } from '../../components/icons/PortalIcons'
    safe to call unconditionally. */
 import { useClientNav } from '../ClientPortal'
 import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
+import { logAction, logError } from '../../lib/clientActivityLog'
 import {
   QUESTIONNAIRE_STEPS,
   AGE_RANGES,
@@ -674,6 +675,15 @@ const IconTrashSmall = () => (
    viewer with edit access. */
 function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
   const list = Array.isArray(images) ? images : []
+  /* Same clientCtx-only sourcing rule as the parent's logCtx (see its
+     comment) — read directly here rather than threading a prop through,
+     since this is the only place in the sub-tree that needs it. */
+  const clientCtx = useContext(ClientContext)
+  const logCtx = {
+    projectId:    (clientCtx && clientCtx.project_id) || null,
+    clientUserId: (clientCtx && clientCtx.id) || null,
+    previewMode:  !!(clientCtx && clientCtx.previewMode),
+  }
   const isMountedRef = useRef(true)
   const fileInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
@@ -723,6 +733,7 @@ function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
     } catch (err) {
       console.error('inspiration image upload error:', err)
       if (isMountedRef.current) setPageError('שגיאה בהעלאה, נסה שוב')
+      logError('questionnaire', 'inspiration_upload_failed', logCtx)
     }
     if (isMountedRef.current) setUploading(false)
   }
@@ -740,6 +751,7 @@ function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
       setConfirmIdx(null)
     } catch (err) {
       console.error('inspiration image delete error:', err)
+      logError('questionnaire', 'inspiration_delete_failed', logCtx)
       if (isMountedRef.current) {
         setPageError('שגיאה במחיקה, נסה שוב')
         setTimeout(() => isMountedRef.current && setPageError(''), 3000)
@@ -870,6 +882,18 @@ export default function ClientProgrammingQuestionnaire({
   const clientCtx = useContext(ClientContext)
   const project_id = embeddedProjectId ?? (clientCtx && clientCtx.project_id)
   const isMounted = useRef(true)
+
+  /* Activity-log context — deliberately sourced ONLY from clientCtx
+     (never embeddedProjectId), so logging fires for genuine client-
+     portal renders (real login OR the admin's "תצוגת לקוח" preview,
+     the latter excluded via previewMode) but stays silent for the
+     admin's own direct split-screen edit (embedded=true, no
+     clientCtx) — that's admin activity, not client usage. */
+  const logCtx = {
+    projectId:     (clientCtx && clientCtx.project_id) || null,
+    clientUserId:  (clientCtx && clientCtx.id) || null,
+    previewMode:   !!(clientCtx && clientCtx.previewMode),
+  }
 
   /* Portal nav — the hub's back-arrow leaves the programming module.
      Safe no-ops when rendered outside the portal (embedded admin). */
@@ -1131,6 +1155,7 @@ export default function ClientProgrammingQuestionnaire({
     } catch (err) {
       console.error('programming_questionnaires save error:', err)
       if (isMounted.current) setPageError('שגיאה בשמירה, נסה שוב')
+      logError('questionnaire', 'save_failed', logCtx)
       return false
     } finally {
       if (isMounted.current) setSavingDraft(false)
@@ -1209,7 +1234,8 @@ export default function ClientProgrammingQuestionnaire({
       /* setAnswers is async — pass the fresh JSON to saveDraftNow so
          the write uses the LATEST house value, not a stale closure. */
       setAnswers(prev => ({ ...(prev || {}), house: jsonFromBuilder }))
-      await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
+      const ok = await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
+      if (ok) logAction('questionnaire', 'save_house_progress', logCtx)
     }
     setView('hub')
   }
@@ -1242,7 +1268,10 @@ export default function ClientProgrammingQuestionnaire({
       ...(nextHouse !== undefined ? { houseOverride: nextHouse } : {}),
       metaOverride: { house_done: true },
     })
-    if (ok) setView('hub')
+    if (ok) {
+      logAction('questionnaire', 'save_house_progress', logCtx)
+      setView('hub')
+    }
   }
 
   /* ── Per-part completion flags ─────────────────────────────────────
@@ -1344,6 +1373,7 @@ export default function ClientProgrammingQuestionnaire({
     }
     const ok = await saveDraftNow({ silent: true })
     if (!ok) return
+    logAction('questionnaire', 'save_step', logCtx, { step_index: stepIndex })
     setStepIndex(i => Math.min(totalSteps - 1, i + 1))
   }
 
@@ -1399,6 +1429,7 @@ export default function ClientProgrammingQuestionnaire({
       const draftOk = await saveDraftNow({ silent: true })
       if (!draftOk) {
         setSubmitError('שגיאה בשמירת התשובות. נסו שוב.')
+        logError('questionnaire', 'submit_draft_failed', logCtx)
         return
       }
 
@@ -1422,6 +1453,7 @@ export default function ClientProgrammingQuestionnaire({
     } catch (err) {
       console.error('programming_questionnaires submit error:', err)
       if (isMounted.current) setSubmitError('שגיאה בשליחה, נסו שוב.')
+      logError('questionnaire', 'submit_failed', logCtx)
     } finally {
       if (isMounted.current) setSubmitting(false)
     }

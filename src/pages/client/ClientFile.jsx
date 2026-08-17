@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { useClientFooter } from './ClientFooter'
+import { logError } from '../../lib/clientActivityLog'
 
 /* ── Section: פרטי הפרויקט — client_info columns (READ-ONLY) ────────── */
 const PROJECT_DETAIL_FIELDS = [
@@ -95,7 +96,8 @@ const IconPencil = ({ size = 16 }) => (
 )
 
 export default function ClientFile() {
-  const { project_id } = useClient()
+  const { id: clientUserId, project_id, previewMode } = useClient()
+  const logCtx = { projectId: project_id, clientUserId, previewMode }
   const isMounted = useRef(true)
 
   /* ── Loaded data (source of truth, refreshed after save) ─────────── */
@@ -302,6 +304,7 @@ export default function ClientFile() {
     } catch (e) {
       console.error('client save error:', e)
       if (isMounted.current) setSaveError('לא הצלחנו לשמור, נסה שוב')
+      logError('file', 'save_failed', logCtx)
     }
     if (isMounted.current) setSaving(false)
   }

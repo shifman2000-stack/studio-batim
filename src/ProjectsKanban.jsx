@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient'
 import { generateUniqueAuthCode } from './lib/generateAuthCode'
 import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentProjectInheritance'
 import NewTaskModal from './NewTaskModal'
+import ClientPreviewOverlay from './components/ClientPreviewOverlay'
 import './ProjectsKanban.css'
 
 function getTextColor(bgHex) {
@@ -69,6 +70,16 @@ const IconX = ({ size = 18 }) => (
     stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18"/>
     <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
+
+/* Feather-style smartphone glyph — "תצוגת לקוח" button in the "הגדרות
+   פרויקט" modal, opens ClientPreviewOverlay. */
+const IconSmartphone = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+    <line x1="12" y1="18" x2="12.01" y2="18"/>
   </svg>
 )
 
@@ -163,6 +174,11 @@ function ProjectsKanban() {
   const [settingsTarget, setSettingsTarget] = useState(null) // project | null
   const [settingsDraft,  setSettingsDraft]  = useState(null) // { name, is_favorite, responsible_id, whatsapp_group_url, is_parent_project } | null
   const [settingsSaving, setSettingsSaving] = useState(false)
+  // "תצוגת לקוח" — admin-only read-only preview of the client portal for
+  // this project, rendered on top of the settings modal (which stays
+  // mounted underneath so closing the preview returns to it). See
+  // src/components/ClientPreviewOverlay.jsx.
+  const [clientPreviewProject, setClientPreviewProject] = useState(null) // project | null
   // Inline warning shown when the admin tries to uncheck "פרויקט אב" on a
   // project that still has real children — see the checkbox's onChange.
   const [settingsError,  setSettingsError]  = useState('')
@@ -1960,6 +1976,30 @@ ${authCode || '—'}
                 </label>
               </div>
 
+              {/* תצוגת לקוח — admin-only read-only preview of the client
+                  portal for this project, in a mobile device frame. Opens
+                  ON TOP of this modal (settingsTarget/settingsDraft stay
+                  as-is), so the overlay's close (X) simply returns here. */}
+              {isAdmin && (
+                <div style={pdSettingsRow}>
+                  <button
+                    type="button"
+                    onClick={() => setClientPreviewProject(settingsTarget)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', gap: 8,
+                      background: '#fff', color: '#1a1a2e',
+                      border: '1px solid #d1d5db', borderRadius: 8,
+                      padding: '9px 14px', fontFamily: 'inherit', fontSize: 14,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <IconSmartphone size={16} />
+                    <span>תצוגת לקוח</span>
+                  </button>
+                </div>
+              )}
+
               {/* ── Group D: destructive (admin-only) ────────────────── */}
 
               {isAdmin && (
@@ -2013,6 +2053,14 @@ ${authCode || '—'}
           </div>
         )
       })()}
+
+      {/* ── תצוגת לקוח — read-only client-portal preview ── */}
+      {clientPreviewProject && (
+        <ClientPreviewOverlay
+          project={clientPreviewProject}
+          onClose={() => setClientPreviewProject(null)}
+        />
+      )}
 
       {/* ── New Task Modal ── */}
       {taskModal && (

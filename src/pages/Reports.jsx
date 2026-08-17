@@ -41,6 +41,11 @@ export default function Reports() {
             <div className="report-card-title">דוח שעות לפי פרויקט</div>
             <div className="report-card-desc">חיפוש פרויקט וטווח תאריכים לצפייה בשעות העבודה שדווחו עבורו</div>
           </div>
+          <div className="report-card" onClick={() => navigate('/reports/client-usability')}>
+            <div className="report-card-icon">📱</div>
+            <div className="report-card-title">דוח שימושיות לקוחות</div>
+            <div className="report-card-desc">צפיות מסך, משך שהייה, שגיאות ויציאות בפורטל הלקוח — לפי פרויקט או לכלל הלקוחות</div>
+          </div>
           <div className="report-card" onClick={() => navigate('/reports/inquiries')}>
             <div className="report-card-icon">📋</div>
             <div className="report-card-title">דוח פניות</div>

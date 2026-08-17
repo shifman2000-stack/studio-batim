@@ -17,9 +17,10 @@
 //   * Drawer mirrors the same group structure: single-child groups are
 //     flat buttons, multi-child groups expand inline as an accordion.
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { useClient } from '../components/ClientRoute'
+import { startScreenView, endScreenView, flushActivityLogQueueNow } from '../lib/clientActivityLog'
 import ClientHome from './client/ClientHome'
 import ClientFile from './client/ClientFile'
 import ClientDocuments from './client/ClientDocuments'
@@ -84,7 +85,10 @@ const IconUser = ({ size = 20 }) => (
      enabled   — false = grayed out, not tappable
      Component — the screen to render when this item is active
 */
-const MENU_ITEMS = [
+/* Exported so ClientUsabilityReport.jsx can map a logged screen_key to
+   its Hebrew label without duplicating this list — single source of
+   truth for client-screen labels stays here. */
+export const MENU_ITEMS = [
   { key: 'home',         label: 'דף בית',           enabled: true,  Component: ClientHome },
   { key: 'file',         label: 'פרטי תיק',         enabled: true,  Component: ClientFile },
   { key: 'documents',    label: 'מעקב מסמכים',      enabled: true,  Component: ClientDocuments },
@@ -105,7 +109,7 @@ const MENU_ITEMS = [
 const LABEL_BY_KEY = MENU_ITEMS.reduce((acc, m) => { acc[m.key] = m.label; return acc }, {})
 
 export default function ClientPortal() {
-  const { first_name: ctxFirstName, project_id } = useClient()
+  const { id: clientUserId, first_name: ctxFirstName, project_id, previewMode } = useClient()
   const [activeKey, setActiveKey]                = useState('home')   // default landing screen
   const [drawerOpen, setDrawerOpen]              = useState(false)
   /* Group this screen was navigated FROM (or null if entered from the
@@ -238,6 +242,51 @@ export default function ClientPortal() {
     loadLive()
     return () => { cancelled = true }
   }, [project_id])
+
+  /* ── Screen-view + duration logging ──────────────────────────────
+     One client_activity_log 'screen_view' row per screen the client
+     lands on (activeKey). startScreenView just timestamps the entry
+     locally (no write yet — RLS only grants clients INSERT, not
+     UPDATE, so the row can't be opened now and patched with a duration
+     later); endScreenView computes the elapsed time and inserts the
+     finished row, firing when the client navigates to a different
+     screen, backgrounds the tab, or closes it — never on a plain React
+     unmount alone, since SPA navigation here doesn't unmount
+     ClientPortal at all (activeKey just changes). currentViewRef is
+     the single source of truth for "the screen-view currently open",
+     shared between the per-navigation effect and the visibility/
+     pagehide listeners below. No-ops entirely under the admin's
+     "תצוגת לקוח" preview (previewMode) — see clientActivityLog.js's
+     own guard. */
+  const currentViewRef = useRef(null)
+
+  useEffect(() => {
+    if (!project_id || previewMode) return undefined
+    currentViewRef.current = startScreenView(activeKey, { projectId: project_id, clientUserId, previewMode })
+    return () => {
+      endScreenView(currentViewRef.current)
+      currentViewRef.current = null
+    }
+  }, [activeKey, project_id, clientUserId, previewMode])
+
+  useEffect(() => {
+    if (!project_id || previewMode) return undefined
+    const finalizeCurrentView = () => {
+      if (!currentViewRef.current) return
+      endScreenView(currentViewRef.current)
+      currentViewRef.current = null
+      flushActivityLogQueueNow()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') finalizeCurrentView()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', finalizeCurrentView)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', finalizeCurrentView)
+    }
+  }, [project_id, previewMode])
 
   const firstName = liveIdentity?.firstName || ctxFirstName || ''
   const lastName  = liveIdentity?.lastName  || null

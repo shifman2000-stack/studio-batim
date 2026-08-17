@@ -15,10 +15,18 @@ import { useClient } from '../../components/ClientRoute'
 
 export default function ClientAccount({ firstName }) {
   const navigate = useNavigate()
-  const { first_name: ctxFirstName } = useClient()
+  const { first_name: ctxFirstName, previewMode } = useClient()
   const displayName = firstName || ctxFirstName || '—'
 
+  /* previewMode (admin's "תצוגת לקוח" — see ClientPreviewOverlay.jsx):
+     supabase.auth.signOut() is already a no-op under preview (see the
+     guard in supabaseClient.js), but this handler navigates regardless
+     of that call's result — left unchecked it would still yank the
+     admin out of their own app to the login screen. Short-circuit the
+     whole handler here since a transport-level guard alone can't stop
+     a local navigate() call. */
   const handleLogout = async () => {
+    if (previewMode) return
     await supabase.auth.signOut()
     navigate('/')
   }

@@ -22,6 +22,7 @@ import {
   clientDoneHint, DONE_STATUS, CLIENT_DONE_LABEL,
 } from '../../components/meetings/meetingTasksStatus'
 import { resolveUserNames } from '../../lib/resolveUserNames'
+import { logAction, logError } from '../../lib/clientActivityLog'
 /* The SAME status widget the משימות tab uses — not a portal copy. */
 import TaskStatusControl from '../../components/tasks/TaskStatusControl'
 /* "דרוש טיפול" — one module decides, this screen only draws. */
@@ -42,7 +43,8 @@ function formatDate(iso) {
 }
 
 export default function ClientMeetings() {
-  const { project_id } = useClient()
+  const { id: clientUserId, project_id, previewMode } = useClient()
+  const logCtx = { projectId: project_id, clientUserId, previewMode }
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   /* All blocks collapsed on mount. Independent toggle per card. */
@@ -178,8 +180,16 @@ export default function ClientMeetings() {
         client_tasks_done_by:   before.client_tasks_done_by,
       } : s))
       setDoneErrors(prev => ({ ...prev, [summaryId]: 'לא הצלחנו לעדכן את הסטטוס' }))
+      logError('meetings', 'mark_task_status_failed', logCtx, { summary_id: summaryId })
       setDoneBusyId(null)
       return
+    }
+
+    /* "marking a meeting client-task done" — only the transition INTO
+       the done status counts as this action; switching back to פעיל
+       isn't. */
+    if (statusId === doneStatus?.id) {
+      logAction('meetings', 'mark_task_done', logCtx, { summary_id: summaryId })
     }
 
     const { data: fresh } = await supabase

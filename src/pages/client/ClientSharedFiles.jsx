@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { useClient } from '../../components/ClientRoute'
+import { logAction, logError } from '../../lib/clientActivityLog'
 
 const BUCKET = 'project-shared-files'
 
@@ -62,7 +63,8 @@ const IconTrash = () => (
 )
 
 export default function ClientSharedFiles() {
-  const { id: userId, project_id } = useClient()
+  const { id: userId, project_id, previewMode } = useClient()
+  const logCtx = { projectId: project_id, clientUserId: userId, previewMode }
   const isMounted = useRef(true)
 
   /* `items` is the MERGED list (files + notes), uniform shape, sorted by
@@ -217,6 +219,7 @@ export default function ClientSharedFiles() {
     } catch (err) {
       console.error('shared_files upload error:', err)
       if (isMounted.current) setPageError('שגיאה בהעלאה, נסה שוב')
+      logError('shared', 'upload_failed', logCtx)
     }
     if (isMounted.current) setUploading(false)
   }
@@ -246,9 +249,11 @@ export default function ClientSharedFiles() {
       if (!isMounted.current) return
       setSavedFlash(true)
       setTimeout(() => isMounted.current && setSavedFlash(false), 2000)
+      logAction('shared', 'add_note', logCtx)
     } catch (err) {
       console.error('project_notes insert error:', err)
       if (isMounted.current) setPageError('שגיאה בשמירה, נסה שוב')
+      logError('shared', 'note_save_failed', logCtx)
     }
     if (isMounted.current) setSavingNote(false)
   }
@@ -284,6 +289,7 @@ export default function ClientSharedFiles() {
         setPageError('שגיאה במחיקה, נסה שוב')
         setTimeout(() => isMounted.current && setPageError(''), 3000)
       }
+      logError('shared', 'delete_failed', logCtx, { kind: item.kind })
     }
   }
 

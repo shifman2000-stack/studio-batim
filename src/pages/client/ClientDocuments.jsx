@@ -26,6 +26,7 @@ import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { computeDocumentActionRequired, isDocumentActionRequired } from '../../lib/actionRequired'
 import ActionRequiredBadge, { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
+import { logAction, logError } from '../../lib/clientActivityLog'
 
 const BUCKET = 'project-files'
 
@@ -90,7 +91,8 @@ const IconTrash = () => (
 )
 
 export default function ClientDocuments() {
-  const { id: userId, project_id } = useClient()
+  const { id: userId, project_id, previewMode } = useClient()
+  const logCtx = { projectId: project_id, clientUserId: userId, previewMode }
   const isMounted = useRef(true)
 
   /* ── State ───────────────────────────────────────────────────────── */
@@ -401,9 +403,11 @@ export default function ClientDocuments() {
       if (!isMounted.current) return
       setSavedFlash(true)
       setTimeout(() => { if (isMounted.current) setSavedFlash(false) }, 2000)
+      logAction('documents', 'upload_document', logCtx, { document_id: docId })
     } catch (e) {
       console.error('client doc upload error:', e)
       if (isMounted.current) setUploadErrors(prev => ({ ...prev, [docId]: true }))
+      logError('documents', 'upload_failed', logCtx, { document_id: docId })
     }
     if (isMounted.current) setUploadingDocId(null)
   }
@@ -468,6 +472,7 @@ export default function ClientDocuments() {
       if (!isMounted.current) return
       setConfirmDeleteVersionId(null)
       await loadData()
+      logAction('documents', 'delete_own_document', logCtx, { document_id: doc.id, version_id: version.id })
     } catch (err) {
       console.error('client document version delete error:', err)
       if (isMounted.current) {
@@ -482,6 +487,7 @@ export default function ClientDocuments() {
           })
         }, 3000)
       }
+      logError('documents', 'delete_failed', logCtx, { document_id: doc.id, version_id: version.id })
     }
   }
 

@@ -41,6 +41,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { ClientContext } from '../../components/ClientRoute'
 import { IconBack } from '../../components/icons/PortalIcons'
+import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
 /* Portal navigation — used by the HUB's back-arrow to leave the
    programming module entirely. useClientNav() falls back to no-op
    handlers when there's no provider (embedded/admin usage), so it's
@@ -1036,9 +1037,23 @@ export default function ClientProgrammingQuestionnaire({
         setTableUnavailable(true); setLoading(false); return
       }
 
-      /* INSERT if missing (Stage A). Any error → "בקרוב" placeholder. */
+      /* The row is now created up front — when an admin flips
+         projects.show_programming_questionnaire ON (see ProjectsKanban's
+         handleSettingsSave) — so a REAL client should always find one
+         already here; the tile that leads to this screen isn't even
+         visible to them otherwise. If it's still missing, degrade to
+         "בקרוב" rather than writing, same as any other load failure.
+
+         The one exception: forceAdminEdit (the meeting-embedded editor,
+         MeetingSummariesTab.jsx) lets an admin fill this in BEFORE ever
+         toggling the client-visibility flag on — that pre-existing
+         workflow keeps its own create-on-first-open fallback so it isn't
+         blocked on the toggle. */
       let row = existing
       if (!row) {
+        if (!forceAdminEdit) {
+          setTableUnavailable(true); setLoading(false); return
+        }
         const { data: inserted, error: insErr } = await supabase
           .from('programming_questionnaires')
           .insert({ project_id: project_id, answers: {} })
@@ -1765,6 +1780,9 @@ export default function ClientProgrammingQuestionnaire({
                 onClick={openQuestionnaire}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {!questionnaireDone && (
+                  <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
                 <span style={hubTileIconWrap}>
                   <IconDocument size={28} />
                 </span>
@@ -1788,6 +1806,9 @@ export default function ClientProgrammingQuestionnaire({
                 onClick={() => setView('house')}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {!houseDone && (
+                  <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
                 <span style={hubTileIconWrap}>
                   <IconHouse size={28} />
                 </span>

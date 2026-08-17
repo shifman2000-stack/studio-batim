@@ -23,6 +23,23 @@
 //      them. Produces a screen total AND the ids of the open summaries,
 //      so the per-card dot comes from here rather than being re-derived.
 //
+//   C. questionnaire — the project's programming_questionnaires row's
+//      answers.meta.{questionnaire_done,house_done} flags. Each one not
+//      strictly true (including a missing row entirely) is one open
+//      item, up to 2 per project. Screen key 'questionnaire' is already
+//      gated on projects.show_programming_questionnaire by
+//      clientPortalGroups' getVisibleChildren, so the usual visibility
+//      rule below already keeps this at zero whenever that flag is off
+//      — no separate gate needed here.
+//
+//   D. contacts — project_contacts personal-detail completeness, for the
+//      'file' screen ("פרטי תיק" → "פרטים אישיים"). ANY row missing ANY
+//      of first_name/last_name/id_number/phone/email counts the whole
+//      PROJECT as needing attention (one flag, not one per row/field —
+//      there's nowhere per-contact for a client to "clear" a partial
+//      dot, so unlike documents/meetings this source never produces
+//      more than 1).
+//
 // ── ROLLUP ───────────────────────────────────────────────────────────
 // A group tile shows the SUM of its children's counts. The parent/child
 // mapping is read from clientPortalGroups.GROUPS — it is not restated
@@ -219,6 +236,115 @@ async function loadMeetingsSource({ projectId }) {
   }
 }
 
+/* ── Source C: questionnaire / house builder ─────────────────────── */
+
+/**
+ * THE questionnaire/house-builder primitive. Mirrors the same
+ * answers.meta.{questionnaire_done,house_done} flags
+ * ClientProgrammingQuestionnaire.jsx itself reads to show "הסתיים
+ * המילוי ✓" on each hub tile — a missing/malformed answers bag (e.g. a
+ * brand-new row) reads as "not done" on both, same as the hub's own
+ * `!!(answers && answers.meta && answers.meta.x === true)` check.
+ *
+ * @param {object|null|undefined} row a programming_questionnaires row (needs .answers)
+ * @returns {{ questionnaireDone: boolean, houseDone: boolean }}
+ */
+export function questionnairePartsStatus(row) {
+  const answers = row && row.answers && typeof row.answers === 'object' && !Array.isArray(row.answers)
+    ? row.answers
+    : {}
+  const meta = answers.meta && typeof answers.meta === 'object' && !Array.isArray(answers.meta)
+    ? answers.meta
+    : {}
+  return {
+    questionnaireDone: meta.questionnaire_done === true,
+    houseDone:          meta.house_done === true,
+  }
+}
+
+/**
+ * @param {object|null|undefined} row a programming_questionnaires row, or null/undefined if none exists yet
+ * @returns {{ total:number, questionnaireDone:boolean, houseDone:boolean }}
+ */
+export function computeQuestionnaireActionRequired(row) {
+  const { questionnaireDone, houseDone } = questionnairePartsStatus(row)
+  const total = (questionnaireDone ? 0 : 1) + (houseDone ? 0 : 1)
+  return { total, questionnaireDone, houseDone }
+}
+
+async function loadQuestionnaireSource({ projectId }) {
+  /* On failure, report BOTH parts done (no dot) rather than false/false
+     — this is the "swallow failure, cost a badge not a screen" contract;
+     unlike `total: 0` alone, the per-part booleans below are read
+     directly by the hub screen for its own tile dots, so they need to
+     independently say "nothing to flag" too. */
+  const empty = { total: 0, questionnaireDone: true, houseDone: true }
+  if (!projectId) return empty
+  try {
+    const { data, error } = await supabase
+      .from('programming_questionnaires')
+      .select('answers')
+      .eq('project_id', projectId)
+      .maybeSingle()
+    if (error) throw error
+    return computeQuestionnaireActionRequired(data)
+  } catch (e) {
+    console.warn('actionRequired/questionnaire failed:', e)
+    return empty
+  }
+}
+
+/* ── Source D: contacts (personal-details completeness) ───────────── */
+
+const CONTACT_REQUIRED_FIELDS = ['first_name', 'last_name', 'id_number', 'phone', 'email']
+
+/**
+ * A single project_contacts row needs attention when any of the 5
+ * personal-detail fields is missing or blank.
+ *
+ * @param {object|null|undefined} contact a project_contacts row
+ * @returns {boolean}
+ */
+export function isContactIncomplete(contact) {
+  if (!contact) return true
+  return CONTACT_REQUIRED_FIELDS.some(f => {
+    const v = contact[f]
+    return v === null || v === undefined || String(v).trim() === ''
+  })
+}
+
+/**
+ * The whole project needs attention when ANY of its contact rows is
+ * incomplete. Used both by the network loader below and directly by
+ * ClientFile.jsx (which already has `contacts` loaded) for its own
+ * in-screen dot — same primitive, no redundant fetch, same pattern the
+ * questionnaire hub's tile dots already use.
+ *
+ * @param {Array|null|undefined} contacts project_contacts rows
+ * @returns {{ total:number }} total is 0 or 1 — a project-level flag, not a per-row count
+ */
+export function computeContactsActionRequired(contacts) {
+  const rows = Array.isArray(contacts) ? contacts : []
+  const anyIncomplete = rows.length > 0 && rows.some(isContactIncomplete)
+  return { total: anyIncomplete ? 1 : 0 }
+}
+
+async function loadContactsSource({ projectId }) {
+  const empty = { total: 0 }
+  if (!projectId) return empty
+  try {
+    const { data, error } = await supabase
+      .from('project_contacts')
+      .select('first_name, last_name, id_number, phone, email')
+      .eq('project_id', projectId)
+    if (error) throw error
+    return computeContactsActionRequired(data)
+  } catch (e) {
+    console.warn('actionRequired/contacts failed:', e)
+    return empty
+  }
+}
+
 /* ── The source registry ──────────────────────────────────────────── */
 
 /**
@@ -227,8 +353,10 @@ async function loadMeetingsSource({ projectId }) {
  * the rollup will never pick it up.
  */
 export const SOURCES = [
-  { screenKey: 'documents', load: loadDocumentsSource },
-  { screenKey: 'meetings',  load: loadMeetingsSource  },
+  { screenKey: 'documents',     load: loadDocumentsSource     },
+  { screenKey: 'meetings',      load: loadMeetingsSource      },
+  { screenKey: 'questionnaire', load: loadQuestionnaireSource },
+  { screenKey: 'file',          load: loadContactsSource      },
 ]
 
 /* ── Rollup ───────────────────────────────────────────────────────── */

@@ -4,7 +4,7 @@
 //
 // Card order (top → bottom):
 //   1. פרטים אישיים  (was "אנשי קשר" — the ONLY editable card)
-//   2. פרטי הפרויקט   (read-only)
+//   2. פרטי מגרש      (read-only)
 //   3. בעלי מקצוע    (read-only)
 //
 // "אחראית פרויקט" and "פרטי רישוי" cards are intentionally absent on
@@ -27,8 +27,10 @@ import { supabase } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { useClientFooter } from './ClientFooter'
 import { logError } from '../../lib/clientActivityLog'
+import { computeContactsActionRequired } from '../../lib/actionRequired'
+import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
 
-/* ── Section: פרטי הפרויקט — client_info columns (READ-ONLY) ────────── */
+/* ── Section: פרטי מגרש — client_info columns (READ-ONLY) ────────── */
 const PROJECT_DETAIL_FIELDS = [
   { field: 'city',         label: 'ישוב' },
   { field: 'gush',         label: 'גוש' },
@@ -344,6 +346,12 @@ export default function ClientFile() {
 
   const detailRows    = renderClientInfoFields(PROJECT_DETAIL_FIELDS)
 
+  /* "דרוש טיפול" — same primitive src/lib/actionRequired.js uses for the
+     home-screen "פרטי תיק" tile badge, computed here directly from the
+     already-loaded `contacts` (no redundant fetch), same pattern the
+     questionnaire hub's own tile dots use. */
+  const contactsNeedAttention = computeContactsActionRequired(contacts).total > 0
+
   /* Professionals — ALWAYS read-only (also in edit mode).
      Dynamic key lookups off clientInfo are guarded with hasOwnProperty
      because role.key === 'constructor' would otherwise fall through to
@@ -406,6 +414,7 @@ export default function ClientFile() {
                   onKeyDown={(e) => handleHeaderKeyDown(e, 'personal')}
                 >
                   <span className="cp-progress-header-name">פרטים אישיים</span>
+                  {contactsNeedAttention && <ActionRequiredDot />}
                   {isOpen && !editMode && (
                     <button
                       type="button"
@@ -476,7 +485,7 @@ export default function ClientFile() {
             )
           })()}
 
-          {/* Block 2 — פרטי הפרויקט (read-only; no pencil). */}
+          {/* Block 2 — פרטי מגרש (read-only; no pencil). */}
           {(() => {
             const isOpen = openSet.has('project')
             return (
@@ -489,7 +498,7 @@ export default function ClientFile() {
                   onClick={() => toggleOpen('project')}
                   onKeyDown={(e) => handleHeaderKeyDown(e, 'project')}
                 >
-                  <span className="cp-progress-header-name">פרטי הפרויקט</span>
+                  <span className="cp-progress-header-name">פרטי מגרש</span>
                   <span className={'cp-progress-chevron' + (isOpen ? ' cp-progress-chevron--open' : '')}>
                     <IconChevron size={16} />
                   </span>

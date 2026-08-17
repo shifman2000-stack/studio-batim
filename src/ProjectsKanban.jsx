@@ -841,6 +841,33 @@ ${authCode || '—'}
     setSettingsSaving(true)
     await supabase.from('projects').update(patch).eq('id', settingsTarget.id)
 
+    /* Turning "חשוף שאלון פרוגרמה ללקוח" ON creates the project's
+       programming_questionnaires row right now, instead of leaving it
+       to be auto-created the first time the client happens to open the
+       hub screen. Guarded on a SELECT first so re-toggling off/on (or a
+       row that already exists from before this change) never creates a
+       duplicate. Best-effort — a failure here just means the row gets
+       created lazily by ClientProgrammingQuestionnaire's own fallback
+       the next time an admin edits it via the meeting-embedded view;
+       it must not block the settings save. */
+    if (patch.show_programming_questionnaire === true) {
+      try {
+        const { data: existingQ } = await supabase
+          .from('programming_questionnaires')
+          .select('id')
+          .eq('project_id', settingsTarget.id)
+          .maybeSingle()
+        if (!existingQ) {
+          const { error: qErr } = await supabase
+            .from('programming_questionnaires')
+            .insert({ project_id: settingsTarget.id, answers: {} })
+          if (qErr) console.warn('programming_questionnaires row creation failed:', qErr)
+        }
+      } catch (e) {
+        console.warn('programming_questionnaires row creation failed:', e)
+      }
+    }
+
     /* Local-state patch carries the joined profiles row if the
        responsible changed — same shape the kanban list uses. */
     const localPatch = { ...patch }

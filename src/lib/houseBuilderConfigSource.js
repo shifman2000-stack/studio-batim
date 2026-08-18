@@ -148,10 +148,15 @@ function adaptDbConfig(dbConfig) {
     }
 
     /* Props — DB shape { title, noTitle, type: 'single'|'multi', options }
-       → in-code shape { t, radio?, noTitle?, opts }. Empty prop arrays
-       don't get stored so PropsPanel's `ROOM_PROPS[type] || DEFAULT_PROPS`
-       fallback continues to kick in for undecorated types. */
-    if (Array.isArray(def.props) && def.props.length) {
+       → in-code shape { t, radio?, noTitle?, opts }.
+
+       An EMPTY array is recorded just like a populated one: an admin
+       who clears every property group off a room type means "this type
+       asks nothing", and that has to survive into ROOM_PROPS. It used
+       to be skipped, which made an empty list read back as `undefined`
+       and silently inherited a default set of properties the admin
+       never configured — so "no properties" was unexpressible. */
+    if (Array.isArray(def.props)) {
       roomProps[type] = def.props
         .filter(g => g && typeof g === 'object')
         .map(g => {

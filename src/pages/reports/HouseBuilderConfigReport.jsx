@@ -337,20 +337,62 @@ export default function HouseBuilderConfigReport() {
       setSaveError(validationErrors[0])
       return
     }
+    if (!configId) {
+      setSaveState('error')
+      setSaveError('אין מזהה שורה לשמירה — רעננו את הדף ונסו שוב.')
+      return
+    }
     setSaveState('saving')
     setSaveError('')
     try {
-      const { error } = await supabase
+      /* Target the row by PRIMARY KEY (loaded alongside the config)
+         and ask PostgREST to RETURN the affected rows.
+
+         This `.select()` is the whole point of the call, not a
+         convenience: without it PostgREST answers 204 No Content, and
+         an UPDATE that matched ZERO rows is then indistinguishable
+         from one that matched — `error` is null in both cases. A row
+         filtered out by RLS, a session that quietly stopped being
+         admin, or an id that no longer exists would all report
+         "נשמר ✓" over a write that never happened. Asking for the
+         rows back turns every one of those into a visible failure. */
+      const { data, error } = await supabase
         .from('house_builder_config')
         .update({ config })
-        .eq('is_active', true)
+        .eq('id', configId)
+        .select('id, config')
+
       if (error) {
         setSaveState('error')
         setSaveError(error.message || 'שגיאה בשמירה')
         return
       }
-      /* Refresh the clean-snapshot so "dirty" resets. Use a fresh
-         deep-clone so future mutations of `config` don't leak. */
+      if (!Array.isArray(data) || data.length === 0) {
+        setSaveState('error')
+        setSaveError(
+          'השמירה לא עדכנה אף שורה בבסיס הנתונים. ייתכן שאין הרשאת עריכה (RLS) ' +
+          'או שהשורה הפעילה השתנתה. רעננו את הדף, ודאו שאתם מחוברים כמנהל, ונסו שוב. ' +
+          'שימו לב: השינויים שלכם עדיין כאן על המסך ולא נשמרו.'
+        )
+        return
+      }
+      /* Read-back verification — compare what the server now holds
+         against what we sent, so a partial write or anything that
+         rewrites the row on the way in can't pass as success. */
+      const stored = data[0] ? data[0].config : null
+      if (canonicalJson(stored) !== canonicalJson(config)) {
+        setSaveState('error')
+        setSaveError(
+          'השמירה בוצעה אך הנתונים שחזרו מהשרת שונים ממה שנשלח. ' +
+          'רעננו את הדף ובדקו מה נשמר בפועל לפני שתמשיכו לערוך.'
+        )
+        return
+      }
+      /* Refresh the clean-snapshot so "dirty" resets. Clone what we
+         SENT rather than what came back: jsonb doesn't preserve object
+         key order, so the returned copy stringifies differently and
+         would leave the dirty indicator stuck on right after a
+         successful save. The two are already proven equal above. */
       setOriginalConfig(JSON.parse(JSON.stringify(config)))
       setSaveState('saved')
       /* Auto-fade the "saved" indicator after a beat. */
@@ -419,7 +461,9 @@ export default function HouseBuilderConfigReport() {
                 <span style={{ color: SAGE_DARK, fontSize: 13 }}>נשמר ✓</span>
               )}
               {saveState === 'error' && (
-                <span style={{ color: DANGER, fontSize: 13 }}>שגיאה: {saveError}</span>
+                <span style={{ color: DANGER, fontSize: 13, fontWeight: 700 }}>
+                  השמירה נכשלה
+                </span>
               )}
               <button
                 type="button"
@@ -448,6 +492,26 @@ export default function HouseBuilderConfigReport() {
               </button>
             </div>
           </div>
+
+          {/* Save-failure banner — a save that didn't reach the DB has
+              to be as loud as a validation error, not a 13px note the
+              admin scrolls past. Stays up until the next save attempt
+              so it can't be missed, and the edits stay on screen
+              (dirty is NOT reset on failure) so nothing is lost. */}
+          {saveState === 'error' && (
+            <div style={{
+              background: '#ffffff', border: `1px solid ${DANGER}`,
+              borderInlineStart: `4px solid ${DANGER}`,
+              borderRadius: 8, padding: '10px 14px', marginBottom: 14,
+            }}>
+              <div style={{ fontWeight: 700, color: DANGER, marginBottom: 6, fontSize: 14 }}>
+                השמירה נכשלה — השינויים לא נשמרו
+              </div>
+              <div style={{ color: CHARCOAL, fontSize: 13, lineHeight: 1.6 }}>
+                {saveError}
+              </div>
+            </div>
+          )}
 
           {/* Validation errors banner — blocks save while non-empty. */}
           {validationErrors.length > 0 && (
@@ -1856,6 +1920,25 @@ function roomHasIssue(type, def, allRooms) {
   }
 
   return false
+}
+
+/* Key-order-insensitive JSON serialization, used to compare what we
+   sent against what the server echoed back after an UPDATE.
+
+   Postgres `jsonb` does NOT preserve object key order — it re-sorts
+   keys on storage — so a plain JSON.stringify comparison would flag a
+   mismatch on literally every save even when the round-trip is exact.
+   Arrays DO keep their order in jsonb, so they compare positionally. */
+function canonicalJson(v) {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort()
+      .map(k => `${JSON.stringify(k)}:${canonicalJson(v[k])}`)
+      .join(',')}}`
+  }
+  /* `undefined` never survives a JSON round-trip; normalize it to
+     null so both sides of the comparison agree on absent values. */
+  return v === undefined ? 'null' : JSON.stringify(v)
 }
 
 function validateConfig(cfg) {

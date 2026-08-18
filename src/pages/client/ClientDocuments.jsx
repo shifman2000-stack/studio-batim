@@ -22,7 +22,7 @@
 //      readers see the latest file too.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase } from '../../supabaseClient'
+import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { computeDocumentActionRequired, isDocumentActionRequired } from '../../lib/actionRequired'
 import ActionRequiredBadge, { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
@@ -405,9 +405,13 @@ export default function ClientDocuments() {
       setTimeout(() => { if (isMounted.current) setSavedFlash(false) }, 2000)
       logAction('documents', 'upload_document', logCtx, { document_id: docId })
     } catch (e) {
-      console.error('client doc upload error:', e)
-      if (isMounted.current) setUploadErrors(prev => ({ ...prev, [docId]: true }))
-      logError('documents', 'upload_failed', logCtx, { document_id: docId })
+      /* Blocked by the client-preview guard = intentional, not a
+         failure — no red per-row error marker. */
+      if (!isPreviewBlockedError(e)) {
+        console.error('client doc upload error:', e)
+        if (isMounted.current) setUploadErrors(prev => ({ ...prev, [docId]: true }))
+        logError('documents', 'upload_failed', logCtx, { document_id: docId })
+      }
     }
     if (isMounted.current) setUploadingDocId(null)
   }
@@ -474,6 +478,7 @@ export default function ClientDocuments() {
       await loadData()
       logAction('documents', 'delete_own_document', logCtx, { document_id: doc.id, version_id: version.id })
     } catch (err) {
+      if (isPreviewBlockedError(err)) return   /* preview: silent no-op */
       console.error('client document version delete error:', err)
       if (isMounted.current) {
         setDeleteErrors(prev => ({ ...prev, [version.id]: true }))

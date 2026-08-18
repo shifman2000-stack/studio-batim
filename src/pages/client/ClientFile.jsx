@@ -23,7 +23,7 @@
 // project. If no contact changed, save is a silent no-op + flash.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase } from '../../supabaseClient'
+import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { useClientFooter } from './ClientFooter'
 import { logError } from '../../lib/clientActivityLog'
@@ -291,6 +291,17 @@ export default function ClientFile() {
 
       const results = await Promise.all(updates)
       const errors  = results.filter(r => r.error)
+      /* Every failure being a preview-guard block means this is the
+         admin's read-only "תצוגת לקוח" — leave edit mode quietly, with
+         no red banner and no "נשמר" flash (nothing was saved). Mixed
+         or other errors still fall through to the real error path. */
+      if (errors.length > 0 && errors.every(r => isPreviewBlockedError(r.error))) {
+        if (!isMounted.current) return
+        setEditMode(false)
+        setContactsDraft([])
+        setSaving(false)
+        return
+      }
       if (errors.length > 0) {
         console.error('client save errors:', errors.map(r => r.error))
         throw new Error('save failed')

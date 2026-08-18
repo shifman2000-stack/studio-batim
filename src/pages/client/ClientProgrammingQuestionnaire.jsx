@@ -38,7 +38,7 @@
 // instead of crashing.
 
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { supabase } from '../../supabaseClient'
+import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { ClientContext } from '../../components/ClientRoute'
 import { IconBack } from '../../components/icons/PortalIcons'
 import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
@@ -732,9 +732,14 @@ function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
 
       onChange([...list, { url: publicUrl, fileName: file.name, uploadedAt: new Date().toISOString() }])
     } catch (err) {
-      console.error('inspiration image upload error:', err)
-      if (isMountedRef.current) setPageError('שגיאה בהעלאה, נסה שוב')
-      logError('questionnaire', 'inspiration_upload_failed', logCtx)
+      /* Preview mode blocks the upload on purpose — bail out quietly
+         (the throw already skipped adding the image to local state, so
+         there's no half-done entry to clean up). */
+      if (!isPreviewBlockedError(err)) {
+        console.error('inspiration image upload error:', err)
+        if (isMountedRef.current) setPageError('שגיאה בהעלאה, נסה שוב')
+        logError('questionnaire', 'inspiration_upload_failed', logCtx)
+      }
     }
     if (isMountedRef.current) setUploading(false)
   }
@@ -751,11 +756,17 @@ function InspirationImagesSection({ images, project_id, onChange, isLocked }) {
       onChange(list.filter((_, i) => i !== idx))
       setConfirmIdx(null)
     } catch (err) {
-      console.error('inspiration image delete error:', err)
-      logError('questionnaire', 'inspiration_delete_failed', logCtx)
-      if (isMountedRef.current) {
-        setPageError('שגיאה במחיקה, נסה שוב')
-        setTimeout(() => isMountedRef.current && setPageError(''), 3000)
+      /* Same preview carve-out as the upload path above. (The storage
+         remove itself is already non-fatal here, so this mainly guards
+         against a future write in this block surfacing a red banner
+         inside a read-only preview.) */
+      if (!isPreviewBlockedError(err)) {
+        console.error('inspiration image delete error:', err)
+        logError('questionnaire', 'inspiration_delete_failed', logCtx)
+        if (isMountedRef.current) {
+          setPageError('שגיאה במחיקה, נסה שוב')
+          setTimeout(() => isMountedRef.current && setPageError(''), 3000)
+        }
       }
     }
   }
@@ -966,6 +977,49 @@ export default function ClientProgrammingQuestionnaire({
      always starts on the hub. */
   const [view, setView] = useState('hub')
 
+  /* Reset scroll to the top on every step change (הבא/הקודם, or the
+     step-number pills) — the SAME approach HouseBuilderV2 uses for its
+     own wizard, kept identical so the two modules behave the same.
+
+     Which thing actually needs resetting depends on how this component
+     is hosted, and it isn't always the same:
+       · The standalone client portal scrolls .cp-content (the portal
+         shell's own overflow container), not the window.
+       · The admin split-screen embed (MeetingSummariesTab) wraps this
+         whole component in ITS OWN fixed-height, internally-scrolling
+         panel.
+     Rather than special-case each host, walk up from the step body to
+     find whichever ancestor is ACTUALLY scrolled (scrollHeight >
+     clientHeight) within a few hops and reset it; only fall back to the
+     window when none is found, so we don't yank an unrelated outer page
+     to the top when an inner container already owns the scroll.
+
+     Guarded on `view` because the ref is only attached in the
+     questionnaire view — without it, a stepIndex change made while
+     entering from the hub (openQuestionnaire sets both) would find a
+     null ref and scroll the window for no reason. */
+  const stepBodyRef = useRef(null)
+  useEffect(() => {
+    if (view !== 'questionnaire') return
+    stepBodyRef.current?.scrollTo(0, 0)
+
+    let scrolledAncestor = false
+    let node = stepBodyRef.current?.parentElement
+    let hops = 0
+    while (node && hops < 8) {
+      const cs = window.getComputedStyle(node)
+      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+        node.scrollTo(0, 0)
+        scrolledAncestor = true
+      }
+      node = node.parentElement
+      hops++
+    }
+    if (!scrolledAncestor) {
+      window.scrollTo({ top: 0 })
+    }
+  }, [stepIndex, view])
+
   /* ── Auto-save refs (hooks; top-level, before any early return) ────
      hasLoadedRef       : flipped true after the initial load runs, so
                           the debounce doesn't try to save an empty row
@@ -1155,14 +1209,24 @@ export default function ClientProgrammingQuestionnaire({
           updated_at: new Date().toISOString(),
         })
         .eq('id', rowId)
-      if (error) throw error
+      /* In the admin's "תצוגת לקוח" preview every write is blocked BY
+         DESIGN. Treat that as a silent success rather than an error:
+         the local state below still updates (in-memory only — nothing
+         reaches the DB), so the admin can page through the whole flow
+         and see exactly what the client sees. Returning false here
+         instead would strand them — goNext / handleHouseDone and the
+         other callers all gate their navigation on this result. */
+      const previewBlocked = isPreviewBlockedError(error)
+      if (error && !previewBlocked) throw error
       if (!isMounted.current) return false
       /* Stamp what we JUST WROTE so the auto-save effect (which fires
          after the setAnswers below) sees "nothing to save" (references
          match) and doesn't schedule a redundant round-trip. */
       savedSnapshotRef.current = { answers: nextAnswers, qData: qData }
       setAnswers(nextAnswers)
-      if (!silent) {
+      /* No "נשמר ✓" flash under preview — nothing was actually saved,
+         and claiming otherwise would be a lie. */
+      if (!silent && !previewBlocked) {
         setSavedFlash(true)
         setTimeout(() => isMounted.current && setSavedFlash(false), 1800)
       }
@@ -1456,6 +1520,14 @@ export default function ClientProgrammingQuestionnaire({
         .from('programming_questionnaires')
         .update({ submitted: true, submitted_at: nowIso })
         .eq('id', rowId)
+      /* Preview mode: close the dialog and stop. Unlike saveDraftNow
+         (whose local-only write is harmless), flipping `submitted` here
+         would lock the entire questionnaire read-only in the preview —
+         a confusing dead end for an admin who is just looking. */
+      if (isPreviewBlockedError(error)) {
+        setConfirmSubmitOpen(false)
+        return
+      }
       if (error) throw error
       if (!isMounted.current) return
 
@@ -1566,7 +1638,21 @@ export default function ClientProgrammingQuestionnaire({
     && Number.isFinite(houseConfig.calcParams.toleranceDeviationPct)
   ) ? houseConfig.calcParams.toleranceDeviationPct : 10
 
-  const houseAreaMatches = targetAreaY != null && computedHouseArea <= targetAreaY * (1 + toleranceDeviationPct / 100)
+  /* Three-way comparison, replacing the old binary matches/exceeds
+     check. toleranceAmount is computed off the TARGET (same base the
+     old single-sided check used), not the calculated size.
+       target > calculated + tolerance → the client's requested size is
+         bigger than what the rooms actually add up to ('bigger').
+       target < calculated - tolerance → the requested size is smaller
+         than the calculated one ('smaller').
+       otherwise (within calculated ± tolerance either direction) →
+         'matches', same wording as before. */
+  const toleranceAmount = targetAreaY != null ? targetAreaY * (toleranceDeviationPct / 100) : 0
+  const houseAreaComparison =
+      targetAreaY == null                                  ? null
+    : targetAreaY > computedHouseArea + toleranceAmount     ? 'bigger'
+    : targetAreaY < computedHouseArea - toleranceAmount     ? 'smaller'
+    :                                                          'matches'
 
   /* ── Render ─────────────────────────────────────────────────────── */
 
@@ -1818,16 +1904,26 @@ export default function ClientProgrammingQuestionnaire({
                     <span style={hubTileDesc}>
                       בחישוב החללים והמאפיינים גודל הבית יוצא כ-{computedHouseArea} מ״ר
                     </span>
-                    {targetAreaY != null && (
+                    {targetAreaY != null && houseAreaComparison && (
                       <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4a4a48' }}>
-                        שימו לב שהגודל{' '}
-                        <span style={{
-                          color:      houseAreaMatches ? '#4a7f4a' : '#a83232',
-                          fontWeight: 600,
-                        }}>
-                          {houseAreaMatches ? 'תואם' : 'חורג'}
-                        </span>
-                        {' '}{houseAreaMatches ? 'למה' : 'ממה'} שרשמתם בהתחלה ({targetAreaY} מ״ר)
+                        {houseAreaComparison === 'matches' ? (
+                          <>
+                            שימו לב שהגודל{' '}
+                            <span style={{ color: '#4a7f4a', fontWeight: 600 }}>תואם</span>
+                            {' '}למה שרשמתם בהתחלה ({targetAreaY} מ״ר)
+                          </>
+                        ) : (
+                          <>
+                            שימו לב שהשטח המבוקש{' '}
+                            <span style={{
+                              color:      houseAreaComparison === 'bigger' ? '#4a7f4a' : '#a83232',
+                              fontWeight: 600,
+                            }}>
+                              {houseAreaComparison === 'bigger' ? 'גדול' : 'קטן'}
+                            </span>
+                            {' '}מהשטח המחושב ({targetAreaY} מ״ר)
+                          </>
+                        )}
                       </span>
                     )}
                   </>
@@ -1965,8 +2061,16 @@ export default function ClientProgrammingQuestionnaire({
               })}
             </div>
 
-            {/* Step counter + current step title */}
-            <div style={{ fontSize: 12.5, color: '#8a8680', marginBottom: 10 }}>
+            {/* Step counter + current step title. Also the scroll-to-top
+                anchor (stepBodyRef) — deliberately NOT the step-pills
+                row above, which is itself overflowX:auto: resetting its
+                scroll would drag the pill strip back to step 1. This is
+                a plain block, so scrollTo(0,0) on it is a harmless no-op
+                and only the walk-up to the real scroller matters. */}
+            <div
+              ref={stepBodyRef}
+              style={{ fontSize: 12.5, color: '#8a8680', marginBottom: 10 }}
+            >
               שלב {stepIndex + 1} מתוך {totalSteps}
             </div>
 

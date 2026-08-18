@@ -99,7 +99,7 @@ export default function ChildInquiriesTab({ projectId }) {
     setLoading(true)
     const { data } = await supabase
       .from('child_project_inquiries')
-      .select('id, parent_project_id, contact1_name, contact1_phone, contact1_email, contact2_name, contact2_phone, contact2_email, selected_model_id, submitted_at, converted_to_project, converted_project_id, project_models(name)')
+      .select('id, parent_project_id, contact1_name, contact1_phone, contact1_email, contact1_id_number, contact1_id_file_url, contact1_id_file_name, contact2_name, contact2_phone, contact2_email, contact2_id_number, contact2_id_file_url, contact2_id_file_name, plot_number, selected_model_id, submitted_at, converted_to_project, converted_project_id, project_models(name)')
       .eq('parent_project_id', projectId)
       .order('submitted_at', { ascending: false })
     setRows(data || [])
@@ -173,6 +173,7 @@ export default function ChildInquiriesTab({ projectId }) {
           last_name:  last,
           phone:      row.contact1_phone || null,
           email:      row.contact1_email || null,
+          id_number:  row.contact1_id_number || null,
         })
       }
       if (row.contact2_name || row.contact2_phone || row.contact2_email) {
@@ -183,6 +184,7 @@ export default function ChildInquiriesTab({ projectId }) {
           last_name:  last,
           phone:      row.contact2_phone || null,
           email:      row.contact2_email || null,
+          id_number:  row.contact2_id_number || null,
         })
       }
       if (contactRows.length > 0) {
@@ -193,6 +195,89 @@ export default function ChildInquiriesTab({ projectId }) {
       /* Shared logic — never duplicated. */
       await markProjectAsParent(row.parent_project_id)
       await inheritClientInfoFromParent(row.parent_project_id, newProject.id)
+
+      /* מספר מגרש → client_info.migrash.
+         Runs AFTER inheritClientInfoFromParent on purpose: `migrash` is
+         one of the inheritable fields, and the value the applicant gave
+         for THIS plot must win over anything copied down from the
+         parent. The inherit step creates the client_info row only when
+         it actually had something to copy, so the row may or may not
+         exist yet — hence the select-then-update-or-insert. */
+      if (row.plot_number) {
+        try {
+          const { data: ci } = await supabase
+            .from('client_info')
+            .select('id')
+            .eq('project_id', newProject.id)
+            .maybeSingle()
+          if (ci?.id) {
+            await supabase.from('client_info').update({ migrash: row.plot_number }).eq('id', ci.id)
+          } else {
+            await supabase.from('client_info').insert({ project_id: newProject.id, migrash: row.plot_number })
+          }
+        } catch (e) {
+          console.warn('handleConvert (child inquiry) — migrash write failed:', e)
+        }
+      }
+
+      /* Attach the uploaded ת.ז scans to the new project's matching
+         document rows.
+
+         The rows already exist: a trigger on projects
+         (trg_seed_project_documents) seeds project_documents from every
+         document_templates row on INSERT, so "ת.ז מבקש 1" / "ת.ז מבקש 2"
+         (stage קליטת פרויקט) are present by name the moment the project
+         is created.
+
+         Attachment mirrors DocumentsTab.uploadFile exactly — a
+         document_versions row plus the parent's denormalized
+         file_url/file_name/status='התקבל'/date — EXCEPT that nothing is
+         re-uploaded: the file is already in the same `project-files`
+         bucket (under child-inquiries/), so pointing at its existing URL
+         keeps preview/download/delete working identically with no copy.
+
+         Best-effort: a failure here logs and moves on rather than
+         aborting a conversion whose project + contacts already landed. */
+      const idAttachments = [
+        { docName: 'ת.ז מבקש 1', url: row.contact1_id_file_url, name: row.contact1_id_file_name },
+        { docName: 'ת.ז מבקש 2', url: row.contact2_id_file_url, name: row.contact2_id_file_name },
+      ].filter(a => a.url)
+
+      if (idAttachments.length > 0) {
+        try {
+          const { data: docRows } = await supabase
+            .from('project_documents')
+            .select('id, name')
+            .eq('project_id', newProject.id)
+            .in('name', idAttachments.map(a => a.docName))
+
+          const today = todayISO()
+          for (const att of idAttachments) {
+            const doc = (docRows || []).find(d => d.name === att.docName)
+            if (!doc) {
+              console.warn(`handleConvert (child inquiry) — no document row named "${att.docName}" on the new project; skipping its ת.ז file.`)
+              continue
+            }
+            const fileName = att.name || decodeURIComponent(att.url.split('/').pop())
+            const { error: verErr } = await supabase.from('document_versions').insert({
+              document_id: doc.id,
+              file_url:    att.url,
+              file_name:   fileName,
+              uploaded_by: session?.user?.id || null,
+            })
+            if (verErr) throw verErr
+            const { error: docErr } = await supabase.from('project_documents').update({
+              file_url:  att.url,
+              file_name: fileName,
+              status:    'התקבל',
+              date:      today,
+            }).eq('id', doc.id)
+            if (docErr) throw docErr
+          }
+        } catch (e) {
+          console.warn('handleConvert (child inquiry) — ת.ז document attach failed:', e)
+        }
+      }
 
       const { error: updErr } = await supabase
         .from('child_project_inquiries')

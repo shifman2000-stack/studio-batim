@@ -36,10 +36,28 @@ export function isSupabasePreviewMode() {
   return previewModeActive
 }
 
+/* The code stamped on every write this guard blocks. Client-portal
+   screens match on it (via isPreviewBlockedError below) to tell "the
+   preview refused this on purpose" apart from a REAL failure, so they
+   can stay silent instead of flashing a red "שגיאה בשמירה" banner at an
+   admin who is only looking. */
+export const PREVIEW_BLOCKED_CODE = 'PREVIEW_MODE_READ_ONLY'
+
 const PREVIEW_BLOCKED = () => ({
   data: null,
-  error: { message: 'תצוגת לקוח היא לצפייה בלבד — פעולת כתיבה נחסמה.', code: 'PREVIEW_MODE_READ_ONLY' },
+  error: { message: 'תצוגת לקוח היא לצפייה בלבד — פעולת כתיבה נחסמה.', code: PREVIEW_BLOCKED_CODE },
 })
+
+/**
+ * True when `err` is a write this preview guard blocked — NOT a real
+ * error. Accepts either a Supabase `{ error }` payload's error object or
+ * a value caught from `throw error`, since call sites use both shapes.
+ * Deliberately narrow: anything without our own code (a genuine RLS
+ * denial, a network drop) reads as false and still surfaces normally.
+ */
+export function isPreviewBlockedError(err) {
+  return !!err && err.code === PREVIEW_BLOCKED_CODE
+}
 
 function guardMutations(builder, methods) {
   for (const method of methods) {

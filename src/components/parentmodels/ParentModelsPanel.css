@@ -1,422 +1,158 @@
 /* src/components/parentmodels/ParentModelsPanel.css
-   Styles for ParentModelsPanel.jsx — shared by ParentProjectModelsReport.jsx
-   (the standalone report) and ProjectDetail.jsx's "דגמים" tab.
-   Visual language borrowed from this app's established small-entity
-   CRUD conventions rather than invented from scratch:
-     - .ppm-modal-*    mirrors Professionals.jsx's .prof-modal-* exactly
-       (overlay, box shadow, radius, header/body/footer, form rows).
-     - .ppm-row / .ppm-icon-btn / .ppm-delete-confirm-*
-       mirror SharedFilesTab.css's .sf-row / .sf-file-icon-btn /
-       .sf-delete-confirm-* (same colors, same hover behavior).
-     - .ppm-add-btn mirrors SharedFilesTab's .sf-upload-btn recipe.
-     - .ppm-count-badge uses the sage "active" badge tokens from
-       src/styles/theme.css (--badge-active-bg / --badge-active-text).
-   Deliberately does NOT reuse the page-level ".report-card" class —
-   that name is already owned by Reports.css's 220px icon-card rule
-   (the small nav cards on the Reports index page), and applying it
-   here was the root cause of the whole panel being squeezed into a
-   220px-wide box regardless of the page's actual available width. */
+   Styles for the "דגמים" panel.
 
-/* ── Step-2 panel: fills the available page width ── */
-.ppm-panel {
+   The panel deliberately borrows DocumentsTab.css for everything it can
+   — .dt-root / .dt-panel-right / .dt-panel-left (the split layout),
+   .dt-table-header / .dt-doc-row (row chrome), .dt-file-* (file cells),
+   .dt-notes-input (inline editable fields), .dt-row-delete-btn and
+   .dt-delete-confirm* (row deletion), .dt-preview-* (the preview pane).
+   That file is imported by ParentModelsPanel.jsx alongside this one.
+
+   What lives HERE is only what genuinely differs from the documents
+   table: this table's own column widths, and the compact presentations
+   strip that sits above it. */
+
+/* ── Column widths ──────────────────────────────────────────────────
+   Same mechanism as DocumentsTab's .dt-col-* (flex children of the
+   shared .dt-doc-row / .dt-table-header flex rows), just this table's
+   own five columns. RTL: first in DOM = rightmost visually, so the
+   order below reads שם · גודל · תוכנית · הדמיה · (מחיקה). */
+.ppm-col-name { flex: 2;   min-width: 0; }
+.ppm-col-size { flex: 1;   min-width: 0; }
+.ppm-col-file { flex: 1.4; min-width: 0; }
+
+/* ── Table shell ── */
+.ppm-table {
+  border: 1px solid #d7ebe8;
+  border-radius: 6px;
+  overflow: hidden;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 24px 28px;
-  width: 100%;
+}
+
+/* Inline "+ דגם חדש" row, pinned under the last model. */
+.ppm-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid #f3f4f6;
+  background: #fcfdfd;
+  direction: rtl;
+}
+
+/* ── Presentations — slim collapsible strip ─────────────────────────
+   Replaces the old full-height card list. Collapsed it is a single
+   ~34px bar; expanded it lists condensed one-line rows. */
+.ppm-pres {
+  border: 1px solid #d7ebe8;
+  border-radius: 6px;
+  background: #fff;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.ppm-pres-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: #f7faf9;
+  border-bottom: 1px solid transparent;
+  direction: rtl;
+  min-height: 34px;
   box-sizing: border-box;
 }
 
-.ppm-panel-header {
+.ppm-pres-toggle {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.ppm-panel-title-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.ppm-panel-title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-/* Prominent model count — sage "active" badge (theme.css tokens) */
-.ppm-count-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(122, 148, 120, 0.12);
-  color: #4a6e48;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* Add button — same recipe as SharedFilesTab's .sf-upload-btn */
-.ppm-add-btn {
-  display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #fff;
-  border: 1px solid #c8bfb0;
-  color: #7a9478;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.ppm-add-btn:hover {
-  background: rgba(122, 148, 120, 0.08);
-  border-color: #7a9478;
-}
-
-/* ── Model list ── */
-.ppm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ppm-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid #eee;
-  border-radius: 10px;
-  background: #fff;
-  transition: box-shadow 0.15s, border-color 0.15s;
-}
-
-.ppm-row:hover {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-  border-color: #e0e0e0;
-}
-
-.ppm-thumb {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  object-fit: cover;
-  border: 1px solid #eee;
-  flex-shrink: 0;
-}
-
-.ppm-thumb-placeholder {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  border: 1px solid #eee;
-  background: #faf9f7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: #c8bfb0;
-}
-
-.ppm-row-body {
   flex: 1;
   min-width: 0;
-}
-
-.ppm-row-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-.ppm-row-desc {
-  font-size: 13px;
-  color: #666;
-  margin-top: 3px;
-  line-height: 1.5;
-}
-
-.ppm-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-/* Icon buttons — exact recipe as .dt-file-icon-btn / .sf-file-icon-btn */
-.ppm-icon-btn {
   background: none;
   border: none;
-  padding: 6px;
+  padding: 0;
   cursor: pointer;
-  color: #aaa;
-  display: flex;
-  align-items: center;
-  border-radius: 6px;
-  transition: color 0.12s, background 0.12s;
-}
-
-.ppm-icon-btn:hover {
-  color: #555;
-  background: rgba(26, 26, 24, 0.05);
-}
-
-.ppm-icon-btn--danger:hover {
-  color: #e24b4a;
-}
-
-/* Inline delete confirm — matches .sf-delete-confirm-* exactly */
-.ppm-delete-confirm {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  font-family: inherit;
   font-size: 12px;
+  font-weight: 600;
   color: #4b5563;
+  text-align: right;
+  direction: rtl;
+}
+
+.ppm-pres-toggle:hover { color: #111827; }
+
+.ppm-pres-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ppm-delete-confirm-text {
-  font-weight: 500;
-}
-
-.ppm-delete-confirm-yes,
-.ppm-delete-confirm-no {
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  background: #fff;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-
-.ppm-delete-confirm-yes {
-  color: #c0392b;
-  border-color: #f4c8c8;
-}
-
-.ppm-delete-confirm-yes:hover:not(:disabled) {
-  background: #c0392b;
-  color: #fff;
-  border-color: #c0392b;
-}
-
-.ppm-delete-confirm-no {
-  color: #4b5563;
-  border-color: #d1d5db;
-}
-
-.ppm-delete-confirm-no:hover:not(:disabled) {
-  background: #f3f4f6;
-}
-
-/* ── Modal — mirrors Professionals.jsx's .prof-modal-* exactly ── */
-.ppm-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 1000;
-  display: flex;
+.ppm-pres-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d7ebe8;
+  color: #37655e;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-}
-
-.ppm-modal {
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-  width: 100%;
-  max-width: 480px;
-  direction: rtl;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-}
-
-.ppm-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 24px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  flex-shrink: 0;
-}
-
-.ppm-modal-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1a1a2e;
-}
-
-.ppm-modal-close {
-  background: none;
-  border: none;
-  font-size: 22px;
-  color: #aaa;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-}
-
-.ppm-modal-close:hover {
-  color: #555;
-}
-
-.ppm-modal-body {
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.ppm-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.ppm-form-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-}
-
-.ppm-form-input {
-  padding: 9px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  background: #fff;
-  font-family: inherit;
-  color: #1a1a2e;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  width: 100%;
   box-sizing: border-box;
+}
+
+.ppm-pres-body {
+  border-top: 1px solid #e5f0ee;
   direction: rtl;
-  resize: vertical;
 }
 
-.ppm-form-input:focus {
-  border-color: #4f86c6;
-  box-shadow: 0 0 0 3px rgba(79, 134, 198, 0.12);
-}
-
-/* ── Image field (mirrors Professionals.jsx's file-slot recipe) ── */
-.ppm-image-row {
+.ppm-pres-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  padding: 4px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  min-height: 30px;
+  direction: rtl;
 }
 
-.ppm-image-preview {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  object-fit: cover;
-  border: 1px solid #eee;
+.ppm-pres-row:last-child { border-bottom: none; }
+.ppm-pres-row:nth-child(even) { background: #f9fafb; }
+
+.ppm-pres-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ppm-pres-date {
   flex-shrink: 0;
+  font-size: 11px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
 }
 
-.ppm-image-btn {
-  background: none;
-  border: 1px dashed #d1d5db;
-  border-radius: 7px;
-  color: #888;
-  font-size: 12.5px;
-  padding: 6px 14px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s, color 0.15s;
+.ppm-pres-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.ppm-image-btn:hover {
-  border-color: #4f86c6;
-  color: #4f86c6;
-}
-
-.ppm-image-remove-btn {
-  background: none;
-  border: none;
-  color: #ccc;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 2px;
-  font-family: inherit;
-  transition: color 0.12s;
-}
-
-.ppm-image-remove-btn:hover {
-  color: #ef4444;
-}
-
-.ppm-form-error {
-  color: #ef4444;
-  font-size: 13px;
+.ppm-pres-empty {
+  display: block;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  direction: rtl;
+  text-align: right;
   margin: 0;
-}
-
-/* ── Modal footer — cancel + save, right-aligned like prof-modal ── */
-.ppm-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 24px 18px;
-  border-top: 1px solid #f0f0f0;
-  flex-shrink: 0;
-}
-
-.ppm-modal-save {
-  background: #2d3748;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.ppm-modal-save:hover:not(:disabled) {
-  background: #1a2535;
-}
-
-.ppm-modal-save:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.ppm-modal-cancel {
-  background: none;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 9px 20px;
-  font-size: 14px;
-  color: #555;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.ppm-modal-cancel:hover:not(:disabled) {
-  border-color: #aaa;
 }

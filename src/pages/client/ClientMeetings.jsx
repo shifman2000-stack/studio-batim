@@ -12,7 +12,7 @@
 // project_id matches the client_users.project_id for auth.uid().
 
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../../supabaseClient'
+import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 /* Shared emptiness rule — the SAME helper the manager tab uses to set
    the has_* flags and to decide what to render, so both screens agree. */
@@ -172,15 +172,20 @@ export default function ClientMeetings() {
     })
 
     if (error) {
-      console.error('ClientMeetings — status error:', error)
+      /* Roll the optimistic flip back either way — nothing persisted.
+         But a write the client-preview guard blocked ON PURPOSE is not
+         a failure, so it gets no red message and no error event. */
       setItems(prev => prev.map(s => s.id === summaryId ? {
         ...s,
         client_tasks_status_id: before.client_tasks_status_id,
         client_tasks_done_at:   before.client_tasks_done_at,
         client_tasks_done_by:   before.client_tasks_done_by,
       } : s))
-      setDoneErrors(prev => ({ ...prev, [summaryId]: 'לא הצלחנו לעדכן את הסטטוס' }))
-      logError('meetings', 'mark_task_status_failed', logCtx, { summary_id: summaryId })
+      if (!isPreviewBlockedError(error)) {
+        console.error('ClientMeetings — status error:', error)
+        setDoneErrors(prev => ({ ...prev, [summaryId]: 'לא הצלחנו לעדכן את הסטטוס' }))
+        logError('meetings', 'mark_task_status_failed', logCtx, { summary_id: summaryId })
+      }
       setDoneBusyId(null)
       return
     }

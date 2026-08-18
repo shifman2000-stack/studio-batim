@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
-import * as mammoth from 'mammoth'
 import PropagateAccessModal from './PropagateAccessModal'
+/* Preview pane + file helpers/icons live in ./filePreview so the models
+   table (ParentModelsPanel) reuses this exact pane instead of cloning
+   it. Everything here behaves as it did when these were inline. */
+import FilePreviewPane, {
+  IconEye, IconDownload,
+  fileExt, storagePathIn, isExternalUrlFor, downloadBlob,
+  previewType, getFileExtension,
+} from './filePreview'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -22,81 +29,14 @@ const STAGES = [
 
 const STATUS_OPTIONS = ['חסר', 'התקבל']
 
-/* ── Utilities ── */
-function storagePath(url) {
-  const marker = `/object/public/${BUCKET}/`
-  const idx = url.indexOf(marker)
-  return idx === -1 ? null : decodeURIComponent(url.slice(idx + marker.length))
-}
-
-function fileExt(url) {
-  if (!url) return ''
-  const name = url.split('/').pop()
-  const dot  = name.lastIndexOf('.')
-  return dot !== -1 ? name.slice(dot + 1).toLowerCase() : name
-}
-
-async function downloadBlob(url, fileName) {
-  const res  = await fetch(url)
-  const blob = await res.blob()
-  const href = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = href; a.download = fileName; a.click()
-  URL.revokeObjectURL(href)
-}
-
-/* True for URLs not hosted on Supabase Storage (e.g. Google Drive). */
-function isExternalUrl(url) {
-  if (!url) return false
-  return !url.includes(`/object/public/${BUCKET}/`)
-}
-
-/* ── Utilities ── */
-function previewType(url) {
-  if (!url) return null
-  /* Google Drive URLs are embedded via /preview iframe (handles PDF/images/docs). */
-  if (url.startsWith('https://drive.google.com/')) return 'pdf'
-  const ext = fileExt(url.split('?')[0])
-  if (['jpg','jpeg','png','gif','webp','bmp','svg','tiff','tif'].includes(ext)) return 'image'
-  if (ext === 'pdf') return 'pdf'
-  if (['doc','docx'].includes(ext)) return 'word'
-  return 'unsupported'
-}
-
-/* Lowercase extension derived from doc.file_name when present, else from file_url. */
-function getFileExtension(doc) {
-  if (doc?.file_name) {
-    const dot = doc.file_name.lastIndexOf('.')
-    if (dot !== -1) return doc.file_name.slice(dot + 1).toLowerCase()
-  }
-  return fileExt(doc?.file_url)
-}
-
-/* Convert a Google Drive `/view` URL to its embeddable `/preview` form. */
-function getPreviewUrl(url) {
-  if (!url) return url
-  const m = url.match(/^(https:\/\/drive\.google\.com\/file\/d\/[^/]+)\/view/)
-  return m ? `${m[1]}/preview` : url
-}
+/* ── Utilities ──
+   The pure file helpers now live in ./filePreview (shared with the
+   models table). These thin, bucket-bound wrappers keep this file's
+   existing call sites unchanged. */
+const storagePath   = (url) => storagePathIn(BUCKET, url)
+const isExternalUrl = (url) => isExternalUrlFor(BUCKET, url)
 
 /* ── Inline SVGs ── */
-const IconEye = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
-  </svg>
-)
-
-const IconDownload = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>
-)
-
 /* XCircle — חסר */
 const IconXCircle = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
@@ -515,32 +455,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
   const [loading,     setLoading]     = useState(true)
   const [openStages,  setOpenStages]  = useState({})
   const [previewFile,    setPreviewFile]    = useState(null) // { url, name }
-  const [wordHtml,       setWordHtml]       = useState('')
-  const [wordLoading,    setWordLoading]    = useState(false)
-  const [wordError,      setWordError]      = useState(false)
   const [accessError,    setAccessError]    = useState('')   /* transient toast for client_access save failures */
-
-  useEffect(() => {
-    if (!previewFile || previewType(previewFile.url) !== 'word') return
-    setWordHtml('')
-    setWordError(false)
-    setWordLoading(true)
-    ;(async () => {
-      try {
-        const filePath = storagePath(previewFile.url)
-        if (!filePath) throw new Error('bad path')
-        const { data, error } = await supabase.storage.from(BUCKET).download(filePath)
-        if (error || !data) throw error
-        const arrayBuffer = await data.arrayBuffer()
-        const result = await mammoth.convertToHtml({ arrayBuffer })
-        setWordHtml(result.value)
-      } catch {
-        setWordError(true)
-      } finally {
-        setWordLoading(false)
-      }
-    })()
-  }, [previewFile])
 
   useEffect(() => { loadDocs() }, [projectId])
 
@@ -863,8 +778,6 @@ export default function DocumentsTab({ projectId, isParentProject }) {
 
   if (loading) return <p className="dt-loading">טוען מסמכים...</p>
 
-  const pType = previewFile ? previewType(previewFile.url) : null
-
   return (
     <div className="dt-root" dir="rtl">
 
@@ -1001,30 +914,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
 
       {/* ── Left panel: preview ── */}
       <div className="dt-panel-left">
-        {previewFile && (
-          <>
-            <div className="dt-preview-label" title={previewFile.name}>{previewFile.name}</div>
-            {pType === 'image' && (
-              <img src={previewFile.url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt={previewFile.name} />
-            )}
-            {pType === 'pdf' && (
-              <iframe src={getPreviewUrl(previewFile.url)} width="100%" height="100%" style={{ border: 'none', flex: 1 }} title={previewFile.name} />
-            )}
-            {pType === 'word' && (
-              wordLoading
-                ? <div className="dt-preview-unsupported">טוען...</div>
-                : wordError
-                  ? <div className="dt-preview-unsupported">שגיאה בטעינת הקובץ</div>
-                  : <div
-                      dangerouslySetInnerHTML={{ __html: wordHtml }}
-                      style={{ background: '#fff', padding: '16px', overflowY: 'auto', fontFamily: 'inherit', flex: 1, minHeight: 0 }}
-                    />
-            )}
-            {pType === 'unsupported' && (
-              <p className="dt-preview-unsupported">תצוגה מקדימה אינה זמינה לסוג קובץ זה</p>
-            )}
-          </>
-        )}
+        <FilePreviewPane file={previewFile} bucket={BUCKET} />
       </div>
 
       {/* ── Propagate client_access to child projects (parent projects only) ── */}

@@ -60,7 +60,13 @@ export const QUESTIONNAIRE_STEPS = [
         { key: 'eat',      label: 'הרגלי אכילה', placeholder: 'למשל: ארוחות משותפות, אוכלים מול הטלוויזיה' },
         { key: 'tv',       label: 'הרגלי צפייה בטלוויזיה', placeholder: 'למשל: צפייה משפחתית בערב' },
         { key: 'hours',    label: 'שעות הפעילות העיקריות בבית', placeholder: 'למשל: בעיקר בערב, עבודה מהבית בבוקר' },
-        { key: 'sport',    label: 'ספורט ופעילות גופנית', placeholder: 'למשל: מתאמנים בבית, צריך מקום לציוד' },
+        /* 'sport' ("ספורט ופעילות גופנית") was removed from the
+           questionnaire. Rows saved before then may still carry an
+           `ls.sport` value; it is deliberately NOT migrated away.
+           normalizeQData shallow-merges the stored `ls` object rather
+           than rebuilding it from these items, so the old value simply
+           rides along untouched — no longer rendered, no longer
+           collected. Don't reuse this key for something else. */
         { key: 'work',     label: 'עבודה מהבית / עבודה מול מחשב', placeholder: 'למשל: אני עובד מהבית על מחשב נייח ורוצה בעמדת עבודה גם פינת קפה' }
       ] }
     ]
@@ -123,7 +129,7 @@ export const QUESTIONNAIRE_STEPS = [
      people: [ { name, sex, age, known } ],
      composition: '', pets: '',
      occ: { [name]: '' }, hob: { [name]: '' },
-     ls: { shop, host, activity, eat, tv, hours, sport, work },
+     ls: { shop, host, activity, eat, tv, hours, work },   // + legacy `sport` on pre-removal rows
      feel: {...}, style: {...}, arch: {...}, style_notes: '',
      inspiration_notes: ''
    }

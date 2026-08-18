@@ -19,7 +19,7 @@
 // attempt regardless.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { supabase } from '../../supabaseClient'
+import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { useClient } from '../../components/ClientRoute'
 import { logAction, logError } from '../../lib/clientActivityLog'
@@ -217,9 +217,13 @@ export default function ClientSharedFiles() {
       setSavedFlash(true)
       setTimeout(() => isMounted.current && setSavedFlash(false), 2000)
     } catch (err) {
-      console.error('shared_files upload error:', err)
-      if (isMounted.current) setPageError('שגיאה בהעלאה, נסה שוב')
-      logError('shared', 'upload_failed', logCtx)
+      /* Blocked by the client-preview guard = intentional, not a
+         failure — stay silent instead of showing a red banner. */
+      if (!isPreviewBlockedError(err)) {
+        console.error('shared_files upload error:', err)
+        if (isMounted.current) setPageError('שגיאה בהעלאה, נסה שוב')
+        logError('shared', 'upload_failed', logCtx)
+      }
     }
     if (isMounted.current) setUploading(false)
   }
@@ -251,9 +255,11 @@ export default function ClientSharedFiles() {
       setTimeout(() => isMounted.current && setSavedFlash(false), 2000)
       logAction('shared', 'add_note', logCtx)
     } catch (err) {
-      console.error('project_notes insert error:', err)
-      if (isMounted.current) setPageError('שגיאה בשמירה, נסה שוב')
-      logError('shared', 'note_save_failed', logCtx)
+      if (!isPreviewBlockedError(err)) {
+        console.error('project_notes insert error:', err)
+        if (isMounted.current) setPageError('שגיאה בשמירה, נסה שוב')
+        logError('shared', 'note_save_failed', logCtx)
+      }
     }
     if (isMounted.current) setSavingNote(false)
   }
@@ -284,12 +290,14 @@ export default function ClientSharedFiles() {
       setConfirmDeleteId(null)
       await loadItems()
     } catch (err) {
-      console.error('shared workspace delete error:', err)
-      if (isMounted.current) {
-        setPageError('שגיאה במחיקה, נסה שוב')
-        setTimeout(() => isMounted.current && setPageError(''), 3000)
+      if (!isPreviewBlockedError(err)) {
+        console.error('shared workspace delete error:', err)
+        if (isMounted.current) {
+          setPageError('שגיאה במחיקה, נסה שוב')
+          setTimeout(() => isMounted.current && setPageError(''), 3000)
+        }
+        logError('shared', 'delete_failed', logCtx, { kind: item.kind })
       }
-      logError('shared', 'delete_failed', logCtx, { kind: item.kind })
     }
   }
 

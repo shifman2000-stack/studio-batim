@@ -104,6 +104,10 @@ const SAGE_DARK  = '#5d7259'
 const SAGE_LITE  = 'rgba(122, 148, 120, 0.14)'
 const MUTED      = '#8a8680'
 const BORDER     = 'rgba(26, 26, 24, 0.13)'
+const DANGER     = '#c94b4b'   /* hover/active tint for the schematic's
+                                  per-room delete affordance. Matches the
+                                  danger red used by the app's other
+                                  destructive controls. */
 
 /* Uniform button size shared by every "room button" surface in step 2
    — the palette "+ סוג חלל" buttons, the current-rooms chips, and the
@@ -163,6 +167,20 @@ const IconChevron = ({ size = 14 }) => (
     stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
     aria-hidden="true">
     <polyline points="6 9 12 15 18 9" />
+  </svg>
+)
+
+/* Trash bin — the delete affordance on each room box inside the
+   MiniHouse schematic. Simplified vs the app's other trash glyphs
+   (no lid handle, no inner tally lines): at the ~10px size these
+   chips allow, those details turn to mud. */
+const IconTrash = ({ size = 10 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true">
+    <polyline points="3 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
   </svg>
 )
 
@@ -1477,6 +1495,20 @@ export default function HouseBuilderV2({
               roomLabel={roomLabel}
               displayType={displayType}
               isContainerType={isContainerType}
+              /* Per-room delete, straight on the schematic's boxes.
+                 Containers route through requestRemoveUnit so a unit
+                 holding children still raises the existing confirm
+                 dialog before it (and they) disappear; plain rooms go
+                 straight out. Passing undefined in readOnly hides the
+                 bins altogether rather than rendering dead controls —
+                 both mutations refuse readOnly writes anyway. */
+              onRemoveRoom={readOnly ? undefined : (floorKey, room) => {
+                if (isContainerType(room.type)) {
+                  requestRemoveUnit(floorKey, room, null)
+                } else {
+                  removeRoomFromFloor(floorKey, room.id)
+                }
+              }}
             />
 
             {/* ── Floor selector (segmented, redundant with mini-house
@@ -1573,70 +1605,72 @@ export default function HouseBuilderV2({
               </div>
             </Section>
 
-            {/* ── Current rooms on active floor — removable chips ── */}
-            <Section
-              title={`חללים נוכחיים במפלס`}
-              subtitle={
-                activeAreaRooms.length === 0
-                  ? 'עדיין לא הוספתם חללים למפלס הזה'
-                  : 'הקישו על × כדי להסיר חלל'
-              }
-            >
-              {activeAreaRooms.length > 0 && (
+            {/* ── Units on the active floor ──────────────────────────
+                  This used to be a "חללים נוכחיים במפלס" list holding
+                  BOTH plain rooms (as RoomChips whose only purpose was
+                  their × remove button) and units. Deleting a room now
+                  happens directly on its box in the schematic above, so
+                  the RoomChip half is gone.
+
+                  The ContainerGroup half stays: it is NOT a deletion
+                  list — it's the only place to add/remove a unit's
+                  CHILDREN (and the only surface enforcing the
+                  required-type rule via canRemoveChild). Children are
+                  drawn inline as text inside the schematic's unit strip,
+                  so they have no box of their own to host a bin.
+
+                  Retitled from "חללים נוכחיים במפלס" because only units
+                  render here now — the old title plus the old
+                  "הקישו על × כדי להסיר חלל" subtitle would both describe
+                  controls that no longer exist. Hidden entirely when the
+                  floor has no units. ── */}
+            {activeAreaRooms.some(room => isContainerType(room.type)) && (
+              <Section
+                title="יחידות במפלס"
+                subtitle="הוסיפו או הסירו חללים בתוך כל יחידה"
+              >
                 <div style={{
                   display:             'grid',
-                  /* Same 3-column rule as the palette so the current-
-                     rooms grid reads as its symmetric counterpart. */
+                  /* Same 3-column rule as the palette so the units grid
+                     reads as its symmetric counterpart. */
                   gridTemplateColumns: 'repeat(3, 1fr)',
                   gap:                 8,
                   direction:           'rtl',
                 }}>
-                  {activeAreaRooms.map(room => {
-                    /* Containers render as an always-expanded group
-                       block (header / children / add-child footer).
-                       There is no "enter the unit" mode — the user
-                       never leaves the floor. Regular rooms stay
-                       plain chips. The group spans the full grid
-                       width so it reads as a container, not a chip. */
-                    if (isContainerType(room.type)) {
-                      return (
-                        <ContainerGroup
-                          key={room.id}
-                          room={room}
-                          parentContainerId={null}
-                          floorKey={activeAreaKey}
-                          roomLabel={roomLabel}
-                          isContainerType={isContainerType}
-                          getChildTypes={allowedChildTypes}
-                          displayType={displayType}
-                          canRemoveChild={canRemoveChild}
-                          childPaletteFor={childPaletteFor}
-                          onTogglePalette={(id) =>
-                            setChildPaletteFor(v => (v === id ? null : id))
-                          }
-                          onAddChild={addChildToContainer}
-                          onRemoveChild={removeChildFromContainer}
-                          onRequestRemoveUnit={requestRemoveUnit}
-                          confirmRemoveUnit={confirmRemoveUnit}
-                          onConfirmRemoveUnit={confirmRemoveUnitNow}
-                          onCancelRemoveUnit={() => setConfirmRemoveUnit(null)}
-                          disabled={readOnly}
-                        />
-                      )
-                    }
-                    return (
-                      <RoomChip
+                  {activeAreaRooms
+                    .filter(room => isContainerType(room.type))
+                    .map(room => (
+                      /* Always-expanded group block (header / children /
+                         add-child footer). There is no "enter the unit"
+                         mode — the user never leaves the floor. The
+                         group spans the full grid width so it reads as
+                         a container, not a chip. */
+                      <ContainerGroup
                         key={room.id}
-                        label={roomLabel(room)}
-                        isContainer={false}
+                        room={room}
+                        parentContainerId={null}
+                        floorKey={activeAreaKey}
+                        roomLabel={roomLabel}
+                        isContainerType={isContainerType}
+                        getChildTypes={allowedChildTypes}
+                        displayType={displayType}
+                        canRemoveChild={canRemoveChild}
+                        childPaletteFor={childPaletteFor}
+                        onTogglePalette={(id) =>
+                          setChildPaletteFor(v => (v === id ? null : id))
+                        }
+                        onAddChild={addChildToContainer}
+                        onRemoveChild={removeChildFromContainer}
+                        onRequestRemoveUnit={requestRemoveUnit}
+                        confirmRemoveUnit={confirmRemoveUnit}
+                        onConfirmRemoveUnit={confirmRemoveUnitNow}
+                        onCancelRemoveUnit={() => setConfirmRemoveUnit(null)}
                         disabled={readOnly}
-                        onRemove={() => removeRoomFromFloor(activeAreaKey, room.id)}
                       />
-                    )
-                  })}
+                    ))}
                 </div>
-              )}
-            </Section>
+              </Section>
+            )}
 
           </div>
         ) : (
@@ -2166,6 +2200,63 @@ function RoomBtnLabel({ children, color }) {
   )
 }
 
+/* ── MiniTrashButton — the per-room delete affordance rendered inside
+      the MiniHouse schematic, on both MiniChip (regular rooms) and
+      MiniContainerLine (units). Shared so the two can't drift.
+
+      · <span role="button">, NOT <button>: these render INSIDE the
+        FloorBox <button>, and a button inside a button is invalid
+        HTML. Same workaround the yard's collapse chevron already uses.
+      · stopPropagation on click AND on the Enter/Space keydown, so
+        hitting the bin never also fires FloorBox's onSelect (which
+        would switch the active floor out from under the user).
+      · Deliberately subtle — the chips are tiny. Muted by default,
+        DANGER red on hover/focus so intent is obvious before the
+        click lands.
+      · RTL: rendered as the LAST flex child so it sits at the visual
+        LEFT edge of the chip — the end of the reading flow, mirroring
+        where RoomChip's × and the yard chevron already sit. As a flex
+        sibling (not absolutely positioned) it reserves its own space,
+        so it can never overlap the room's name/number label. */
+function MiniTrashButton({ onRemove, label }) {
+  const [hover, setHover] = useState(false)
+  const activate = () => { if (typeof onRemove === 'function') onRemove() }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      title={label}
+      onClick={(e) => { e.stopPropagation(); activate() }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault(); e.stopPropagation(); activate()
+        }
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
+      style={{
+        display:        'inline-flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        flexShrink:     0,
+        width:          12,
+        height:         12,
+        marginInlineStart: 2,
+        color:          hover ? DANGER : MUTED,
+        opacity:        hover ? 1 : 0.75,
+        cursor:         'pointer',
+        lineHeight:     1,
+        transition:     'color 0.12s, opacity 0.12s',
+      }}
+    >
+      <IconTrash size={10} />
+    </span>
+  )
+}
+
 /* MiniContainerLine — a container inside the schematic's floor box.
    Unlike a regular room (a small MiniChip in one grid cell), a
    container spans the FULL width of the floor's chip grid and states
@@ -2183,7 +2274,7 @@ function RoomBtnLabel({ children, color }) {
    · Whatever still overflows is clipped with ellipsis; the `title`
      always carries the FULL, UNABBREVIATED line.
    Same chip vocabulary as MiniChip — just wider. No new colors. */
-function MiniContainerLine({ room, roomLabel, compact }) {
+function MiniContainerLine({ room, roomLabel, compact, onRemove }) {
   const kids      = room.children || []
   const parentLbl = roomLabel(room)
   const fullKids  = kids.map(c => roomLabel(c))
@@ -2205,7 +2296,10 @@ function MiniContainerLine({ room, roomLabel, compact }) {
       title={full}
       style={{
         gridColumn:   '1 / -1',
-        display:      'block',
+        /* flex (was block) so the trash sits as a proper sibling at the
+           visual-LEFT edge while the label text takes the rest. */
+        display:      'flex',
+        alignItems:   'center',
         width:        '100%',
         background:   '#ffffff',
         border:       `1px solid ${INPUT_BORDER}`,
@@ -2216,13 +2310,22 @@ function MiniContainerLine({ room, roomLabel, compact }) {
         color:        CHARCOAL,
         minWidth:     0,
         boxSizing:    'border-box',
+        overflow:     'hidden',
+      }}
+    >
+      <span style={{
+        flex:         1,
+        minWidth:     0,
         whiteSpace:   'nowrap',
         overflow:     'hidden',
         textOverflow: 'ellipsis',
         textAlign:    'right',   /* RTL: reads from the visual RIGHT */
-      }}
-    >
-      {shown}
+      }}>
+        {shown}
+      </span>
+      {onRemove && (
+        <MiniTrashButton onRemove={onRemove} label={`הסר ${parentLbl}`} />
+      )}
     </span>
   )
 }
@@ -2233,7 +2336,7 @@ function MiniContainerLine({ room, roomLabel, compact }) {
    text uses SmartText so long names abbreviate before ellipsizing.
    The larger uniform ROOM_BTN size is reserved for the palette
    "add room" buttons and the current-rooms chips below the sketch. */
-function MiniChip({ text }) {
+function MiniChip({ text, onRemove }) {
   return (
     <span
       title={text}
@@ -2259,7 +2362,17 @@ function MiniChip({ text }) {
         overflow:     'hidden',
       }}
     >
-      <SmartText text={text} color={CHARCOAL} style={{ width: '100%', textAlign: 'center' }} />
+      <SmartText
+        text={text}
+        color={CHARCOAL}
+        /* flex:1 + minWidth:0 (was width:100%) so the label yields
+           space to the trash sibling instead of pushing it out of the
+           chip. Without the trash it behaves exactly as before. */
+        style={{ flex: 1, minWidth: 0, textAlign: 'center' }}
+      />
+      {onRemove && (
+        <MiniTrashButton onRemove={onRemove} label={`הסר ${text}`} />
+      )}
     </span>
   )
 }
@@ -2359,12 +2472,16 @@ function RoomChip({ label, isContainer, disabled, onRemove, blockedReason }) {
             color:        '#ffffff',
             cursor:       disabled ? 'not-allowed' : 'pointer',
             opacity:      disabled ? 0.55 : 1,
-            fontSize:     13,
             lineHeight:   1,
             flexShrink:   0,
           }}
         >
-          ×
+          {/* Same IconTrash the schematic's room boxes use, so every
+              delete control in the builder reads as one family. Colour
+              stays white (inherited above) rather than the schematic's
+              muted/DANGER pair — this chip sits on a SAGE fill, where
+              grey or red would all but vanish. */}
+          <IconTrash size={11} />
         </button>
       ) : null}
     </span>
@@ -2600,15 +2717,18 @@ function ContainerGroup({
             display:      'inline-flex',
             alignItems:   'center',
             justifyContent:'center',
-            color:        '#c94b4b',
+            color:        DANGER,
             cursor:       disabled ? 'not-allowed' : 'pointer',
             opacity:      disabled ? 0.55 : 1,
-            fontSize:     15,
             lineHeight:   1,
             flexShrink:   0,
           }}
         >
-          ×
+          {/* Removing the whole unit — same IconTrash as its children's
+              chips and the schematic, kept at the existing DANGER red
+              since this is the more destructive of the two (it takes
+              the unit's children with it). */}
+          <IconTrash size={13} />
         </button>
       </div>
 
@@ -2806,7 +2926,7 @@ function ContainerGroup({
 */
 function MiniHouse({
   activeAreas, activeAreaKey, onSelectArea, rooms, roof, roomLabel,
-  isContainerType,
+  isContainerType, onRemoveRoom,
 }) {
   const hasFirst    = activeAreas.includes('first')
   const hasGround   = activeAreas.includes('ground')
@@ -2888,6 +3008,7 @@ function MiniHouse({
             roomLabel={roomLabel}
             isContainerType={isContainerType}
             compact={yardExpanded}
+            onRemoveRoom={onRemoveRoom}
           />
         </div>
       )}
@@ -2921,6 +3042,7 @@ function MiniHouse({
               roomLabel={roomLabel}
               isContainerType={isContainerType}
               compact={yardExpanded}
+              onRemoveRoom={onRemoveRoom}
             />
           </div>
           {hasYard && (
@@ -2942,6 +3064,7 @@ function MiniHouse({
                   roomLabel={roomLabel}
                   isContainerType={isContainerType}
                   compact={yardExpanded}
+                  onRemoveRoom={onRemoveRoom}
                   onToggleCollapse={() => setYardOpen(false)}
                 />
               ) : (
@@ -2984,6 +3107,7 @@ function MiniHouse({
             roomLabel={roomLabel}
             isContainerType={isContainerType}
             compact={yardExpanded}
+            onRemoveRoom={onRemoveRoom}
           />
         </div>
       )}
@@ -3125,7 +3249,7 @@ function YardStrip({ active, count, onSelect, onToggleCollapse }) {
    that folds the box back into its thin strip. */
 function FloorBox({
   areaKey, active, onSelect, rooms, roomLabel, variant, onToggleCollapse,
-  isContainerType, compact = false,
+  isContainerType, compact = false, onRemoveRoom,
 }) {
   const isYard = variant === 'yard'
   /* Chip columns per box. The yard is a narrow side box, so 3 chips
@@ -3247,9 +3371,14 @@ function FloorBox({
                 room={r}
                 roomLabel={roomLabel}
                 compact={compact}
+                onRemove={onRemoveRoom ? () => onRemoveRoom(areaKey, r) : undefined}
               />
             ) : (
-              <MiniChip key={r.id} text={roomLabel(r)} />
+              <MiniChip
+                key={r.id}
+                text={roomLabel(r)}
+                onRemove={onRemoveRoom ? () => onRemoveRoom(areaKey, r) : undefined}
+              />
             )
           ))}
         </div>

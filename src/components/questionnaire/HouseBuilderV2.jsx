@@ -4638,19 +4638,20 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
                     room would have occupied (last), so the two settings
                     read as the same question answered two ways.
 
-                    Deliberately NOT a twoLine: a room name there is
-                    bold 14px and carries a number and a size, and this
-                    is a fitting inside the suite rather than a space of
-                    its own. It borrows the second-line styling instead
-                    — same muted colour and size as "מאפיינים:" — which
-                    keeps it visually part of the block while making
-                    clear it isn't another room. */}
+                    Carries the SAME styling as the room-name lines
+                    above — bold, 14px, CHARCOAL — so the list reads as
+                    one set of entries rather than a room list with an
+                    afterthought appended. What still sets it apart is
+                    what it omits: no number and no size in parentheses,
+                    since a fitting inside the suite is neither counted
+                    nor sized like a space of its own. */}
                 {block.closetIsFitting && (
                   <div style={{
                     marginTop:  block.children.length ? 10 : 8,
-                    fontSize:   12.5,
-                    color:      INPUT_TEXT,
-                    lineHeight: 1.6,
+                    fontSize:   14,
+                    fontWeight: 700,
+                    color:      CHARCOAL,
+                    lineHeight: 1.3,
                   }}>
                     ארון
                   </div>

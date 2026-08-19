@@ -136,6 +136,25 @@ const DANGER     = '#c94b4b'   /* hover/active tint for the schematic's
                                   danger red used by the app's other
                                   destructive controls. */
 
+/* ── Schematic materials ───────────────────────────────────────────
+   The house drawing has parts that read as MATERIALS rather than as UI
+   chrome, and those get their own earthy tokens instead of borrowing
+   SAGE. The WALLS deliberately keep SAGE: they stay the app's primary
+   colour, and that's exactly what lets the roof and the ground read as
+   materials against them. Kept as separate constants so the three can
+   diverge without any one change dragging the others along. */
+const ROOF_CLAY    = '#a87563'  /* muted terracotta. Warm architectural
+                                   accent — far less saturated than
+                                   DANGER so it never reads as an error
+                                   state. Shared by ALL THREE roof
+                                   shapes (רעפים / שטוח / משולב) so they
+                                   stay one family. */
+const GROUND_EARTH = '#8b7355'  /* soft earth brown for the line that
+                                   divides above-ground from below-
+                                   ground — warm enough to read as soil,
+                                   quiet enough not to compete with the
+                                   floors it separates. */
+
 /* Uniform button size shared by every "room button" surface in step 2
    — the palette "+ סוג חלל" buttons, the current-rooms chips, and the
    compact chips inside the MiniHouse. Fixed width + height + single-
@@ -3260,15 +3279,15 @@ function MiniHouse({
 
       </div>{/* ── /ABOVE-GROUND BODY (walls wrapper) ── */}
 
-      {/* GROUND LINE — sage bar between above-ground and below-ground
-          floors. Spans FULL width when yard is on (running under both
-          the floors column and the yard); otherwise spans the floors
-          column width. Symmetric vertical margins on both sides give
-          it breathing room from the neighbouring floor boxes. */}
+      {/* GROUND LINE — earth-brown bar between above-ground and below-
+          ground floors. Spans FULL width when yard is on (running under
+          both the floors column and the yard); otherwise spans the
+          floors column width. Symmetric vertical margins on both sides
+          give it breathing room from the neighbouring floor boxes. */}
       <div style={{
         ...(hasYard ? { width: '100%' } : rightSlot),
         height:       2,
-        background:   SAGE,
+        background:   GROUND_EARTH,
         borderRadius: 2,
         marginTop:    6,
         marginBottom: 6,
@@ -3331,7 +3350,7 @@ function RoofCap({ roof }) {
     >
       {roof === 'שטוח' && (
         <line x1="-10" y1="14" x2="210" y2="14"
-          stroke={SAGE} strokeWidth="3" vectorEffect="non-scaling-stroke"
+          stroke={ROOF_CLAY} strokeWidth="3" vectorEffect="non-scaling-stroke"
           strokeLinecap="round" />
       )}
       {roof === 'רעפים' && (
@@ -3342,7 +3361,7 @@ function RoofCap({ roof }) {
            pitch rather than a nearly-flat one. The -10/210 span keeps
            the existing 5%-per-side eaves overhang untouched. */
         <polyline points="-10,36 100,4 210,36"
-          fill="none" stroke={SAGE} strokeWidth="2" vectorEffect="non-scaling-stroke"
+          fill="none" stroke={ROOF_CLAY} strokeWidth="2" vectorEffect="non-scaling-stroke"
           strokeLinecap="round" strokeLinejoin="round" />
       )}
       {roof === 'משולב' && (
@@ -3353,7 +3372,7 @@ function RoofCap({ roof }) {
            two sloped faces now read at one angle. The flat half stays
            the same ~1.8px above the box's bottom edge it always was. */
         <polyline points="210,36 100,4 100,36 -10,36"
-          fill="none" stroke={SAGE} strokeWidth="2" vectorEffect="non-scaling-stroke"
+          fill="none" stroke={ROOF_CLAY} strokeWidth="2" vectorEffect="non-scaling-stroke"
           strokeLinecap="round" strokeLinejoin="round" />
       )}
       {!roof && (

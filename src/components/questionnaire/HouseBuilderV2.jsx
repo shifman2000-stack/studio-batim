@@ -137,23 +137,18 @@ const DANGER     = '#c94b4b'   /* hover/active tint for the schematic's
                                   destructive controls. */
 
 /* ── Schematic materials ───────────────────────────────────────────
-   The house drawing has parts that read as MATERIALS rather than as UI
-   chrome, and those get their own earthy tokens instead of borrowing
-   SAGE. The WALLS deliberately keep SAGE: they stay the app's primary
-   colour, and that's exactly what lets the roof and the ground read as
-   materials against them. Kept as separate constants so the three can
-   diverge without any one change dragging the others along. */
-const ROOF_CLAY    = '#a87563'  /* muted terracotta. Warm architectural
-                                   accent — far less saturated than
-                                   DANGER so it never reads as an error
-                                   state. Shared by ALL THREE roof
-                                   shapes (רעפים / שטוח / משולב) so they
-                                   stay one family. */
-const GROUND_EARTH = '#8b7355'  /* soft earth brown for the line that
-                                   divides above-ground from below-
-                                   ground — warm enough to read as soil,
-                                   quiet enough not to compete with the
-                                   floors it separates. */
+   The ROOF is the one part of the house drawing that reads as a
+   material rather than as UI chrome, so it gets its own token instead
+   of borrowing SAGE. Everything else in the drawing — the walls and
+   the ground line — stays SAGE, which is what lets the roof register
+   as an accent at all. Kept separate so the two can't drag each other
+   along on a future change. */
+const ROOF_CLAY = '#a87563'  /* muted terracotta. Warm architectural
+                                accent — far less saturated than DANGER
+                                so it never reads as an error state.
+                                Shared by ALL THREE roof shapes
+                                (רעפים / שטוח / משולב) so they stay one
+                                family. */
 
 /* Uniform button size shared by every "room button" surface in step 2
    — the palette "+ סוג חלל" buttons, the current-rooms chips, and the
@@ -1614,10 +1609,10 @@ export default function HouseBuilderV2({
                  per type whether to ask first — a יחידת דיור holding
                  rooms does, a יחידת סוויטה never does. Plain rooms go
                  straight out. Any confirm that IS raised renders just
-                 below — see the panel following this drawing. Passing
-                 undefined in readOnly hides the X controls altogether
-                 rather than rendering dead ones; both mutations refuse
-                 readOnly writes anyway. */
+                 below — see the dialog at the end of this component.
+                 Passing undefined in readOnly hides the X controls
+                 altogether rather than rendering dead ones; both
+                 mutations refuse readOnly writes anyway. */
               onRemoveRoom={readOnly ? undefined : (floorKey, room) => {
                 if (isContainerType(room.type)) {
                   requestRemoveUnit(floorKey, room, null)
@@ -1626,88 +1621,6 @@ export default function HouseBuilderV2({
                 }
               }}
             />
-
-            {/* ── Confirm removing a unit that was deleted FROM THE
-                  SCHEMATIC ──
-                  requestRemoveUnit only parks its target in
-                  confirmRemoveUnit; something has to render the actual
-                  question. ContainerGroup does that for the units it
-                  draws — but a unit's X now lives on a chip in the
-                  drawing, and a unit with no ContainerGroup of its own
-                  would have its confirm appear nowhere, silently doing
-                  nothing. This panel is that missing host: it shows for
-                  any pending removal whose target ISN'T one of the
-                  units ContainerGroup renders below, so the two never
-                  both display the same question.
-
-                  Nothing reaches it today — the only container types
-                  are יחידת דיור (which confirms inside ContainerGroup,
-                  and is excluded just below) and יחידת סוויטה (which
-                  no longer confirms at all). It stays because
-                  containers are ADMIN-CONFIGURABLE: the moment another
-                  type is marked isContainer, its confirm needs a host
-                  again. */}
-            {(() => {
-              if (!confirmRemoveUnit || confirmRemoveUnit.parentContainerId) return null
-              const list   = (houseState.rooms || {})[confirmRemoveUnit.floorKey] || []
-              const target = list.find(r => r.id === confirmRemoveUnit.roomId)
-              /* Dwellings keep their own confirm inside ContainerGroup. */
-              if (!target || target.type === DWELLING_UNIT_TYPE) return null
-              const kidCount = (target.children || []).length
-              return (
-                <div style={{
-                  display:      'flex',
-                  alignItems:   'center',
-                  gap:          8,
-                  flexWrap:     'wrap',
-                  background:   '#ffffff',
-                  border:       `1px solid ${INPUT_BORDER}`,
-                  borderRadius: 8,
-                  padding:      '8px 10px',
-                  direction:    'rtl',
-                }}>
-                  <span style={{ fontSize: 12, color: CHARCOAL, lineHeight: 1.4 }}>
-                    {`להסיר את ${roomLabel(target)} ואת ${kidCount} החללים שבתוכה?`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={confirmRemoveUnitNow}
-                    style={{
-                      marginInlineStart: 'auto',
-                      background:   DANGER,
-                      color:        '#ffffff',
-                      border:       `1px solid ${DANGER}`,
-                      borderRadius: 8,
-                      padding:      '5px 14px',
-                      fontFamily:   'inherit',
-                      fontSize:     12.5,
-                      fontWeight:   600,
-                      cursor:       'pointer',
-                      flexShrink:   0,
-                    }}
-                  >
-                    הסר
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmRemoveUnit(null)}
-                    style={{
-                      background:   'transparent',
-                      color:        CHARCOAL,
-                      border:       `1px solid ${INPUT_BORDER}`,
-                      borderRadius: 8,
-                      padding:      '5px 14px',
-                      fontFamily:   'inherit',
-                      fontSize:     12.5,
-                      cursor:       'pointer',
-                      flexShrink:   0,
-                    }}
-                  >
-                    ביטול
-                  </button>
-                </div>
-              )
-            })()}
 
             {/* ── Floor selector (segmented, redundant with mini-house
                   taps but useful when the mini-house scrolls). Also
@@ -1867,9 +1780,6 @@ export default function HouseBuilderV2({
                         onAddChild={addChildToContainer}
                         onRemoveChild={removeChildFromContainer}
                         onRequestRemoveUnit={requestRemoveUnit}
-                        confirmRemoveUnit={confirmRemoveUnit}
-                        onConfirmRemoveUnit={confirmRemoveUnitNow}
-                        onCancelRemoveUnit={() => setConfirmRemoveUnit(null)}
                         disabled={readOnly}
                       />
                     ))}
@@ -1992,6 +1902,98 @@ export default function HouseBuilderV2({
           </div>
         )}
       </div>
+
+      {/* ── Confirm removing a unit ────────────────────────────────
+            The ONE place this question is ever asked. requestRemoveUnit
+            parks its target in confirmRemoveUnit and this renders the
+            dialog, so the question looks and behaves the same whichever
+            X was pressed — the chip in the schematic or the one in the
+            "יחידת דיור" section below it. Previously each of those had
+            its own inline confirm strip in its own part of the page.
+
+            Only units that need asking get here at all: a suite deletes
+            outright and never sets the state (see requestRemoveUnit),
+            so in practice this is the dwelling-unit dialog.
+
+            Chrome is the questionnaire's existing confirm-submit dialog
+            verbatim — same scrim, radius, padding, width cap, shadow
+            and type scale — with the confirm button in the app's
+            destructive red rather than sage, matching every other
+            delete control here. Backdrop click cancels; the panel stops
+            propagation so clicks inside it don't. */}
+      {confirmRemoveUnit && (() => {
+        const list   = (houseState.rooms || {})[confirmRemoveUnit.floorKey] || []
+        const target = findRoomById(list, confirmRemoveUnit.roomId)
+        /* Target vanished from under us (shouldn't happen — the state
+           is set from a live room) — say nothing rather than show an
+           empty question. */
+        if (!target) return null
+        const kidCount = (target.children || []).length
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setConfirmRemoveUnit(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 60,
+              background: 'rgba(26,26,24,0.42)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16, direction: 'rtl',
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#ffffff', borderRadius: 14,
+                padding: '20px 20px 16px',
+                maxWidth: 400, width: '100%',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
+                textAlign: 'right',
+              }}
+            >
+              <h2 style={{
+                margin: '0 0 10px', fontSize: 17, fontWeight: 600, color: '#1a1a18',
+              }}>
+                מחיקת {roomLabel(target)}
+              </h2>
+              <p style={{
+                margin: '0 0 16px', fontSize: 14, color: '#4a4a48', lineHeight: 1.6,
+              }}>
+                {kidCount > 0
+                  ? `המחיקה תסיר גם את ${kidCount} החללים שבתוכה. להמשיך?`
+                  : 'למחוק את היחידה?'}
+              </p>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+                <button
+                  type="button"
+                  onClick={confirmRemoveUnitNow}
+                  style={{
+                    background: '#c94b4b', color: '#ffffff',
+                    border: '1px solid #b03e3e', borderRadius: 8,
+                    padding: '8px 20px', fontFamily: 'inherit', fontSize: 14,
+                    fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  מחק
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemoveUnit(null)}
+                  style={{
+                    background: '#ffffff', color: '#4a4a48',
+                    border: '1px solid #d9d6cd', borderRadius: 8,
+                    padding: '8px 20px', fontFamily: 'inherit', fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -2783,13 +2785,18 @@ function PropChip({ label, selected, disabled, onClick, onRemove }) {
       this renders ANOTHER ContainerGroup for it (same visual style,
       one level deeper) instead of a flat RoomChip. `parentContainerId`
       is null for the top-level render and the OWNING container's id
-      for a nested one, so this single component's own remove/add/
-      confirm handlers stay correctly scoped at every depth without
-      each level needing its own pre-curried callbacks. childPaletteFor
-      / confirmRemoveUnit are shared single-value state (only one
-      container's palette, or one pending remove-confirm, can be open
-      anywhere at a time) — the same design childPaletteFor already
-      used before nesting existed.
+      for a nested one, so this single component's own remove/add
+      handlers stay correctly scoped at every depth without each level
+      needing its own pre-curried callbacks. childPaletteFor is shared
+      single-value state (only one container's palette can be open
+      anywhere at a time) — the same design it used before nesting
+      existed.
+
+      This component asks NOTHING before removing: its X just reports
+      the request upward via onRequestRemoveUnit, and the builder
+      renders the confirmation as a modal dialog. It used to host its
+      own inline confirm strip, which meant the question appeared in a
+      different place depending on which X you pressed.
 
       RTL note: the header is a flex row whose FIRST child (the unit
       label) paints on the visual RIGHT, and `marginInlineStart:auto`
@@ -2801,14 +2808,12 @@ function ContainerGroup({
   childPaletteFor, onTogglePalette,
   onAddChild, onRemoveChild,
   onRequestRemoveUnit,
-  confirmRemoveUnit, onConfirmRemoveUnit, onCancelRemoveUnit,
   disabled,
 }) {
   const kids = room.children || []
   const label = roomLabel(room)
   const childTypes = getChildTypes(room.type)
   const paletteOpen = childPaletteFor === room.id
-  const confirming = !!confirmRemoveUnit && confirmRemoveUnit.roomId === room.id
   return (
     <div style={{
       gridColumn:   '1 / -1',
@@ -2870,60 +2875,6 @@ function ContainerGroup({
         </button>
       </div>
 
-      {/* Inline confirm — a unit with children takes them with it. */}
-      {confirming && (
-        <div style={{
-          display:      'flex',
-          alignItems:   'center',
-          gap:          8,
-          flexWrap:     'wrap',
-          background:   '#ffffff',
-          border:       `1px solid ${INPUT_BORDER}`,
-          borderRadius: 8,
-          padding:      '8px 10px',
-        }}>
-          <span style={{ fontSize: 12, color: CHARCOAL, lineHeight: 1.4 }}>
-            להסיר את היחידה ואת {kids.length} החללים שבתוכה?
-          </span>
-          <button
-            type="button"
-            onClick={onConfirmRemoveUnit}
-            style={{
-              marginInlineStart: 'auto',
-              background:   '#c94b4b',
-              color:        '#ffffff',
-              border:       '1px solid #b03e3e',
-              borderRadius: 6,
-              padding:      '4px 12px',
-              fontFamily:   'inherit',
-              fontSize:     12,
-              fontWeight:   600,
-              cursor:       'pointer',
-              flexShrink:   0,
-            }}
-          >
-            הסר
-          </button>
-          <button
-            type="button"
-            onClick={onCancelRemoveUnit}
-            style={{
-              background:   '#ffffff',
-              color:        CHARCOAL,
-              border:       `1px solid ${INPUT_BORDER}`,
-              borderRadius: 6,
-              padding:      '4px 12px',
-              fontFamily:   'inherit',
-              fontSize:     12,
-              cursor:       'pointer',
-              flexShrink:   0,
-            }}
-          >
-            ביטול
-          </button>
-        </div>
-      )}
-
       {/* Children — same chip family as the floor's regular rooms. */}
       {kids.length === 0 ? (
         <div style={{ fontSize: 11.5, color: MUTED }}>
@@ -2958,9 +2909,6 @@ function ContainerGroup({
                   onAddChild={onAddChild}
                   onRemoveChild={onRemoveChild}
                   onRequestRemoveUnit={onRequestRemoveUnit}
-                  confirmRemoveUnit={confirmRemoveUnit}
-                  onConfirmRemoveUnit={onConfirmRemoveUnit}
-                  onCancelRemoveUnit={onCancelRemoveUnit}
                   disabled={disabled}
                 />
               )
@@ -3279,15 +3227,16 @@ function MiniHouse({
 
       </div>{/* ── /ABOVE-GROUND BODY (walls wrapper) ── */}
 
-      {/* GROUND LINE — earth-brown bar between above-ground and below-
-          ground floors. Spans FULL width when yard is on (running under
-          both the floors column and the yard); otherwise spans the
-          floors column width. Symmetric vertical margins on both sides
-          give it breathing room from the neighbouring floor boxes. */}
+      {/* GROUND LINE — sage bar between above-ground and below-ground
+          floors, the same colour as the walls. Spans FULL width when
+          yard is on (running under both the floors column and the
+          yard); otherwise spans the floors column width. Symmetric
+          vertical margins on both sides give it breathing room from
+          the neighbouring floor boxes. */}
       <div style={{
         ...(hasYard ? { width: '100%' } : rightSlot),
         height:       2,
-        background:   GROUND_EARTH,
+        background:   SAGE,
         borderRadius: 2,
         marginTop:    6,
         marginBottom: 6,
@@ -3365,15 +3314,31 @@ function RoofCap({ roof }) {
           strokeLinecap="round" strokeLinejoin="round" />
       )}
       {roof === 'משולב' && (
-        /* Same structure as before — pitched face on one side, a
-           vertical drop at the ridge, then the flat run — and the same
-           -10/210 overhang. Only the apex moved: eaves y=36 / apex y=4
-           are רעפים's exact values over the same 110-unit run, so the
-           two sloped faces now read at one angle. The flat half stays
-           the same ~1.8px above the box's bottom edge it always was. */
-        <polyline points="210,36 100,4 100,36 -10,36"
-          fill="none" stroke={ROOF_CLAY} strokeWidth="2" vectorEffect="non-scaling-stroke"
-          strokeLinecap="round" strokeLinejoin="round" />
+        /* Pitched face on one side, a vertical drop at the ridge, then
+           the flat run — same -10/210 outer eaves as every other roof,
+           and eaves y=36 / apex y=4 are רעפים's exact values over the
+           same 110-unit run so the two sloped faces read at one angle.
+
+           Drawn as TWO strokes rather than one polyline so the sloped
+           face can carry on PAST the ridge. Ending it exactly at the
+           ridge made the slope and the vertical meet at a near-square
+           corner, which read as two lines bumping into each other
+           instead of a roof. Continuing the same slope another 13.75
+           units up-left — to x=86.25, where it reaches the top of the
+           box — puts a small eave out over the ridge, the way a real
+           pitched roof overhangs the wall it lands on. One polyline
+           couldn't do this without doubling back over itself. */
+        <>
+          <line x1="210" y1="36" x2="86.25" y2="0"
+            stroke={ROOF_CLAY} strokeWidth="2" vectorEffect="non-scaling-stroke"
+            strokeLinecap="round" />
+          {/* Ridge wall + flat run. Starts at the apex, ON the sloped
+              line above, so the two still meet at the ridge — the
+              overhang is what now continues beyond that meeting. */}
+          <polyline points="100,4 100,36 -10,36"
+            fill="none" stroke={ROOF_CLAY} strokeWidth="2" vectorEffect="non-scaling-stroke"
+            strokeLinecap="round" strokeLinejoin="round" />
+        </>
       )}
       {!roof && (
         <line x1="-10" y1="18" x2="210" y2="18"

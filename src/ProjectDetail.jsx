@@ -600,8 +600,26 @@ function ProjectDetail() {
   }, [activeTab, id])
 
   /* ── Contact helpers ── */
+  /* Writes the field, then mirrors it into `contacts` — the same
+     write-then-patch-local-state shape every other handler here uses.
+
+     The local update is not cosmetic. Tab 1's data lives on THIS
+     component, which stays mounted while the tab content itself is
+     unmounted and remounted by the `activeTab === 1` switch, and the
+     fetch that would refresh it is keyed on [id] so it doesn't re-run
+     on a tab change. Without this line the saved value reached the DB
+     but never the state, so coming back to the tab re-seeded the field
+     from the pre-save value and the edit looked lost until a refresh. */
   const saveContact = async (contactId, field, val) => {
-    await supabase.from('project_contacts').update({ [field]: val }).eq('id', contactId)
+    const { error } = await supabase
+      .from('project_contacts')
+      .update({ [field]: val })
+      .eq('id', contactId)
+    if (error) {
+      console.error('ProjectDetail — contact save failed:', error)
+      return
+    }
+    setContacts(prev => prev.map(c => (c.id === contactId ? { ...c, [field]: val } : c)))
   }
 
   const addContact = async () => {

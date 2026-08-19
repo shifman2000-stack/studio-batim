@@ -55,7 +55,7 @@ function makeEmptyState() {
   return {
     mode:         'floors',
     floorsOn:     { ground: true },       // default: ground on
-    yardOn:       false,
+    yardOn:       true,                   // default: yard on
     selFloor:     null,
     rooms:        { first: [], ground: [], basement: [], yard: [] },
     selRoom:      null,
@@ -193,8 +193,16 @@ export function houseFromJSON(data) {
     out.floorsOn = floorsOn
   }
 
-  /* yard — accept strict true only. */
-  out.yardOn = data.yard === true
+  /* yard — a SAVED answer always wins, in either direction: `true`
+     stays on, `false` stays OFF even though a fresh state now starts
+     with the yard on. The default may only fill a gap, so the key has
+     to actually be present before we read it — reading unconditionally
+     would turn "this row predates the yard question" into a silent
+     "the client said no". Mirrors how `floors` above is only applied
+     when the row carries it. Value still has to be strictly true. */
+  if (Object.prototype.hasOwnProperty.call(data, 'yard')) {
+    out.yardOn = data.yard === true
+  }
 
   /* rooms — fresh ids across ALL areas; walk AREA_KEYS in the SAME
      order the render's global-numbering pass uses (first → ground →

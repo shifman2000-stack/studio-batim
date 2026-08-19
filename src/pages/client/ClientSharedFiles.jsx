@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { useClient } from '../../components/ClientRoute'
-import { logAction, logError } from '../../lib/clientActivityLog'
+import { logError } from '../../lib/clientActivityLog'
 
 const BUCKET = 'project-shared-files'
 
@@ -253,7 +253,6 @@ export default function ClientSharedFiles() {
       if (!isMounted.current) return
       setSavedFlash(true)
       setTimeout(() => isMounted.current && setSavedFlash(false), 2000)
-      logAction('shared', 'add_note', logCtx)
     } catch (err) {
       if (!isPreviewBlockedError(err)) {
         console.error('project_notes insert error:', err)

@@ -26,7 +26,7 @@ import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { computeDocumentActionRequired, isDocumentActionRequired } from '../../lib/actionRequired'
 import ActionRequiredBadge, { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
-import { logAction, logError } from '../../lib/clientActivityLog'
+import { logError } from '../../lib/clientActivityLog'
 
 const BUCKET = 'project-files'
 
@@ -403,7 +403,6 @@ export default function ClientDocuments() {
       if (!isMounted.current) return
       setSavedFlash(true)
       setTimeout(() => { if (isMounted.current) setSavedFlash(false) }, 2000)
-      logAction('documents', 'upload_document', logCtx, { document_id: docId })
     } catch (e) {
       /* Blocked by the client-preview guard = intentional, not a
          failure — no red per-row error marker. */
@@ -476,7 +475,6 @@ export default function ClientDocuments() {
       if (!isMounted.current) return
       setConfirmDeleteVersionId(null)
       await loadData()
-      logAction('documents', 'delete_own_document', logCtx, { document_id: doc.id, version_id: version.id })
     } catch (err) {
       if (isPreviewBlockedError(err)) return   /* preview: silent no-op */
       console.error('client document version delete error:', err)

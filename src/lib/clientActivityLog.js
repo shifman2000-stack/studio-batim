@@ -16,7 +16,6 @@
 // Call shapes:
 //   startScreenView(screenKey, ctx) → local handle (sync, no I/O).
 //   endScreenView(handle) → enqueues the finished screen_view row.
-//   logAction(screenKey, actionName, ctx, metadata?)
 //   logError(screenKey, errorCode, ctx, metadata?)
 //
 // `ctx` is always { projectId, clientUserId, previewMode } — every
@@ -129,12 +128,11 @@ export function endScreenView(handle) {
   enqueue('screen_view', handle.screenKey, handle.ctx, { duration_ms })
 }
 
-/* ── action / error ───────────────────────────────────────────────── */
-
-export function logAction(screenKey, actionName, ctx, metadata) {
-  if (!actionName) return
-  enqueue('action', screenKey, ctx, { action_name: actionName, metadata: metadata || null })
-}
+/* ── error ────────────────────────────────────────────────────────
+   The portal logs SCREEN VIEWS (with duration) and ERRORS. There is
+   deliberately no action logger any more: the per-feature action
+   events it wrote were removed, and the 'action' event_type stays in
+   the schema only so the rows already recorded remain readable. */
 
 export function logError(screenKey, errorCode, ctx, metadata) {
   if (!errorCode) return

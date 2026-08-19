@@ -22,7 +22,7 @@ import {
   clientDoneHint, DONE_STATUS, CLIENT_DONE_LABEL,
 } from '../../components/meetings/meetingTasksStatus'
 import { resolveUserNames } from '../../lib/resolveUserNames'
-import { logAction, logError } from '../../lib/clientActivityLog'
+import { logError } from '../../lib/clientActivityLog'
 /* The SAME status widget the משימות tab uses — not a portal copy. */
 import TaskStatusControl from '../../components/tasks/TaskStatusControl'
 /* "דרוש טיפול" — one module decides, this screen only draws. */
@@ -188,13 +188,6 @@ export default function ClientMeetings() {
       }
       setDoneBusyId(null)
       return
-    }
-
-    /* "marking a meeting client-task done" — only the transition INTO
-       the done status counts as this action; switching back to פעיל
-       isn't. */
-    if (statusId === doneStatus?.id) {
-      logAction('meetings', 'mark_task_done', logCtx, { summary_id: summaryId })
     }
 
     const { data: fresh } = await supabase

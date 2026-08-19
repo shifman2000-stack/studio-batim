@@ -48,7 +48,7 @@ import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
    safe to call unconditionally. */
 import { useClientNav } from '../ClientPortal'
 import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
-import { logAction, logError } from '../../lib/clientActivityLog'
+import { logError } from '../../lib/clientActivityLog'
 import {
   QUESTIONNAIRE_STEPS,
   AGE_RANGES,
@@ -1313,8 +1313,7 @@ export default function ClientProgrammingQuestionnaire({
       /* setAnswers is async — pass the fresh JSON to saveDraftNow so
          the write uses the LATEST house value, not a stale closure. */
       setAnswers(prev => ({ ...(prev || {}), house: jsonFromBuilder }))
-      const ok = await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
-      if (ok) logAction('questionnaire', 'save_house_progress', logCtx)
+      await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
     }
     setView('hub')
   }
@@ -1348,7 +1347,6 @@ export default function ClientProgrammingQuestionnaire({
       metaOverride: { house_done: true },
     })
     if (ok) {
-      logAction('questionnaire', 'save_house_progress', logCtx)
       setView('hub')
     }
   }
@@ -1452,7 +1450,6 @@ export default function ClientProgrammingQuestionnaire({
     }
     const ok = await saveDraftNow({ silent: true })
     if (!ok) return
-    logAction('questionnaire', 'save_step', logCtx, { step_index: stepIndex })
     setStepIndex(i => Math.min(totalSteps - 1, i + 1))
   }
 

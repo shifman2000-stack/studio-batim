@@ -25,6 +25,44 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="סטודיו בתים" />
 
+    <!-- ── Early capture of `beforeinstallprompt` ──────────────────────
+         This MUST be an inline classic script in <head>. It runs during
+         HTML parsing, whereas the app bundle is a module (deferred) and
+         React only attaches its own listener from a useEffect — which
+         on /client does not run until ClientRoute has finished TWO
+         sequential Supabase round-trips (getSession, then client_users).
+         Chrome fires beforeinstallprompt within a few hundred ms of
+         load, the event is neither sticky nor replayed, so by the time
+         React was listening it had already been missed and the install
+         button never appeared.
+
+         So we catch it here, at the earliest moment possible, suppress
+         the browser's own banner, and stash it for the hook to pick up
+         on mount. The custom event covers the opposite ordering, where
+         React mounts first and the browser fires later. -->
+    <script>
+      (function () {
+        window.__sbInstall = {
+          event: null,          // the saved BeforeInstallPromptEvent
+          firedAt: null,        // when the browser offered it
+          capturedEarly: false, // true = this script caught it, not React
+          installed: false,
+        }
+        window.addEventListener('beforeinstallprompt', function (e) {
+          e.preventDefault()
+          window.__sbInstall.event = e
+          window.__sbInstall.firedAt = Date.now()
+          window.__sbInstall.capturedEarly = true
+          window.dispatchEvent(new Event('sb-install-available'))
+        })
+        window.addEventListener('appinstalled', function () {
+          window.__sbInstall.event = null
+          window.__sbInstall.installed = true
+          window.dispatchEvent(new Event('sb-install-available'))
+        })
+      })()
+    </script>
+
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
   </head>

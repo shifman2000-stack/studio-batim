@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
+import { pwaDebug } from './lib/pwaDebug'   /* TEMP DIAGNOSTIC — strip before merge */
 import './index.css'
 import App from './App.jsx'
 import Header from './Header'
@@ -52,9 +53,24 @@ function Layout() {
    installability and asset caching, never behaviour. */
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => {
-      console.warn('service worker registration failed:', err)
-    })
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        /* TEMP DIAGNOSTIC — strip with pwaDebug.js */
+        pwaDebug('sw registered', {
+          scope: reg.scope,
+          state: reg.active ? 'active' : reg.installing ? 'installing' : 'waiting',
+        })
+      })
+      .catch(err => {
+        pwaDebug('sw registration FAILED', err?.message || String(err))
+        console.warn('service worker registration failed:', err)
+      })
+  })
+} else {
+  /* TEMP DIAGNOSTIC — strip with pwaDebug.js */
+  pwaDebug('sw not registered', {
+    supported: 'serviceWorker' in navigator,
+    prod: import.meta.env.PROD,
   })
 }
 

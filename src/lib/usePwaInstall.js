@@ -20,6 +20,7 @@
 // component has to re-derive the platform rules.
 
 import { useCallback, useEffect, useState } from 'react'
+import { dumpPwaState } from './pwaDebug'   /* TEMP DIAGNOSTIC — strip before merge */
 
 const DISMISS_KEY  = 'sb_pwa_install_dismissed_at'
 /* 90 days. Not forever: someone who declines during a first meeting may
@@ -73,16 +74,42 @@ export function rememberInstallDismissed() {
 }
 
 export default function usePwaInstall() {
-  const [promptEvent, setPromptEvent] = useState(null)
-  const [standalone,  setStandalone]  = useState(detectStandalone)
+  /* Seeded from the stash the inline script in index.html fills in.
+     This is the whole fix for "the button never appeared": React cannot
+     attach a listener early enough on /client, because ClientRoute
+     holds the portal unmounted through two Supabase round-trips first.
+     By the time this hook mounts the event has usually already fired,
+     and it is neither sticky nor replayed — so we read what was caught
+     for us rather than waiting for an event that has been and gone. */
+  const [promptEvent, setPromptEvent] = useState(
+    () => (typeof window !== 'undefined' && window.__sbInstall?.event) || null
+  )
+  const [standalone,  setStandalone]  = useState(
+    () => detectStandalone() || (typeof window !== 'undefined' && window.__sbInstall?.installed === true)
+  )
   const [iosSafari]                   = useState(detectIOSSafari)
 
   useEffect(() => {
     const onBeforeInstallPrompt = (e) => {
       /* Suppress Chrome's own mini-infobar so the invitation appears
-         where WE decide, in Hebrew, in the app's own styling. */
+         where WE decide, in Hebrew, in the app's own styling.
+         Still needed for the opposite ordering — React mounted first
+         and the browser fires afterwards. */
       e.preventDefault()
+      if (window.__sbInstall) {
+        window.__sbInstall.event = e
+        window.__sbInstall.firedAt = Date.now()
+      }
       setPromptEvent(e)
+    }
+    /* Raised by the inline script when it catches the event before the
+       app has even parsed — this is what un-sticks a hook that mounted
+       after the fact. */
+    const onStashUpdated = () => {
+      const stash = window.__sbInstall
+      if (!stash) return
+      if (stash.installed) { setPromptEvent(null); setStandalone(true); return }
+      if (stash.event) setPromptEvent(stash.event)
     }
     const onInstalled = () => {
       /* Drop the saved event and flip to installed immediately, so the
@@ -92,7 +119,13 @@ export default function usePwaInstall() {
     }
 
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('sb-install-available', onStashUpdated)
     window.addEventListener('appinstalled', onInstalled)
+
+    /* Re-read once on mount too: the custom event may have been
+       dispatched before this listener existed, which is precisely the
+       race we are fixing. */
+    onStashUpdated()
 
     /* Launching from the home screen after install changes display-mode
        without a fresh page load in some browsers. */
@@ -102,6 +135,7 @@ export default function usePwaInstall() {
 
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('sb-install-available', onStashUpdated)
       window.removeEventListener('appinstalled', onInstalled)
       mq?.removeEventListener?.('change', onDisplayModeChange)
     }
@@ -115,9 +149,13 @@ export default function usePwaInstall() {
     try {
       promptEvent.prompt()
       const choice = await promptEvent.userChoice
+      /* Single-use: clear BOTH copies, or a second component reading
+         the stash would try to re-prompt with a spent event. */
+      if (window.__sbInstall) window.__sbInstall.event = null
       setPromptEvent(null)
       return choice?.outcome === 'accepted'
     } catch {
+      if (window.__sbInstall) window.__sbInstall.event = null
       setPromptEvent(null)
       return false
     }
@@ -127,6 +165,13 @@ export default function usePwaInstall() {
     : promptEvent        ? 'prompt'      /* real beforeinstallprompt available */
     : iosSafari          ? 'ios'         /* explain the Share gesture instead */
     : 'unavailable'                      /* e.g. desktop Firefox — offer nothing */
+
+  /* TEMP DIAGNOSTIC — strip with pwaDebug.js. Reports the RESOLVED
+     decision plus every input to it, once per change, so a real device
+     shows why the button did or didn't render. */
+  useEffect(() => {
+    dumpPwaState({ resolvedMode: mode, hasPromptEvent: !!promptEvent, standalone, iosSafari })
+  }, [mode, promptEvent, standalone, iosSafari])
 
   return {
     mode,

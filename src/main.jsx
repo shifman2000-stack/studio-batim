@@ -45,6 +45,19 @@ function Layout() {
   )
 }
 
+/* ── Service worker ──────────────────────────────────────────────
+   Registered after `load` so it never competes with the first paint for
+   bandwidth. Failure is non-fatal by design: the app must work exactly
+   the same with no service worker at all — the SW only adds
+   installability and asset caching, never behaviour. */
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('service worker registration failed:', err)
+    })
+  })
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

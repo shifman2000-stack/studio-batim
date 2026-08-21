@@ -19,6 +19,7 @@ import ProjectHoursReport from './pages/reports/ProjectHoursReport'
 import ClientUsabilityReport from './pages/reports/ClientUsabilityReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
 import HouseBuilderConfigReport from './pages/reports/HouseBuilderConfigReport'
+import SiteHealthReport from './pages/reports/SiteHealthReport'
 import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport'
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
@@ -79,6 +80,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reports/inquiries" element={<InquiriesReport />} />
           <Route path="/reports/house-builder-config" element={<HouseBuilderConfigReport />} />
           <Route path="/reports/parent-project-models" element={<ParentProjectModelsReport />} />
+          <Route path="/reports/site-health" element={<SiteHealthReport />} />
           <Route path="/quote-builder/:inquiryId" element={<QuoteBuilderPage />} />
         </Route>
       </Routes>

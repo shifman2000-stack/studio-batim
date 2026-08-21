@@ -1,5 +1,10 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
   "functions": {
     "api/generate-pdf.js": {
       "maxDuration": 30,
@@ -16,6 +21,9 @@
     "api/generate-contractor-spec-pdf.js": {
       "maxDuration": 30,
       "memory": 1024
+    },
+    "api/site-health.js": {
+      "maxDuration": 15
     }
   }
 }

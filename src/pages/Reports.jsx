@@ -70,6 +70,11 @@ export default function Reports() {
             <div className="report-card-title">רשימת דגמים לפרויקט אב</div>
             <div className="report-card-desc">ניהול רשימת הדגמים (שם, תאור, תמונה, הערות) עבור כל פרויקט אב</div>
           </div>
+          <div className="report-card" onClick={() => navigate('/reports/site-health')}>
+            <div className="report-card-icon">🌐</div>
+            <div className="report-card-title">בדיקת אתר</div>
+            <div className="report-card-desc">בדיקה שאתר batim-es.com זמין, מגיש את הגרסה הנכונה ומחובר ל-Vercel — כולל תוקף תעודת SSL וכתובות גיבוי</div>
+          </div>
         </div>
       </section>
     </div>

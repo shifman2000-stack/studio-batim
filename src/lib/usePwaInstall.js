@@ -20,7 +20,6 @@
 // component has to re-derive the platform rules.
 
 import { useCallback, useEffect, useState } from 'react'
-import { dumpPwaState } from './pwaDebug'   /* TEMP DIAGNOSTIC — strip before merge */
 
 const DISMISS_KEY  = 'sb_pwa_install_dismissed_at'
 /* 90 days. Not forever: someone who declines during a first meeting may
@@ -165,13 +164,6 @@ export default function usePwaInstall() {
     : promptEvent        ? 'prompt'      /* real beforeinstallprompt available */
     : iosSafari          ? 'ios'         /* explain the Share gesture instead */
     : 'unavailable'                      /* e.g. desktop Firefox — offer nothing */
-
-  /* TEMP DIAGNOSTIC — strip with pwaDebug.js. Reports the RESOLVED
-     decision plus every input to it, once per change, so a real device
-     shows why the button did or didn't render. */
-  useEffect(() => {
-    dumpPwaState({ resolvedMode: mode, hasPromptEvent: !!promptEvent, standalone, iosSafari })
-  }, [mode, promptEvent, standalone, iosSafari])
 
   return {
     mode,

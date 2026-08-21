@@ -110,8 +110,7 @@ function InstallDialog({ mode, onInstall, onClose, installing }) {
 
         {mode === 'ios' ? <IosSteps /> : (
           <p style={{ margin: '0 0 16px', fontSize: 14, color: '#4a4a48', lineHeight: 1.7 }}>
-            אפשר להוסיף את הפורטל למסך הבית ולפתוח אותו כמו אפליקציה רגילה —
-            בלי לחפש כתובת, עם כניסה מהירה לכל המסמכים וההתקדמות של הפרויקט.
+            אפשר להוסיף את הפורטל למסך הבית ולפתוח אותו כמו אפליקציה רגילה
           </p>
         )}
 

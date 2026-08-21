@@ -1,5 +1,10 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<!-- lang only, deliberately no dir. Every surface already sets its own
+     direction (the portal in ClientPortal.css, each staff screen on its
+     own root, the PDF routes in .qp-pages .page), so a global dir="rtl"
+     would change nothing we own — but it WOULD inherit into the Google
+     Sign-In button on the login screen, which we don't own. -->
+<html lang="he">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

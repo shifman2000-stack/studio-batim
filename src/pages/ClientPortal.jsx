@@ -20,6 +20,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { useClient } from '../components/ClientRoute'
+import { InstallAppButton, InstallAppPrompt } from '../components/client/PwaInstall'
 import { startScreenView, endScreenView, flushActivityLogQueueNow } from '../lib/clientActivityLog'
 import ClientHome from './client/ClientHome'
 import ClientFile from './client/ClientFile'
@@ -477,6 +478,12 @@ export default function ClientPortal() {
         {/* ── Account footer row, pinned at the drawer bottom.
               Generic user avatar + the client's name. Clicking selects
               the 'account' screen exactly like a normal drawer item. ── */}
+        {/* "התקן אפליקציה" — pinned just above the account row so it is
+            always reachable without scrolling the menu. Renders nothing
+            when the app is already installed or the browser can't
+            install at all. */}
+        <InstallAppButton />
+
         {(() => {
           const accountItem = MENU_ITEMS.find(m => m.key === 'account')
           if (!accountItem) return null
@@ -550,6 +557,12 @@ export default function ClientPortal() {
           freed height on its own, exactly as it already does for the
           ClientFile-edit-mode hide case above. */}
       {!isChildProject && <ClientFooter />}
+
+      {/* One-time install invitation, shown shortly after the portal
+          opens. Renders nothing when already installed, when the
+          browser can't install, or when it was dismissed within the
+          last 90 days. */}
+      <InstallAppPrompt />
 
     </div>
     </ClientNavContext.Provider>

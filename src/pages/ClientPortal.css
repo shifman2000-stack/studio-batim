@@ -2143,3 +2143,43 @@
   }
 }
 
+
+/* ── "התקן אפליקציה" — permanent drawer entry ─────────────────────────
+   Sits between the scrolling menu and the pinned account row, matching
+   .cp-drawer-account's geometry so the drawer bottom reads as one
+   group. Rendered only when installing is actually possible — see
+   PwaInstall.jsx. */
+.cp-drawer-install {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 18px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(26, 26, 24, 0.08);
+  font-family: inherit;
+  font-size: 14px;
+  color: #1a1a18;
+  text-align: right;
+  cursor: pointer;
+}
+
+.cp-drawer-install:hover,
+.cp-drawer-install:focus-visible {
+  background: rgba(122, 148, 120, 0.10);
+  outline: none;
+}
+
+.cp-drawer-install-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: rgba(122, 148, 120, 0.14);
+  color: #7a9478;
+}

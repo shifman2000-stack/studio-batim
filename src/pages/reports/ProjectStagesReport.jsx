@@ -67,12 +67,12 @@ export default function ProjectStagesReport() {
         { data: allProjects },
       ] = await Promise.all([
         supabase.from('project_stage_history').select('stage, days_in_stage, entered_at, stages!stage_id(id, name, color)').eq('project_id', selectedId),
-        supabase.from('projects').select('current_stage, stage_entered_at').eq('id', selectedId).single(),
+        supabase.from('projects').select('stage_id, stage_entered_at').eq('id', selectedId).single(),
         supabase.from('hour_reports').select('stage, stage_id, user_id, hours, minutes, stages!stage_id(id, name)').eq('project_id', selectedId),
         // All history across all projects for computing averages
         supabase.from('project_stage_history').select('stage, days_in_stage, stages!stage_id(id, name)'),
         // All active projects for current-stage averages
-        supabase.from('projects').select('current_stage, stage_entered_at').eq('archived', false),
+        supabase.from('projects').select('stage_id, stage_entered_at').eq('archived', false),
       ])
 
       // ── Build table rows keyed by stage_id ───────────────────────────────
@@ -82,8 +82,11 @@ export default function ProjectStagesReport() {
         if (!sid) return
         if (!stageMap[sid]) stageMap[sid] = { days: h.days_in_stage, isCurrent: false }
       })
-      if (project?.current_stage) {
-        const currentS = stagesData.find(s => s.name === project.current_stage)
+      /* Matched on stage_id. The old name-against-current_stage compare
+         mis-attributed the current stage for any project whose
+         denormalised copy had drifted — 94% of them in production. */
+      if (project?.stage_id) {
+        const currentS = stagesData.find(s => s.id === project.stage_id)
         if (currentS) {
           stageMap[currentS.id] = {
             ...(stageMap[currentS.id] || {}),
@@ -123,8 +126,8 @@ export default function ProjectStagesReport() {
         stageSums[sid].count += 1
       })
       ;(allProjects || []).forEach(p => {
-        if (!p.current_stage) return
-        const s = stagesData.find(s => s.name === p.current_stage)
+        if (!p.stage_id) return
+        const s = stagesData.find(s => s.id === p.stage_id)
         if (!s) return
         const days = daysFromDate(p.stage_entered_at)
         if (!stageSums[s.id]) stageSums[s.id] = { sum: 0, count: 0 }

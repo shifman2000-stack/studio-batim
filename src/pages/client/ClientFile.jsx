@@ -149,7 +149,12 @@ export default function ClientFile() {
       { data: contactsData },
     ] = await Promise.all([
       supabase.from('projects')
-        .select('name, type, status, current_stage, urgency, intake_date, location, notes')
+        /* Stage name comes from the LUT through stage_id, never from
+           the denormalised current_stage column — that copy drifts and
+           was showing clients a stale stage. RLS on `stages` grants
+           SELECT to any authenticated user, so the embed resolves for a
+           client session. */
+        .select('name, type, status, stage_id, stages!stage_id(name), urgency, intake_date, location, notes')
         .eq('id', project_id)
         .maybeSingle(),
       supabase.from('client_info')
@@ -348,9 +353,9 @@ export default function ClientFile() {
   }
 
   const projectName = clean(project?.name) || 'פרויקט'
-  /* Header subtitle. The current_stage segment is prefixed with the
-     label "שלב הפרויקט:" so the client sees an explicit field name. */
-  const stageVal     = clean(project?.current_stage)
+  /* Header subtitle. The stage segment is prefixed with the label
+     "שלב הפרויקט:" so the client sees an explicit field name. */
+  const stageVal     = clean(project?.stages?.name)
   const stageLabeled = stageVal ? `שלב הפרויקט: ${stageVal}` : null
   const subtitleParts = [clean(project?.type), stageLabeled].filter(Boolean)
   const subtitle      = subtitleParts.join(' · ')

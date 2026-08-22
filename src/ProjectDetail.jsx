@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import ProfessionalModal from './components/professionals/ProfessionalModal'
+import InlineField from './components/InlineField'
 import DocumentsTab from './components/documents/DocumentsTab'
 import SharedFilesTab from './components/sharedfiles/SharedFilesTab'
 import TasksTab from './components/tasks/TasksTab'
@@ -42,8 +43,9 @@ const IconUser = ({ size = 13 }) => (
 
 const STAGE_COLORS = {
   'קליטת פרויקט':  { bg: '#f0f0f0', text: '#000' },
-  'סקיצות':        { bg: '#e8e197', text: '#000' },
-  'הדמיה':         { bg: '#cbc9a2', text: '#000' },
+  'סקיצות':        { bg: '#e8e197', text: '#000' },   /* TODO(stage-rename): drop after migration */
+  'סקיצות והדמיות': { bg: '#e8e197', text: '#000' },
+  'הדמיה':         { bg: '#cbc9a2', text: '#000' },   /* TODO(stage-rename): drop after migration */
   'גרמושקה':       { bg: '#73946e', text: '#fff' },
   'רישוי':         { bg: '#7bc1b5', text: '#000' },
   'תכניות עבודה':  { bg: '#676977', text: '#fff' },
@@ -257,36 +259,10 @@ const PROF_ROLES = [
   { label: 'מפקח',             profession: 'מפקח',             idField: 'supervisor_id' },
 ]
 
-/* ── Inline editable field ── */
-function InlineField({ value, onSave, placeholder = '', type = 'text', multiline = false, readOnly = false }) {
-  const [editing, setEditing] = useState(false)
-  const [val, setVal]         = useState(value ?? '')
-
-  useEffect(() => { setVal(value ?? '') }, [value])
-
-  if (editing && !readOnly) {
-    const props = {
-      value: val,
-      onChange: e => setVal(e.target.value),
-      onBlur: () => { setEditing(false); if (val !== (value ?? '')) onSave(val) },
-      autoFocus: true,
-      className: 'pd-field-input',
-    }
-    return multiline
-      ? <textarea rows={3} {...props} />
-      : <input type={type} {...props} />
-  }
-
-  return (
-    <span
-      className={'pd-field-value' + (val ? '' : ' pd-field-empty')}
-      onClick={() => { if (!readOnly) setEditing(true) }}
-      style={readOnly ? { cursor: 'default' } : {}}
-    >
-      {val || placeholder}
-    </span>
-  )
-}
+/* InlineField moved to src/components/InlineField.jsx so the project-
+   settings modal can use the same control. Pure move — every call site
+   below passes exactly what it always did, and the component's defaults
+   match the behaviour that lived here. */
 
 /* ── Main component ── */
 function ProjectDetail() {
@@ -438,7 +414,7 @@ function ProjectDetail() {
     const fetchProject = async () => {
       const { data } = await supabase
         .from('projects')
-        .select('id, name, current_stage, is_favorite, gantt_state, responsible_id, parent_project_id, is_parent_project, client_visible_tabs, selected_model_id')
+        .select('id, name, stage_id, stages!stage_id(name), is_favorite, gantt_state, responsible_id, parent_project_id, is_parent_project, client_visible_tabs, selected_model_id')
         .eq('id', id)
         .single()
       if (data) {
@@ -795,8 +771,10 @@ function ProjectDetail() {
     await supabase.from('projects').update({ is_favorite: next }).eq('id', id)
   }
 
-  const stageColor = project?.current_stage
-    ? STAGE_COLORS[project.current_stage] || { bg: '#e0e0e0', text: '#000' }
+  /* Read through stage_id, not the drifting current_stage copy. */
+  const stageName  = project?.stages?.name || null
+  const stageColor = stageName
+    ? STAGE_COLORS[stageName] || { bg: '#e0e0e0', text: '#000' }
     : null
 
   /* Parent projects: hide the construction-detail tabs that don't apply,
@@ -943,9 +921,9 @@ function ProjectDetail() {
               ארכיון
             </span>
           ) : (
-            project?.current_stage && stageColor && (
+            stageName && stageColor && (
               <span className="pd-stage-badge" style={{ background: stageColor.bg, color: stageColor.text }}>
-                {project.current_stage}
+                {stageName}
               </span>
             )
           ))}

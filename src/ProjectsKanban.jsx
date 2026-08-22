@@ -5,6 +5,7 @@ import { generateUniqueAuthCode } from './lib/generateAuthCode'
 import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentProjectInheritance'
 import NewTaskModal from './NewTaskModal'
 import ClientPreviewOverlay from './components/ClientPreviewOverlay'
+import InlineField from './components/InlineField'
 import './ProjectsKanban.css'
 
 function getTextColor(bgHex) {
@@ -82,6 +83,20 @@ const IconSmartphone = ({ size = 16 }) => (
     <line x1="12" y1="18" x2="12.01" y2="18"/>
   </svg>
 )
+
+/* Feather-style copy glyph — the small affordance beside anything the
+   "הגדרות פרויקט" modal offers to copy (auth code, links). Deliberately
+   an icon rather than a labelled button: several of them sit in one
+   short column and full buttons crowded it. */
+const IconCopy = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+)
+
+/* The existing IconCheck above doubles as the "copied" tick. */
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -183,7 +198,14 @@ function ProjectsKanban() {
   // project that still has real children — see the checkbox's onChange.
   const [settingsError,  setSettingsError]  = useState('')
   // "הועתק" confirmation for the פרויקטי בנים token link's copy button.
-  const [tokenLinkCopied, setTokenLinkCopied] = useState(false)
+  /* Which copyable value most recently flashed its "copied" tick, by
+     key ('auth' | 'wa' | 'inquiry'), or null. One shared slot so two
+     rows can never both claim success at once. */
+  const [settingsCopied, setSettingsCopied] = useState(null)
+  /* Models belonging to THIS project's parent — the options for
+     "דגם נבחר". Only ever loaded for a child project; an empty list for
+     everything else, which is what hides the row. */
+  const [settingsModels, setSettingsModels] = useState([])
 
   // ── Parent-view mode (route /פרויקטים/אב/:parentId).
   // When the URL carries a parentId, this same Kanban renders only the
@@ -761,8 +783,23 @@ ${authCode || '—'}
          false so the modal shows an unchecked box on unmigrated rows. */
       show_programming_questionnaire: project.show_programming_questionnaire === true,
       is_parent_project:              project.is_parent_project === true,
+      /* Same column ProjectDetail's "פרטי דגם" writes. Drafted here so
+         it saves through this modal's own save/cancel like every other
+         field, rather than writing the instant the select changes. */
+      selected_model_id:              project.selected_model_id || '',
     })
     setSettingsError('')
+    /* Model options come from the PARENT's catalogue — a child picks one
+       of its parent's models. Same query ProjectDetail uses. */
+    setSettingsModels([])
+    if (project.parent_project_id) {
+      supabase
+        .from('project_models')
+        .select('id, name')
+        .eq('project_id', project.parent_project_id)
+        .order('created_at', { ascending: true })
+        .then(({ data }) => setSettingsModels(data || []))
+    }
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
     setContextMenu(null)
@@ -831,6 +868,13 @@ ${authCode || '—'}
     const parentFlagOrig  = settingsTarget.is_parent_project === true
     if (parentFlagDraft !== parentFlagOrig) patch.is_parent_project = parentFlagDraft
 
+    /* selected_model_id — empty → null, exactly as ProjectDetail's
+       saveSelectedModel normalises it, so the two places can never
+       write the column differently. */
+    const modelDraft = settingsDraft.selected_model_id || null
+    const modelOrig  = settingsTarget.selected_model_id || null
+    if (modelDraft !== modelOrig) patch.selected_model_id = modelDraft
+
     /* No-op shortcut. */
     if (Object.keys(patch).length === 0) {
       setSettingsTarget(null)
@@ -886,7 +930,7 @@ ${authCode || '—'}
     setSettingsTarget(null)
     setSettingsDraft(null)
     setSettingsError('')
-    setTokenLinkCopied(false)
+    setSettingsCopied(null)
     setCtxChildPickerOpen(false)
     setCtxChildPickedId('')
   }
@@ -916,21 +960,51 @@ ${authCode || '—'}
     const enteredAt = project.stage_entered_at || today
     const days      = daysInStage(enteredAt)
 
+    /* The stage being LEFT, resolved from stage_id through the LUT.
+
+       This used to read projects.current_stage, and that was the source
+       of a real bug: current_stage is a denormalised copy that this
+       handler never updated, so it froze at whatever it was when the
+       project was created. Every drag then stamped the history row with
+       that stale name — and wrote no stage_id at all — which is why
+       project_stage_history disagreed with itself (28 rows by id vs 30
+       by text) and why 94% of production projects displayed a stage
+       name that did not match their actual stage. */
+    const fromStage = stages.find(s => s.id === project.stage_id) || null
+
     await supabase.from('project_stage_history').insert([{
       project_id:    project.id,
-      stage:         project.current_stage,
+      stage_id:      fromStage?.id ?? project.stage_id ?? null,
+      /* current_stage as a LAST-RESORT fallback only — not as a source of
+         truth. It matters because project_stage_history.stage is NOT NULL
+         on Dev (it is nullable on Prod), so a project with a null stage_id
+         would make the LUT lookup miss and this insert throw, where the
+         old name-based code survived. No such project exists in either
+         environment today (0 rows), and nothing enforces stage_id NOT
+         NULL, so this keeps the old behaviour for the one case it
+         differed in. */
+      stage:         fromStage?.name ?? project.current_stage ?? null,
       entered_at:    enteredAt,
       exited_at:     today,
       days_in_stage: days,
     }])
 
+    /* Both columns are written, deliberately. stage_id is the single
+       source of truth and the only one anything READS; current_stage is
+       kept in step purely so the column stays truthful for any consumer
+       neither of us found. Writing it costs nothing; letting it drift
+       again would cost another 94%. */
     await supabase.from('projects')
-      .update({ stage_id: stageObj.id, stage_entered_at: today })
+      .update({
+        stage_id:         stageObj.id,
+        stage_entered_at: today,
+        current_stage:    stageObj.name,
+      })
       .eq('id', dragId)
 
     setProjects(prev => prev.map(p =>
       p.id === dragId
-        ? { ...p, stage_id: stageObj.id, stages: { id: stageObj.id, name: stageObj.name, color: stageObj.color }, stage_entered_at: today }
+        ? { ...p, stage_id: stageObj.id, current_stage: stageObj.name, stages: { id: stageObj.id, name: stageObj.name, color: stageObj.color }, stage_entered_at: today }
         : p
     ))
     setDragId(null)
@@ -1716,339 +1790,414 @@ ${authCode || '—'}
                 actual state, not the action).
             ── */}
       {settingsTarget && settingsDraft && (() => {
-        /* Inline style constants — shared across all rows so every
-           field has identical alignment, width, and border-radius.
-           Field grouping (separated by .pdGroupDivider):
-             Group A — input fields    (name, responsible, whatsapp link)
-             Group B — toggles/markers (favorite star, parent project)
-             Group C — read-only       (auth code + welcome message)
-             Group D — destructive     (archive — admin-only)
-        */
-        const pdSettingsRow   = { marginBottom: 14 }
-        const pdInputBorder   = { borderRadius: 8 }
-        const pdGroupDivider  = { borderTop: '1px solid #ececec', margin: '4px 0 14px' }
-        /* Frameless icon-button base for the footer — no border, no
-           background, just the icon over a comfortable tap area with a
-           small text label beside it. Matches the spirit of the app's
-           other small icon buttons. */
+        /* ── "הגדרות פרויקט" ──────────────────────────────────────────
+           Presentation only. Every value still saves exactly as before:
+           the six drafted fields go through settingsDraft and are written
+           by handleSettingsSave, and the flows that were never drafted
+           (parent attach/detach, archive, welcome message, client
+           preview) keep their own handlers untouched.
+
+           Layout: five sections in a responsive grid — two columns where
+           there is room, one where there isn't — with פעולות pulled out
+           below a full-width rule.
+
+           RTL: the modal is dir="rtl", so in every row the label is the
+           FIRST child and therefore sits at the visual RIGHT, with the
+           value and its icons running leftwards from it. */
         const pdFooterIconBtn = {
           display: 'inline-flex', alignItems: 'center', gap: 6,
           background: 'none', border: 'none', padding: '6px 10px',
           fontFamily: 'inherit', fontSize: 14, cursor: 'pointer',
           color: '#1a1a2e',
         }
+
+        const inquiryLink = settingsTarget.child_inquiry_token
+          ? `${import.meta.env.VITE_APP_URL}/child-inquiry/${settingsTarget.child_inquiry_token}`
+          : ''
+
+        /* One copy handler for every copyable value; the key drives which
+           icon shows its tick, so two rows can't both flash at once. */
+        const copyValue = (key, text) => {
+          if (!text) return
+          navigator.clipboard.writeText(text)
+          setSettingsCopied(key)
+          setTimeout(() => setSettingsCopied(c => (c === key ? null : c)), 2000)
+        }
+
+        const CopyButton = ({ copyKey, text, label }) => (
+          <button
+            type="button"
+            className={'pdset-icon-btn pdset-copy-cell' + (settingsCopied === copyKey ? ' pdset-icon-btn--ok' : '')}
+            onClick={() => copyValue(copyKey, text)}
+            disabled={!text}
+            aria-label={settingsCopied === copyKey ? label + ' הועתק' : 'העתקת ' + label}
+            title={settingsCopied === copyKey ? 'הועתק' : 'העתקת ' + label}
+            style={!text ? { opacity: 0.35, cursor: 'not-allowed' } : undefined}
+          >
+            {settingsCopied === copyKey ? <IconCheck /> : <IconCopy />}
+          </button>
+        )
+
+        /* "הפוך לפרויקט בן" is a FLOW, not a field: it opens a picker and
+           then a two-step confirm that closes this modal on success. The
+           condition for showing it is unchanged. */
+        const showChildFlow =
+          !parentId && (!!settingsTarget.parent_project_id || !settingsTarget.is_parent_project)
+
+        const responsibleName =
+          users.find(u => u.id === settingsDraft.responsible_id)?.first_name || ''
+
+        /* A child can never also be a parent, so the "פרויקט אב" checkbox
+           is hidden for one entirely rather than shown and then refused. */
+        const isChild = !!settingsTarget.parent_project_id
+
+        /* The parent's name. parentProjectsList holds every non-archived
+           project flagged is_parent_project, and a child's parent is by
+           definition one of those, so the lookup resolves; parentProject
+           covers the parent-view route as a fallback. */
+        const parentName = isChild
+          ? (parentProjectsList.find(p => p.id === settingsTarget.parent_project_id)?.name
+             || parentProject?.name
+             || '')
+          : ''
+
+        /* Third header line — only rendered when it actually says
+           something. Reads from the DRAFT for the parent case so ticking
+           "פרויקט אב" updates it live. */
+        const lineage = isChild
+          ? (parentName ? 'פרויקט בן של ' + parentName : 'פרויקט בן')
+          : (settingsDraft.is_parent_project ? 'פרויקט אב' : '')
+
         return (
           <div className="modal-overlay" onClick={handleSettingsCancel}>
             <div
-              className="modal-box"
+              className="modal-box pdset-box"
               onClick={e => e.stopPropagation()}
               dir="rtl"
-              style={{ width: 380, borderRadius: 10, gap: 0 }}
             >
-              <h3 className="modal-title" style={{ marginBottom: 16 }}>הגדרות פרויקט</h3>
-
-              {/* ── Group A: input fields ────────────────────────────── */}
-
-              {/* 1. שם פרויקט */}
-              <div style={pdSettingsRow}>
-                <label className="modal-label">שם פרויקט</label>
-                <input
-                  type="text"
-                  className="modal-input"
-                  style={pdInputBorder}
-                  value={settingsDraft.name}
-                  onChange={e => setSettingsDraft(d => ({ ...d, name: e.target.value }))}
-                  dir="rtl"
-                />
-              </div>
-
-              {/* 2. אחראית */}
-              <div style={pdSettingsRow}>
-                <label className="modal-label">אחראית</label>
-                <select
-                  className="modal-input"
-                  style={pdInputBorder}
-                  value={settingsDraft.responsible_id}
-                  onChange={e => setSettingsDraft(d => ({ ...d, responsible_id: e.target.value }))}
-                >
-                  <option value="">ללא</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.first_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 3. קישור קבוצת WhatsApp */}
-              <div style={pdSettingsRow}>
-                <label className="modal-label">קישור קבוצת WhatsApp</label>
-                <input
-                  type="text"
-                  className="modal-input"
-                  style={pdInputBorder}
-                  value={settingsDraft.whatsapp_group_url}
-                  onChange={e => setSettingsDraft(d => ({ ...d, whatsapp_group_url: e.target.value }))}
-                  placeholder="קישור הזמנה לקבוצת וואטסאפ של הפרויקט"
-                  dir="rtl"
-                />
-              </div>
-
-              <div style={pdGroupDivider} />
-
-              {/* ── Group B: toggles / markers ───────────────────────── */}
-
-              {/* 4. מועדפים — frameless star + text, clickable as one unit.
-                  No checkbox. Star icon matches the CURRENT draft state
-                  (★ filled when true, ☆ outline when false). */}
-              <div style={pdSettingsRow}>
-                <button
-                  type="button"
-                  onClick={() => setSettingsDraft(d => ({ ...d, is_favorite: !d.is_favorite }))}
-                  aria-pressed={settingsDraft.is_favorite}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    background: 'none', border: 'none', padding: 0,
-                    fontFamily: 'inherit', fontSize: 14,
-                    color: '#1a1a2e', cursor: 'pointer',
-                  }}
-                >
-                  <span style={{ fontSize: 18, lineHeight: 1, color: settingsDraft.is_favorite ? '#f5a623' : '#9ca3af' }}>
+              {/* Three-line header. The star mirrors settingsDraft, so
+                  ticking "האם הפרויקט מועדף" below updates it live,
+                  before saving — the same draft model every other field
+                  in this modal follows. */}
+              <div className="pdset-header">
+                <div className="pdset-header-eyebrow">הגדרות פרויקט:</div>
+                <div className="pdset-header-name-row">
+                  <h3 className="pdset-header-name">{settingsDraft.name || '—'}</h3>
+                  <span
+                    className="pdset-header-star"
+                    style={{ color: settingsDraft.is_favorite ? '#f5a623' : '#c8ccd2' }}
+                    aria-label={settingsDraft.is_favorite ? 'פרויקט מועדף' : 'לא מועדף'}
+                    title={settingsDraft.is_favorite ? 'פרויקט מועדף' : 'לא מועדף'}
+                  >
                     {settingsDraft.is_favorite ? '★' : '☆'}
                   </span>
-                  <span>{settingsDraft.is_favorite ? 'פרויקט מועדף' : 'לא מועדף'}</span>
-                </button>
+                </div>
+                {lineage && <div className="pdset-header-lineage">{lineage}</div>}
               </div>
 
-              {/* 5. פרויקט אב — explicit, independent flag (single source of
-                  truth for "is this project a parent"). Toggleable even
-                  with zero children, so a project can be flagged ahead of
-                  having any. Unchecking is blocked while real children
-                  still point at this project — that would make it stop
-                  being recognised as a parent everywhere despite live
-                  children existing, so the checkbox refuses the change and
-                  shows settingsError instead of silently drafting it. */}
-              <div style={pdSettingsRow}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0, fontSize: 14, color: '#1a1a2e' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!settingsDraft.is_parent_project}
-                    onChange={e => {
-                      setSettingsError('')
-                      if (!e.target.checked && childCounts[settingsTarget.id] > 0) {
-                        setSettingsError('לא ניתן להסיר סימון "פרויקט אב" מפרויקט עם פרויקטי בן פעילים')
-                        return
-                      }
-                      setSettingsDraft(d => ({ ...d, is_parent_project: e.target.checked }))
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <span>פרויקט אב</span>
-                </label>
-                {settingsError && (
-                  <p style={{ color: 'red', fontSize: '13px', margin: '6px 0 0', textAlign: 'right' }}>{settingsError}</p>
-                )}
-              </div>
+              <div className="pdset-grid">
 
-              {/* פרויקטי בנים — public inquiry link, only meaningful once
-                  this project is flagged as a parent. Same read-only-input
-                  + copy-button pattern as the regular inquiry's "קישור
-                  לטופס הלקוח" (Inquiries.jsx), reimplemented here with this
-                  modal's own pdSettingsRow/pdInputBorder styling instead of
-                  importing Inquiries.css cross-file. */}
-              {!!settingsDraft.is_parent_project && (
-                <div style={pdSettingsRow}>
-                  <label className="modal-label" style={{ display: 'block', marginBottom: 4 }}>קישור לטופס פנייה לפרויקט בן</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="modal-input"
-                      style={{ ...pdInputBorder, flex: 1, background: '#f7f8fa', color: '#555', cursor: 'default' }}
-                      readOnly
-                      dir="ltr"
-                      value={`${import.meta.env.VITE_APP_URL}/child-inquiry/${settingsTarget.child_inquiry_token}`}
+                {/* ── 1. זיהוי הפרויקט ──────────────────────────────── */}
+                <section className="pdset-section">
+                  <h4 className="pdset-section-title">זיהוי הפרויקט</h4>
+
+                  <div className="pdset-row pdset-row--grid">
+                    <span className="pdset-row-label">שם הפרויקט</span>
+                    <InlineField
+                      value={settingsDraft.name}
+                      onSave={v => setSettingsDraft(d => ({ ...d, name: v }))}
+                      withPencil
+                      splitCells
+                      pencilClassName="pdset-action-cell"
+                      ariaLabel="שם הפרויקט"
+                      placeholder="—"
+                      className="pdset-value pdset-value-cell"
+                      emptyClassName="pdset-value-empty"
+                      inputClassName="modal-input"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${import.meta.env.VITE_APP_URL}/child-inquiry/${settingsTarget.child_inquiry_token}`)
-                        setTokenLinkCopied(true)
-                        setTimeout(() => setTokenLinkCopied(false), 2000)
-                      }}
-                      style={{
-                        flexShrink: 0, background: '#000', color: '#fff', border: 'none',
-                        borderRadius: 8, padding: '9px 16px', fontFamily: 'inherit', fontSize: 13,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {tokenLinkCopied ? '✓ הועתק' : 'העתק'}
-                    </button>
                   </div>
-                </div>
-              )}
 
-              {/* 6. פרויקט בן — independent (its own two-step parentConfirm
-                  flow). Hidden in parent view and on projects that are
-                  flagged is_parent_project — EXCEPT a project that already
-                  has a parent_project_id always keeps this block, so the
-                  "detach" option never disappears just because someone
-                  separately flagged it as a parent above. The picker opens
-                  parentConfirm; that handler closes this modal entirely on
-                  success. */}
-              {!parentId && (!!settingsTarget.parent_project_id || !settingsTarget.is_parent_project) && (
-                <div style={pdSettingsRow}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0, fontSize: 14, color: '#1a1a2e' }}>
-                    <input
-                      type="checkbox"
-                      checked={!!settingsTarget.parent_project_id || ctxChildPickerOpen}
-                      onChange={e => {
-                        const isCurrentlyChild = !!settingsTarget.parent_project_id
-                        if (isCurrentlyChild) {
-                          setParentConfirm({ mode: 'detach', project: settingsTarget })
-                        } else if (e.target.checked) {
-                          setCtxChildPickedId('')
-                          setCtxChildPickerOpen(true)
-                          loadParentOptions()
-                        } else {
-                          setCtxChildPickerOpen(false)
-                          setCtxChildPickedId('')
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
+                  <div className="pdset-row pdset-row--grid">
+                    <span className="pdset-row-label">אחראית</span>
+                    {/* Stores responsible_id but reads as the person's
+                        name — hence displayValue. */}
+                    <InlineField
+                      value={settingsDraft.responsible_id}
+                      displayValue={responsibleName}
+                      onSave={v => setSettingsDraft(d => ({ ...d, responsible_id: v }))}
+                      withPencil
+                      splitCells
+                      pencilClassName="pdset-action-cell"
+                      ariaLabel="אחראית"
+                      placeholder="ללא"
+                      className="pdset-value pdset-value-cell"
+                      emptyClassName="pdset-value-empty"
+                      renderInput={(props) => (
+                        <select {...props} className="modal-input" style={{ borderRadius: 8 }}>
+                          <option value="">ללא</option>
+                          {users.map(u => (
+                            <option key={u.id} value={u.id}>{u.first_name}</option>
+                          ))}
+                        </select>
+                      )}
                     />
-                    <span>הפוך לפרויקט בן</span>
-                  </label>
-                  {!settingsTarget.parent_project_id && ctxChildPickerOpen && (
-                    <select
-                      className="modal-input"
-                      style={{ ...pdInputBorder, marginTop: 8 }}
-                      value={ctxChildPickedId}
-                      onChange={e => {
-                        const pid = e.target.value
-                        setCtxChildPickedId(pid)
-                        if (pid) {
-                          const parentName = parentOptions.find(p => p.id === pid)?.name || ''
-                          setParentConfirm({
-                            mode: 'attach',
-                            project: settingsTarget,
-                            parentId: pid,
-                            parentName,
-                          })
-                        }
-                      }}
-                    >
-                      <option value="">בחר אב…</option>
-                      {parentOptions
-                        .filter(p => p.id !== settingsTarget.id)
-                        .map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
+                  </div>
+
+                  {/* A checkbox now, not the old star button — the star
+                      moved to the header and reads the same draft value,
+                      so ticking this updates it immediately. */}
+                  <div className="pdset-row">
+                    <label className="pdset-check">
+                      <input
+                        type="checkbox"
+                        checked={!!settingsDraft.is_favorite}
+                        onChange={e => setSettingsDraft(d => ({ ...d, is_favorite: e.target.checked }))}
+                        style={{ width: 16, height: 16 }}
+                      />
+                      <span>האם הפרויקט מועדף</span>
+                    </label>
+                  </div>
+                </section>
+
+                {/* ── 2. גישה וקישורים ──────────────────────────────── */}
+                <section className="pdset-section">
+                  <h4 className="pdset-section-title">גישה וקישורים</h4>
+
+                  {/* RTL grid: column 1 is the visual RIGHT. Reading
+                      right-to-left — label, value, WhatsApp, copy — so the
+                      copy icon is always the leftmost element and every row
+                      in this group puts it on the same vertical line. */}
+                  <div className="pdset-row pdset-row--grid pdset-row--copy">
+                    <span className="pdset-row-label">קוד הרשאה</span>
+                    {/* The welcome-message composer — an existing flow,
+                        kept ALONGSIDE the copy icon, not replaced. As an
+                        ACTION it sits beside the label. */}
+                    <button
+                        type="button"
+                        className="pdset-icon-btn pdset-action-cell"
+                        onClick={handleOpenWelcomeMessage}
+                        title="הכנת הודעת ברוכים הבאים"
+                        aria-label="הכנת הודעת ברוכים הבאים"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="#25D366" stroke="none" aria-hidden="true">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                          <path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.936.526 3.745 1.438 5.291L2 22l4.842-1.417A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 11.999 2zm0 18a7.958 7.958 0 0 1-4.28-1.244l-.307-.182-3.18.93.972-3.093-.2-.317A7.958 7.958 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
+                        </svg>
+                    </button>
+                    <span className="pdset-value pdset-value-ltr pdset-value-cell" style={{ letterSpacing: '0.5px' }}>
+                      {settingsTarget.auth_code || '—'}
+                    </span>
+                    <CopyButton copyKey="auth" text={settingsTarget.auth_code || ''} label="קוד ההרשאה" />
+                  </div>
+
+                  <div className="pdset-row pdset-row--grid pdset-row--copy">
+                    <span className="pdset-row-label">קבוצת וואטסאפ</span>
+                    <InlineField
+                      value={settingsDraft.whatsapp_group_url}
+                      onSave={v => setSettingsDraft(d => ({ ...d, whatsapp_group_url: v }))}
+                      withPencil
+                      splitCells
+                      pencilClassName="pdset-action-cell"
+                      ariaLabel="קישור קבוצת וואטסאפ"
+                      placeholder="לא הוגדר"
+                      className="pdset-value pdset-value-ltr pdset-value-cell"
+                      emptyClassName="pdset-value-empty"
+                      inputClassName="modal-input"
+                    />
+                    <CopyButton
+                      copyKey="wa"
+                      text={settingsDraft.whatsapp_group_url || ''}
+                      label="קישור קבוצת וואטסאפ"
+                    />
+                  </div>
+
+                  {/* Parent projects only — the public child-inquiry link. */}
+                  {!!settingsDraft.is_parent_project && (
+                    <div className="pdset-row pdset-row--grid pdset-row--copy">
+                      <span className="pdset-row-label">טופס פנייה</span>
+                      <span className="pdset-value pdset-value-ltr pdset-value-cell">{inquiryLink || '—'}</span>
+                      <CopyButton copyKey="inquiry" text={inquiryLink} label="קישור טופס הפנייה" />
+                    </div>
                   )}
-                </div>
-              )}
+                </section>
 
-              <div style={pdGroupDivider} />
+                {/* ── 3. מבנה הפרויקט ───────────────────────────────── */}
+                <section className="pdset-section">
+                  <h4 className="pdset-section-title">מבנה הפרויקט</h4>
 
-              {/* ── Group C: read-only ───────────────────────────────── */}
+                  {/* Hidden entirely for a child project — a child cannot
+                      also be a parent, so offering the box at all would be
+                      an option that could only ever be refused. */}
+                  {!isChild && (
+                  <div className="pdset-row" style={{ display: 'block' }}>
+                    <label className="pdset-check">
+                      <input
+                        type="checkbox"
+                        checked={!!settingsDraft.is_parent_project}
+                        onChange={e => {
+                          setSettingsError('')
+                          if (!e.target.checked && childCounts[settingsTarget.id] > 0) {
+                            setSettingsError('לא ניתן להסיר סימון "פרויקט אב" מפרויקט עם פרויקטי בן פעילים')
+                            return
+                          }
+                          setSettingsDraft(d => ({ ...d, is_parent_project: e.target.checked }))
+                        }}
+                      />
+                      <span>פרויקט אב</span>
+                    </label>
+                    {/* Stays attached to the checkbox that produces it. */}
+                    {settingsError && (
+                      <p style={{ color: 'red', fontSize: '13px', margin: '6px 0 0', textAlign: 'right' }}>{settingsError}</p>
+                    )}
+                  </div>
+                  )}
 
-              {/* 6. קוד הרשאה — read-only chip + green WhatsApp button
-                  that opens the welcome-message popup composer. */}
-              <div style={pdSettingsRow}>
-                <label className="modal-label">קוד הרשאה לחיבור ראשוני</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ flex: 1, padding: '10px 12px', background: '#F3F4F6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#1a1a2e', letterSpacing: '0.5px', fontFamily: 'inherit', boxSizing: 'border-box' }}>
-                    {settingsTarget.auth_code || '—'}
-                  </span>
-                  <button
-                    type="button"
-                    className="context-menu-whatsapp-btn"
-                    onClick={handleOpenWelcomeMessage}
-                    title="הכנת הודעת ברוכים הבאים"
-                    aria-label="הכנת הודעת ברוכים הבאים"
-                  >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#25D366" stroke="none" aria-hidden="true">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                      <path d="M11.999 2C6.477 2 2 6.477 2 12c0 1.936.526 3.745 1.438 5.291L2 22l4.842-1.417A9.956 9.956 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 11.999 2zm0 18a7.958 7.958 0 0 1-4.28-1.244l-.307-.182-3.18.93.972-3.093-.2-.317A7.958 7.958 0 0 1 4 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/>
-                    </svg>
-                  </button>
-                </div>
+                  {/* דגם נבחר — child projects only, chosen from the
+                      PARENT's model catalogue. Writes the very same
+                      projects.selected_model_id column ProjectDetail's
+                      "פרטי דגם" writes, with the same empty-to-null
+                      normalisation, so the two views can't drift. */}
+                  {isChild && settingsModels.length > 0 && (
+                    <div className="pdset-row pdset-row--grid">
+                      <span className="pdset-row-label">דגם נבחר</span>
+                      <InlineField
+                        value={settingsDraft.selected_model_id}
+                        displayValue={settingsModels.find(m => m.id === settingsDraft.selected_model_id)?.name || ''}
+                        onSave={v => setSettingsDraft(d => ({ ...d, selected_model_id: v }))}
+                        withPencil
+                        splitCells
+                        pencilClassName="pdset-action-cell"
+                        ariaLabel="דגם נבחר"
+                        placeholder="לא נבחר"
+                        className="pdset-value pdset-value-cell"
+                        emptyClassName="pdset-value-empty"
+                        renderInput={(props) => (
+                          <select {...props} className="modal-input" style={{ borderRadius: 8 }}>
+                            <option value="">לא נבחר</option>
+                            {settingsModels.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {showChildFlow && (
+                    <div className="pdset-row" style={{ display: 'block' }}>
+                      <label className="pdset-check">
+                        <input
+                          type="checkbox"
+                          checked={!!settingsTarget.parent_project_id || ctxChildPickerOpen}
+                          onChange={e => {
+                            const isCurrentlyChild = !!settingsTarget.parent_project_id
+                            if (isCurrentlyChild) {
+                              setParentConfirm({ mode: 'detach', project: settingsTarget })
+                            } else if (e.target.checked) {
+                              setCtxChildPickedId('')
+                              setCtxChildPickerOpen(true)
+                              loadParentOptions()
+                            } else {
+                              setCtxChildPickerOpen(false)
+                              setCtxChildPickedId('')
+                            }
+                          }}
+                        />
+                        <span>הפוך לפרויקט בן</span>
+                      </label>
+                      {!settingsTarget.parent_project_id && ctxChildPickerOpen && (
+                        <select
+                          className="modal-input"
+                          style={{ borderRadius: 8, marginTop: 8 }}
+                          value={ctxChildPickedId}
+                          onChange={e => {
+                            const pid = e.target.value
+                            setCtxChildPickedId(pid)
+                            if (pid) {
+                              const parentName = parentOptions.find(p => p.id === pid)?.name || ''
+                              setParentConfirm({
+                                mode: 'attach',
+                                project: settingsTarget,
+                                parentId: pid,
+                                parentName,
+                              })
+                            }
+                          }}
+                        >
+                          <option value="">בחר אב…</option>
+                          {parentOptions
+                            .filter(p => p.id !== settingsTarget.id)
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                {/* ── 4. מה הלקוח רואה ──────────────────────────────── */}
+                <section className="pdset-section">
+                  <h4 className="pdset-section-title">מה הלקוח רואה</h4>
+
+                  <div className="pdset-row">
+                    <label className="pdset-check">
+                      <input
+                        type="checkbox"
+                        checked={!!settingsDraft.show_programming_questionnaire}
+                        onChange={(e) => setSettingsDraft(d => ({
+                          ...d,
+                          show_programming_questionnaire: e.target.checked,
+                        }))}
+                        style={{ width: 16, height: 16 }}
+                      />
+                      <span>חשוף שאלון פרוגרמה ללקוח</span>
+                    </label>
+                  </div>
+
+                  {/* Opens ON TOP of this modal; the draft stays as-is so
+                      closing the preview returns here unchanged. */}
+                  {isAdmin && (
+                    <div className="pdset-row">
+                      {/* Same geometry as the checkbox above: the control
+                          is the first child and so paints at the visual
+                          RIGHT, with its text to the left of it. */}
+                      <button
+                        type="button"
+                        className="pdset-check pdset-check-btn"
+                        onClick={() => setClientPreviewProject(settingsTarget)}
+                        title="תצוגת לקוח"
+                        aria-label="פתיחת תצוגת לקוח"
+                      >
+                        <IconSmartphone size={16} />
+                        <span>תצוגת לקוח</span>
+                      </button>
+                    </div>
+                  )}
+                </section>
               </div>
 
-              {/* 6b. Programming-questionnaire visibility toggle.
-                     Client-only: flips whether the שאלון פרוגרמה tile
-                     shows in the portal for this project. Admin/meeting
-                     split-view stays available regardless. */}
-              <div style={pdSettingsRow}>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: 14,
-                    color: '#1a1a2e',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    direction: 'rtl',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!settingsDraft.show_programming_questionnaire}
-                    onChange={(e) => setSettingsDraft(d => ({
-                      ...d,
-                      show_programming_questionnaire: e.target.checked,
-                    }))}
-                    style={{ width: 16, height: 16, accentColor: '#7a9478', cursor: 'pointer' }}
-                  />
-                  חשוף שאלון פרוגרמה ללקוח
-                </label>
-              </div>
-
-              {/* תצוגת לקוח — admin-only read-only preview of the client
-                  portal for this project, in a mobile device frame. Opens
-                  ON TOP of this modal (settingsTarget/settingsDraft stay
-                  as-is), so the overlay's close (X) simply returns here. */}
-              {isAdmin && (
-                <div style={pdSettingsRow}>
+              {/* ── Footer ───────────────────────────────────────────
+                  RTL: the first child sits at the visual RIGHT, so
+                  "העברה לארכיון" keeps the side it had while the
+                  save/cancel pair is pushed to the visual LEFT. The
+                  archive flow itself is unchanged — it still opens the
+                  same two-step confirm. */}
+              <div className="pdset-footer">
+                {isAdmin && (
                   <button
                     type="button"
-                    onClick={() => setClientPreviewProject(settingsTarget)}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', gap: 8,
-                      background: '#fff', color: '#1a1a2e',
-                      border: '1px solid #d1d5db', borderRadius: 8,
-                      padding: '9px 14px', fontFamily: 'inherit', fontSize: 14,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <IconSmartphone size={16} />
-                    <span>תצוגת לקוח</span>
-                  </button>
-                </div>
-              )}
-
-              {/* ── Group D: destructive (admin-only) ────────────────── */}
-
-              {isAdmin && (
-                <>
-                  <div style={pdGroupDivider} />
-                  {/* 7. העבר לארכיון — opens the existing two-step archive
-                      confirm flow. Small archive glyph next to the label. */}
-                  <button
-                    className="context-menu-archive-btn"
-                    style={{ width: '100%', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}
                     onClick={() => startArchiveFlow(settingsTarget)}
+                    aria-label="העברת הפרויקט לארכיון"
+                    title="העברה לארכיון"
+                    style={{ ...pdFooterIconBtn, color: '#E24B4A' }}
                   >
-                    <IconArchive size={14} />
-                    <span>העבר לארכיון</span>
+                    <IconArchive size={16} />
+                    <span>העברה לארכיון</span>
                   </button>
-                </>
-              )}
+                )}
 
-              {/* ── Footer ──────────────────────────────────────────────
-                  Two frameless icon buttons. שמור is a Feather floppy-disk
-                  glyph; ביטול is a red X. Overlay-click also cancels. ── */}
-              <div className="modal-actions" style={{ marginTop: 18 }}>
+                <div className="pdset-footer-actions">
                 <button
                   type="button"
                   onClick={handleSettingsSave}
@@ -2075,6 +2224,7 @@ ${authCode || '—'}
                   <IconX size={18} />
                   <span>ביטול</span>
                 </button>
+                </div>
               </div>
             </div>
           </div>

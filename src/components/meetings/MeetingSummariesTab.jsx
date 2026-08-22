@@ -78,9 +78,22 @@ export function buildMeetingDeepLink(projectId, summaryId) {
 
 /* Stages the studio itself drives — a task born from a meeting on one
    of these goes to the admin (Einav). Every other stage belongs to
-   whoever runs the project. Matched BY NAME against the stages table,
-   never by id: the numbers differ between Dev and Prod. */
-const ADMIN_STAGE_NAMES = new Set(['קליטת פרויקט', 'סקיצות', 'בניה', 'גמר'])
+   whoever runs the project. Matched BY NAME against the stages table.
+
+   BOTH names for stage 2 are listed on purpose. The stage is being
+   renamed 'סקיצות' → 'סקיצות והדמיות' in the LUT, and this code ships
+   BEFORE that UPDATE runs, so it has to match either. Were it to carry
+   only one name there would be a window — however short — in which
+   meeting-born tasks silently routed to the project lead instead of the
+   admin, with no error to notice. The old name is dropped once the
+   rename has landed in both environments. */
+const ADMIN_STAGE_NAMES = new Set([
+  'קליטת פרויקט',
+  'סקיצות',            /* TODO(stage-rename): drop after the LUT rename */
+  'סקיצות והדמיות',
+  'בניה',
+  'גמר',
+])
 
 /* The stage a summary opened via "סיכום פגישת פרוגרמה" starts on. Set
    at creation, so nothing later has to guess from the topic text. */

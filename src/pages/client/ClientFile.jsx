@@ -108,6 +108,10 @@ export default function ClientFile() {
   const [contacts, setContacts]       = useState([])
   const [profById, setProfById]       = useState({})
   const [loading, setLoading]         = useState(true)
+  /* A load that FAILED, as distinct from a load that returned nothing.
+     Without this the two are the same screen, which is how the Prod
+     42703 below stayed invisible. */
+  const [loadError, setLoadError]     = useState(false)
 
   /* ── Edit-mode state ─────────────────────────────────────────────
      Only contacts are editable, so the only draft we keep is contactsDraft.
@@ -144,17 +148,27 @@ export default function ClientFile() {
     setLoading(true)
 
     const [
-      { data: projData },
-      { data: ciData },
-      { data: contactsData },
+      { data: projData,     error: projErr },
+      { data: ciData,       error: ciErr },
+      { data: contactsData, error: contactsErr },
     ] = await Promise.all([
       supabase.from('projects')
-        /* Stage name comes from the LUT through stage_id, never from
-           the denormalised current_stage column — that copy drifts and
-           was showing clients a stale stage. RLS on `stages` grants
-           SELECT to any authenticated user, so the embed resolves for a
-           client session. */
-        .select('name, type, status, stage_id, stages!stage_id(name), urgency, intake_date, location, notes')
+        /* EXACTLY what this screen renders — the project name and the
+           stage — and nothing else.
+
+           The stage name comes from the LUT through stage_id, never from
+           the denormalised current_stage column, which drifts. RLS on
+           `stages` grants SELECT to any authenticated user, so the embed
+           resolves for a client session.
+
+           This list used to also carry type, status, location, notes,
+           urgency and intake_date. None of them were ever read, and four
+           of them (type, status, location, notes) do not exist on
+           Production at all — so PostgREST rejected the WHOLE request
+           with 42703 and this screen rendered an empty header to every
+           production client from the day it shipped. Keep this list to
+           what the component actually uses. */
+        .select('name, stages!stage_id(name)')
         .eq('id', project_id)
         .maybeSingle(),
       supabase.from('client_info')
@@ -168,6 +182,26 @@ export default function ClientFile() {
     ])
 
     if (!isMounted.current) return
+
+    /* Surface a failed load instead of rendering it as "no data".
+       Discarding these three `error`s is what let a hard 400 look
+       exactly like a project with nothing filled in. Any of the three
+       failing is treated as fatal for the screen: a partial render here
+       would put the client back in the same position of not being able
+       to tell missing data from a broken fetch. */
+    const loadErr = projErr || ciErr || contactsErr
+    if (loadErr) {
+      console.error('ClientFile load failed:', { projErr, ciErr, contactsErr })
+      logError('file', 'load_failed', logCtx, {
+        message: loadErr.message,
+        code:    loadErr.code,
+      })
+      setLoadError(true)
+      setLoading(false)
+      return
+    }
+
+    setLoadError(false)
     setProject(projData || null)
     setClientInfo(ciData || null)
     setContacts(Array.isArray(contactsData) ? contactsData : [])
@@ -334,6 +368,21 @@ export default function ClientFile() {
     )
   }
 
+  /* ── Failed load ─────────────────────────────────────────────────
+     Deliberately NOT an empty page. The client has to be able to tell
+     "we couldn't fetch this" from "there's nothing here yet". */
+  if (loadError) {
+    return (
+      <div className="cp-page">
+        <div className="cp-container">
+          <div className="cp-save-error" role="alert">
+            לא הצלחנו לטעון את פרטי התיק. נסו לרענן את הדף, ואם התקלה חוזרת — פנו אלינו.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   /* ── Render helpers ──────────────────────────────────────────────── */
   /* renderClientInfoFields: always read-only display, skipping empties.
      (No edit-mode branch — pertaining cards are no longer editable.) */
@@ -353,12 +402,13 @@ export default function ClientFile() {
   }
 
   const projectName = clean(project?.name) || 'פרויקט'
-  /* Header subtitle. The stage segment is prefixed with the label
-     "שלב הפרויקט:" so the client sees an explicit field name. */
-  const stageVal     = clean(project?.stages?.name)
-  const stageLabeled = stageVal ? `שלב הפרויקט: ${stageVal}` : null
-  const subtitleParts = [clean(project?.type), stageLabeled].filter(Boolean)
-  const subtitle      = subtitleParts.join(' · ')
+  /* Header subtitle — the stage, prefixed with "שלב הפרויקט:" so the
+     client sees an explicit field name. This used to join a
+     projects.type segment in front with " · ", but that column is dead:
+     null on all 56 Dev rows and absent from Prod entirely, so the
+     separator was unreachable and the type segment never rendered. */
+  const stageVal = clean(project?.stages?.name)
+  const subtitle = stageVal ? `שלב הפרויקט: ${stageVal}` : ''
 
   const detailRows    = renderClientInfoFields(PROJECT_DETAIL_FIELDS)
 

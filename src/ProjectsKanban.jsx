@@ -254,7 +254,7 @@ function ProjectsKanban() {
       }
 
       const { data: stagesData } = await supabase
-        .from('stages').select('*').order('order_index')
+        .from('stages').select('*').eq('is_active', true).order('order_index')
       if (stagesData) setStages(stagesData)
 
       let projectsQuery = supabase

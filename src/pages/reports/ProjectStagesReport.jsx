@@ -44,7 +44,7 @@ export default function ProjectStagesReport() {
       const [{ data: projs }, { data: emps }, { data: stg }] = await Promise.all([
         supabase.from('projects').select('id, name').eq('archived', false).order('name'),
         supabase.from('profiles').select('id, first_name, last_name').eq('role', 'employee').order('first_name'),
-        supabase.from('stages').select('id, name, color').order('order_index'),
+        supabase.from('stages').select('id, name, color').eq('is_active', true).order('order_index'),
       ])
       if (projs) setProjects(projs)
       if (emps)  setEmployees(emps)

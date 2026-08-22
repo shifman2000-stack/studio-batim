@@ -227,7 +227,7 @@ function Hours() {
     if (profile) setUserRole(profile.role)
     const [{ data: projs }, { data: stg }] = await Promise.all([
       supabase.from('projects').select('id, name').eq('archived', false).order('name'),
-      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('stages').select('id, name').eq('is_active', true).order('order_index'),
     ])
     if (projs) setProjects(projs)
     if (stg) setStages(stg.filter(s => s.id !== 9))

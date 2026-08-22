@@ -38,7 +38,7 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
   useEffect(() => {
     const load = async () => {
       const [{ data: stg }, { data: sts }, { data: emp }] = await Promise.all([
-        supabase.from('stages').select('id, name, color').order('order_index'),
+        supabase.from('stages').select('id, name, color').eq('is_active', true).order('order_index'),
         supabase.from('task_statuses').select('id, name, color').order('id'),
         supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name'),
       ])

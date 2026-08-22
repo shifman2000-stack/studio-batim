@@ -5,9 +5,7 @@ import '../../TasksTab.css'
 /* ── Stage definitions (order + kanban colors) ── */
 const STAGES = [
   { name: 'קליטת פרויקט', bg: '#f0f0f0', text: '#000' },
-  { name: 'סקיצות',        bg: '#e8e197', text: '#000' },   /* TODO(stage-rename): drop after migration */
   { name: 'סקיצות והדמיות', bg: '#e8e197', text: '#000' },
-  { name: 'הדמיה',         bg: '#cbc9a2', text: '#000' },   /* TODO(stage-rename): drop after migration */
   { name: 'הכנת גרמושקה',  bg: '#73946e', text: '#fff' },
   { name: 'רישוי',         bg: '#7bc1b5', text: '#000' },
   { name: 'תוכניות עבודה', bg: '#676977', text: '#fff' },

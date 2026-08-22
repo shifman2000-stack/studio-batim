@@ -78,18 +78,15 @@ export function buildMeetingDeepLink(projectId, summaryId) {
 
 /* Stages the studio itself drives — a task born from a meeting on one
    of these goes to the admin (Einav). Every other stage belongs to
-   whoever runs the project. Matched BY NAME against the stages table.
+   whoever runs the project. Matched BY NAME against the stages table,
+   never by id: the numbers differ between Dev and Prod.
 
-   BOTH names for stage 2 are listed on purpose. The stage is being
-   renamed 'סקיצות' → 'סקיצות והדמיות' in the LUT, and this code ships
-   BEFORE that UPDATE runs, so it has to match either. Were it to carry
-   only one name there would be a window — however short — in which
-   meeting-born tasks silently routed to the project lead instead of the
-   admin, with no error to notice. The old name is dropped once the
-   rename has landed in both environments. */
+   The name compared here comes from the LUT (see the stages fetch in
+   assignMeetingTask below), so it always carries the stage's CURRENT
+   name — which is why the old 'סקיצות' spelling is gone rather than
+   kept as a fallback. */
 const ADMIN_STAGE_NAMES = new Set([
   'קליטת פרויקט',
-  'סקיצות',            /* TODO(stage-rename): drop after the LUT rename */
   'סקיצות והדמיות',
   'בניה',
   'גמר',
@@ -434,7 +431,7 @@ export default function MeetingSummariesTab({
     /* Stages for the form's dropdown (existing table order) and the
        project's current stage, which is what a new summary opens on. */
     const [{ data: stageRows }, { data: projRow }] = await Promise.all([
-      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('stages').select('id, name').eq('is_active', true).order('order_index'),
       supabase.from('projects').select('stage_id').eq('id', projectId).maybeSingle(),
     ])
     setStages(Array.isArray(stageRows) ? stageRows : [])

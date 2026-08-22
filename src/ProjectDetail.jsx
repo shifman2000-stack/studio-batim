@@ -43,9 +43,7 @@ const IconUser = ({ size = 13 }) => (
 
 const STAGE_COLORS = {
   'קליטת פרויקט':  { bg: '#f0f0f0', text: '#000' },
-  'סקיצות':        { bg: '#e8e197', text: '#000' },   /* TODO(stage-rename): drop after migration */
   'סקיצות והדמיות': { bg: '#e8e197', text: '#000' },
-  'הדמיה':         { bg: '#cbc9a2', text: '#000' },   /* TODO(stage-rename): drop after migration */
   'גרמושקה':       { bg: '#73946e', text: '#fff' },
   'רישוי':         { bg: '#7bc1b5', text: '#000' },
   'תכניות עבודה':  { bg: '#676977', text: '#fff' },
@@ -563,7 +561,7 @@ function ProjectDetail() {
           .select('id, first_name')
           .in('role', ['admin', 'employee'])
           .order('first_name'),
-        supabase.from('stages').select('id, name').order('order_index'),
+        supabase.from('stages').select('id, name').eq('is_active', true).order('order_index'),
         supabase.from('task_statuses').select('id, name, color').order('id'),
       ])
       setPdTasks(t || [])

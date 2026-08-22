@@ -327,7 +327,7 @@ export default function Tasks() {
     const [{ data: p }, { data: u }, { data: stg }, { data: sts }] = await Promise.all([
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name'),
-      supabase.from('stages').select('id, name').order('order_index'),
+      supabase.from('stages').select('id, name').eq('is_active', true).order('order_index'),
       supabase.from('task_statuses').select('id, name, color').order('id'),
     ])
     setProjects(p || [])

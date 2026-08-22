@@ -2,7 +2,7 @@
 //
 // "Share this client_access value with child projects too" — opened
 // from DocumentsTab.jsx's dt-propagate-btn (parent projects only, on a
-// row whose client_access is already 'view'/'view_edit'). Offers three
+// row whose client_access is any non-hidden state). Offers three
 // ways to pick which children to apply it to, then bulk-updates the
 // matching project_documents rows (same template_id as the parent's
 // row) in those children. Never touches the parent's own row — that's
@@ -19,7 +19,12 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import '../../DocumentsTab.css'
 
-const ACCESS_LABEL = { view: 'צפייה בלבד', view_edit: 'עריכה' }
+const ACCESS_LABEL = {
+  view:    'לצפייה בלבד',
+  sign:    'נדרשת חתימה',
+  upload:  'נדרשת העלאת קובץ',
+  approve: 'נדרש אישור',
+}
 
 export default function PropagateAccessModal({ parentProjectId, templateId, docName, accessValue, onClose }) {
   const [mode, setMode] = useState('all') // 'all' | 'model' | 'manual'
@@ -96,9 +101,17 @@ export default function PropagateAccessModal({ parentProjectId, templateId, docN
       if (findErr) throw findErr
 
       if (matchedRows && matchedRows.length > 0) {
+        /* Same reset as DocumentsTab.patchClientAccess: changing a
+           child's permission clears any completion recorded against the
+           OLD one, so a row can never claim the client approved or
+           signed something under a permission it no longer carries. */
         const { error: updErr } = await supabase
           .from('project_documents')
-          .update({ client_access: accessValue })
+          .update({
+            client_access:       accessValue,
+            client_completed_at: null,
+            client_completed_by: null,
+          })
           .in('id', matchedRows.map(r => r.id))
         if (updErr) throw updErr
       }

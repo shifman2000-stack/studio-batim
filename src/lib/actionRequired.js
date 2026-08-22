@@ -11,11 +11,13 @@
 // SOURCES below — the rollup, the visibility gate and every consumer
 // keep working untouched.
 //
-//   A. documents — a project_documents row with client_access ===
-//      'view_edit' that the CLIENT has not uploaded to. A staff upload
-//      does NOT close it, and neither does a legacy
-//      project_documents.file_url (we can't attribute it to the client).
-//      Produces a screen total AND per-stage counts.
+//   A. documents — a project_documents row whose client_access asks
+//      something of the client ('sign' | 'upload' | 'approve') and whose
+//      client_completed_at is still null. Completion is recorded on the
+//      ROW, by whichever flow satisfied it (an upload for sign/upload, a
+//      tick for approve), so this no longer has to infer it from who
+//      uploaded which version. Produces a screen total AND per-stage
+//      counts.
 //
 //   B. meetings — a meeting_summaries row with has_client_tasks === true
 //      whose client_tasks_status_id is not the "הושלם" status. The count
@@ -82,23 +84,28 @@ function stageKey(doc) {
  * rows inside that stage.
  *
  * A row needs the client's attention when:
- *   · client_access === 'view_edit'   (the client is asked to upload)
- *   · AND document_versions holds no row whose uploaded_by is the
- *     client's own user id.
+ *   · client_access is one of 'sign' | 'upload' | 'approve'  — the three
+ *     states that ASK the client for something ('view' asks nothing and
+ *     'hidden' isn't shown at all)
+ *   · AND client_completed_at is still null.
  *
- * @param {object|null|undefined} doc            a project_documents row
- * @param {Array|null|undefined}  versionsForDoc that doc's document_versions
- * @param {string|null|undefined} clientUserId   the client's auth.uid;
- *                                 when missing no version can match, so
- *                                 every view_edit row reads as open.
+ * The old rule inferred completion from document_versions.uploaded_by.
+ * It can't any more: 'approve' is satisfied by a tick, not a file, and a
+ * signed re-upload is indistinguishable from any other client upload.
+ * Completion is now recorded explicitly on the row by whichever flow
+ * satisfied it, which is also why the signature no longer needs the
+ * versions list or the client's uid.
+ *
+ * @param {object|null|undefined} doc  a project_documents row carrying
+ *                                     client_access + client_completed_at
  * @returns {boolean}
  */
-export function isDocumentActionRequired(doc, versionsForDoc, clientUserId) {
-  if (!doc || doc.client_access !== 'view_edit') return false
-  const clientUploaded = Array.isArray(versionsForDoc) && clientUserId
-    ? versionsForDoc.some(v => v && v.uploaded_by === clientUserId)
-    : false
-  return !clientUploaded
+export const CLIENT_ACTION_STATES = ['sign', 'upload', 'approve']
+
+export function isDocumentActionRequired(doc) {
+  if (!doc) return false
+  if (!CLIENT_ACTION_STATES.includes(doc.client_access)) return false
+  return !doc.client_completed_at
 }
 
 /**
@@ -109,15 +116,14 @@ export function isDocumentActionRequired(doc, versionsForDoc, clientUserId) {
  *
  * @returns {{ total:number, byStage:Object }}
  */
-export function computeDocumentActionRequired(documents, versionsByDoc, clientUserId) {
+export function computeDocumentActionRequired(documents) {
   const byStage = {}
   let total = 0
   const docs = Array.isArray(documents) ? documents : []
-  const versions = versionsByDoc || {}
   for (const d of docs) {
     /* Derived from the primitive above — do not re-implement the
        condition here, or the counts and the row markers will drift. */
-    if (!isDocumentActionRequired(d, versions[d.id], clientUserId)) continue
+    if (!isDocumentActionRequired(d)) continue
     total += 1
     const key = stageKey(d)
     byStage[key] = (byStage[key] || 0) + 1
@@ -129,32 +135,19 @@ async function loadDocumentsSource({ projectId, clientUserId }) {
   const empty = { total: 0, byStage: {} }
   if (!projectId) return empty
   try {
-    /* Stage 1 — only view_edit rows can be open. RLS additionally gates
-       by the caller's client_users row. */
+    /* Only the three asking states can be open. RLS additionally gates
+       by the caller's client_users row. Completion now lives on the row
+       itself, so the second query over document_versions this used to
+       need is gone. */
     const { data: docs, error: docsErr } = await supabase
       .from('project_documents')
-      .select('id, stage, client_access')
-      .eq('project_id',    projectId)
-      .eq('client_access', 'view_edit')
+      .select('id, stage, client_access, client_completed_at')
+      .eq('project_id', projectId)
+      .in('client_access', CLIENT_ACTION_STATES)
     if (docsErr) throw docsErr
     if (!docs || docs.length === 0) return empty
 
-    /* Stage 2 — versions with uploaded_by, so client uploads can be
-       told apart from staff uploads. */
-    const docIds = docs.map(d => d.id)
-    const { data: versions, error: vErr } = await supabase
-      .from('document_versions')
-      .select('document_id, uploaded_by')
-      .in('document_id', docIds)
-    if (vErr) throw vErr
-
-    const versionsByDoc = {}
-    for (const v of versions || []) {
-      if (!versionsByDoc[v.document_id]) versionsByDoc[v.document_id] = []
-      versionsByDoc[v.document_id].push(v)
-    }
-
-    return computeDocumentActionRequired(docs, versionsByDoc, clientUserId)
+    return computeDocumentActionRequired(docs)
   } catch (e) {
     console.warn('actionRequired/documents failed:', e)
     return empty

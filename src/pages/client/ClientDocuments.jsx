@@ -1,7 +1,8 @@
 // src/pages/client/ClientDocuments.jsx
 //
 // "מסמכים" screen — read access for all visible documents, plus per-doc
-// "העלה גרסה חדשה" for documents flagged client_access = 'view_edit'.
+// "העלה גרסה חדשה" for documents flagged client_access = 'sign' or
+// 'upload'.
 //
 // Data pipeline:
 //   1. project_documents  → filtered to client_access != 'hidden'
@@ -10,7 +11,7 @@
 //                          uploaded_at (single grouped query)
 //   3. profiles + client_users → resolve uploader display names
 //
-// Upload flow (view_edit only):
+// Upload flow ('sign' / 'upload' only):
 //   1. Storage path  → `{project_id}/{document_id}/{uuid}.{ext}`
 //      (matches the manager's per-project folder convention, never any
 //       Hebrew characters in the path)
@@ -40,6 +41,34 @@ function formatDate(iso) {
   const year  = String(d.getFullYear()).slice(2)
   return `${day}/${month}/${year}`
 }
+
+/* Same, with a 4-digit year — used by the approval line, which reads as
+   a record rather than a file annotation. */
+function formatDateFull(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const day   = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getFullYear()}`
+}
+
+/* The red sentence each asking state shows while it is still open.
+   'view' asks nothing, so it has no entry and never shows a message. */
+const OPEN_REQUEST_TEXT = {
+  sign:    'יש להוריד את הקובץ ולהעלותו שוב חתום',
+  upload:  'התקבלה בקשה להעלאת קובץ מתאים',
+  approve: 'יש לעיין בקובץ ולאשרו ע"י סימון V בתיבת האישור',
+}
+
+/* States in which the client may attach a file. */
+const UPLOADABLE_STATES = ['sign', 'upload']
+
+/* Shown instead of attempting a write while the staff-side "תצוגת לקוח"
+   preview is open. Every mutation is a no-op there (see
+   setSupabasePreviewMode in supabaseClient.js), so the honest thing is
+   to refuse up front rather than let the action appear to run. */
+const PREVIEW_WRITE_NOTE = 'תצוגת לקוח — פעולות שמירה מושבתות כאן'
 
 /* Extract a lowercase extension from a filename; fallback to 'bin'. */
 function fileExt(name) {
@@ -106,7 +135,7 @@ export default function ClientDocuments() {
   const [nameByUserId, setNameByUserId]   = useState({})  // uploader uuid → display name
   const [loading, setLoading]           = useState(true)
   const [uploadingDocId, setUploadingDocId] = useState(null)
-  const [uploadErrors, setUploadErrors] = useState({})  // { docId: true }
+  const [uploadErrors, setUploadErrors] = useState({})  // { docId: message }
   const [savedFlash, setSavedFlash]     = useState(false)
 
   /* Delete flow (own uploads only) — mirrors ClientSharedFiles' single
@@ -121,6 +150,14 @@ export default function ClientDocuments() {
   /* Accordion state — Set of currently-open group keys. Default: all
      blocks collapsed; the user opens whatever they want. */
   const [openSet, setOpenSet] = useState(new Set())
+
+  /* Approval flow — which row is mid-write, and per-row failure TEXT
+     (not a boolean: "the server refused this" and "the write touched no
+     rows" are different things and the client should be told which).
+     Keyed by doc id like uploadErrors, so one failure never blocks
+     another row. */
+  const [approvingDocId, setApprovingDocId] = useState(null)
+  const [approveErrors, setApproveErrors]   = useState({})  // { docId: message }
 
   const fileInputRef     = useRef(null)
   const pickerForDocRef  = useRef(null)  /* which doc the next file pick is for */
@@ -138,7 +175,7 @@ export default function ClientDocuments() {
     /* Stage 1 — visible documents for this project. */
     const { data: docs } = await supabase
       .from('project_documents')
-      .select('id, name, stage, stage_id, file_url, file_name, client_access, sort_order')
+      .select('id, name, stage, stage_id, file_url, file_name, client_access, client_completed_at, client_completed_by, sort_order')
       .eq('project_id', project_id)
       .neq('client_access', 'hidden')
       .order('stage_id',   { ascending: true, nullsFirst: true })
@@ -152,7 +189,7 @@ export default function ClientDocuments() {
        We keep every attachment now, not just the latest, so the row
        can render a stacked list. RLS on document_versions gates
        these to versions of documents whose parent client_access is
-       'view' or 'view_edit' AND whose project is the caller's — same
+       one of the four visible states AND whose project is the caller's — same
        guard as the manager's server-side. Client-side filter here is
        just an optimisation, not a security boundary. */
     const docIds = visibleDocs.map(d => d.id)
@@ -197,6 +234,13 @@ export default function ClientDocuments() {
           .filter(Boolean)
       ))
     }
+    /* The approval line names whoever ticked the box, and that uuid is
+       on the DOCUMENT, not on any version — so it has to join the same
+       batch or the line would render without a name. */
+    uploaderIds = Array.from(new Set([
+      ...uploaderIds,
+      ...visibleDocs.map(d => d.client_completed_by).filter(Boolean),
+    ]))
     setVersionsByDoc(versionsMap)
 
     /* Stage 3 — resolve uploader names. profiles first (staff), then
@@ -237,21 +281,23 @@ export default function ClientDocuments() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  /* A 'view' row (view-only — nothing is asked of the client) is shown
-     only when it actually has a file. With none, it's a name and
-     "טרם הועלה קובץ" with nothing for the client to do — clutter, not
-     a request. 'view_edit' is UNAFFECTED: an empty view_edit row IS the
-     request for the client to upload, so it must stay visible; that
-     case is exactly what isDocumentActionRequired (below) flags.
-     'hidden' rows never reach this component at all (filtered by the
-     Stage-1 query's .neq('client_access','hidden') plus RLS).
+  /* Per-state visibility. 'hidden' never reaches this component at all
+     (the Stage-1 query's .neq plus RLS); everything else is refined
+     here:
+
+       view     — only with a file. Empty, it's a name and
+                  "טרם הועלה קובץ" with nothing to do: clutter.
+       sign     — only with a file. There is nothing to sign otherwise.
+       approve  — only with a file. Same reasoning.
+       upload   — ALWAYS shown. An empty upload row IS the request, and
+                  hiding it would hide the very thing being asked for.
 
      This filter runs BEFORE both the count and the grouping below, so
      neither needs a second rule to "stay consistent with what's
-     displayed" — they simply never see the hidden rows. */
+     displayed" — they simply never see the suppressed rows. */
   const visibleDocuments = useMemo(() => {
     return documents.filter(d => {
-      if (d.client_access !== 'view') return true
+      if (d.client_access === 'upload') return true
       const versions = versionsByDoc[d.id]
       return Array.isArray(versions) && versions.length > 0
     })
@@ -261,19 +307,19 @@ export default function ClientDocuments() {
      the tab already loads. Refreshes automatically after every upload
      (which calls loadData → resets documents + versionsByDoc), so the
      stage badge decreases the instant the CLIENT'S first upload lands
-     on a view_edit row (staff uploads don't close a request — see
-     actionRequired.js). `byStage` is keyed by the same stage string
+     on a sign/upload/approve row that the client hasn't completed —
+     see actionRequired.js. `byStage` is keyed by the same stage string
      used below for grouping ('כללי' fallback), so lookup is
      `openByStage[group.key]`.
      Computed from visibleDocuments (the SAME shared module,
-     actionRequired.js, just fed the already-filtered list) — a hidden
-     'view' row was never eligible for this count anyway (only
-     'view_edit' rows are, per isDocumentActionRequired), but scoping
-     the input here keeps this call and the render below provably in
-     sync rather than relying on that being true by coincidence. */
+     actionRequired.js, just fed the already-filtered list) — a
+     suppressed row was never eligible for this count anyway, but
+     scoping the input here keeps this call and the render below
+     provably in sync rather than relying on that being true by
+     coincidence. */
   const { byStage: openByStage } = useMemo(
-    () => computeDocumentActionRequired(visibleDocuments, versionsByDoc, userId),
-    [visibleDocuments, versionsByDoc, userId]
+    () => computeDocumentActionRequired(visibleDocuments),
+    [visibleDocuments]
   )
 
   /* ── Group documents by stage (preserves first-appearance order) ── */
@@ -308,8 +354,95 @@ export default function ClientDocuments() {
     }
   }
 
+  /* ── Approve a document ──
+     Ticking the box records the completion on the row itself. There is
+     deliberately no untick: only a staff permission change clears it
+     (DocumentsTab.patchClientAccess nulls both columns), so the record
+     can't be quietly withdrawn by the person who gave it. */
+  const approveDoc = async (docId) => {
+    if (approvingDocId) return
+    /* Writes are inert in the staff preview, so refuse up front and say
+       why rather than letting the guard swallow it downstream. */
+    if (previewMode) {
+      setApproveErrors(prev => ({ ...prev, [docId]: PREVIEW_WRITE_NOTE }))
+      return
+    }
+    setApprovingDocId(docId)
+    setApproveErrors(prev => {
+      if (!(docId in prev)) return prev
+      const next = { ...prev }
+      delete next[docId]
+      return next
+    })
+
+    /* try/finally is not optional here. The preview guard replaces
+       .update() with a bare Promise, so chaining .eq() onto it throws a
+       TypeError rather than returning an { error } — and without this
+       the checkbox would sit on "מאשר…" forever. Any throw, from any
+       cause, must still clear the in-flight flag. */
+    try {
+      /* .select() is what makes a refusal visible: without it PostgREST
+         answers 204 with no body, and a row the policy declined to touch
+         is indistinguishable from one it updated. */
+      const { data, error } = await supabase
+        .from('project_documents')
+        .update({
+          client_completed_at: new Date().toISOString(),
+          client_completed_by: userId,
+        })
+        .eq('id', docId)
+        .select('id')
+
+      if (error) {
+        console.error('client doc approve error:', error)
+        if (isMounted.current) {
+          setApproveErrors(prev => ({
+            ...prev,
+            [docId]: isPreviewBlockedError(error) ? PREVIEW_WRITE_NOTE : 'שגיאה באישור, נסה שוב',
+          }))
+        }
+        logError('documents', 'approve_failed', logCtx, { document_id: docId })
+        return
+      }
+
+      if (!Array.isArray(data) || data.length === 0) {
+        /* 0 rows: the row is gone, or a policy refused it. Either way
+           nothing was recorded, so the tick must not appear to stick. */
+        console.error('client doc approve affected 0 rows', { docId })
+        if (isMounted.current) {
+          setApproveErrors(prev => ({ ...prev, [docId]: 'האישור לא נשמר, נסו שוב' }))
+        }
+        logError('documents', 'approve_no_rows', logCtx, { document_id: docId })
+        return
+      }
+
+      await loadData()
+      if (!isMounted.current) return
+      setSavedFlash(true)
+      setTimeout(() => { if (isMounted.current) setSavedFlash(false) }, 2000)
+    } catch (e) {
+      console.error('client doc approve threw:', e)
+      if (isMounted.current) {
+        setApproveErrors(prev => ({
+          ...prev,
+          [docId]: isPreviewBlockedError(e) ? PREVIEW_WRITE_NOTE : 'שגיאה באישור, נסה שוב',
+        }))
+      }
+      logError('documents', 'approve_failed', logCtx, { document_id: docId })
+    } finally {
+      /* The one line that guarantees the checkbox always comes back. */
+      if (isMounted.current) setApprovingDocId(null)
+    }
+  }
+
   /* ── File picker ── */
   const handlePickFile = (docId) => {
+    /* Same up-front refusal as approveDoc — opening the picker and then
+       discarding the file is the silent failure being fixed here. */
+    if (previewMode) {
+      setUploadErrors(prev => ({ ...prev, [docId]: PREVIEW_WRITE_NOTE }))
+      return
+    }
     pickerForDocRef.current = docId
     /* Clear previous error for this doc on a fresh attempt. */
     setUploadErrors(prev => {
@@ -388,15 +521,35 @@ export default function ClientDocuments() {
             Same policy client_can_update_editable_documents already
             gates this UPDATE — RLS is row-level, not column-level. */
       const today = new Date().toISOString().slice(0, 10)
-      const { error: updateError } = await supabase.from('project_documents')
+      /* An upload in a 'sign' or 'upload' row IS the completion of what
+         was asked, so it stamps the same two columns the approve flow
+         writes. Recorded here rather than inferred later from
+         document_versions.uploaded_by: a signed re-upload looks
+         identical to any other client upload. */
+      const doc = documents.find(d => d.id === docId)
+      const completes = UPLOADABLE_STATES.includes(doc?.client_access)
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('project_documents')
         .update({
           file_url:  publicUrl,
           file_name: file.name,
           status:    'התקבל',
           date:      today,
+          ...(completes ? {
+            client_completed_at: new Date().toISOString(),
+            client_completed_by: userId,
+          } : {}),
         })
         .eq('id', docId)
+        .select('id')
       if (updateError) throw updateError
+      /* Same 204-looks-like-success trap as the approve path. The
+         version row already exists at this point, so a refusal here
+         would leave the file attached but the request still open —
+         silently. */
+      if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+        throw new Error('project_documents update affected 0 rows')
+      }
 
       /* 5. Refetch + show success flash. */
       await loadData()
@@ -404,11 +557,17 @@ export default function ClientDocuments() {
       setSavedFlash(true)
       setTimeout(() => { if (isMounted.current) setSavedFlash(false) }, 2000)
     } catch (e) {
-      /* Blocked by the client-preview guard = intentional, not a
-         failure — no red per-row error marker. */
+      /* A preview block is still explained rather than swallowed: the
+         previous behaviour showed nothing at all, which read as "the
+         upload just didn't happen". */
+      console.error('client doc upload error:', e)
+      if (isMounted.current) {
+        setUploadErrors(prev => ({
+          ...prev,
+          [docId]: isPreviewBlockedError(e) ? PREVIEW_WRITE_NOTE : 'שגיאה בהעלאה, נסה שוב',
+        }))
+      }
       if (!isPreviewBlockedError(e)) {
-        console.error('client doc upload error:', e)
-        if (isMounted.current) setUploadErrors(prev => ({ ...prev, [docId]: true }))
         logError('documents', 'upload_failed', logCtx, { document_id: docId })
       }
     }
@@ -519,7 +678,7 @@ export default function ClientDocuments() {
   /* Dot + sentence marking a row the client still owes a file on.
      RTL: the dot is the FIRST child so it paints to the visual RIGHT
      of the text, i.e. it reads as coming BEFORE the sentence. */
-  const renderOpenRequestNote = (style) => (
+  const renderOpenRequestNote = (text, style) => (
     <div
       className="cp-doc-meta"
       style={{
@@ -545,7 +704,7 @@ export default function ClientDocuments() {
           display:      'inline-block',
         }}
       />
-      <span style={{ fontWeight: 700 }}>התקבלה בקשה להעלאת קובץ</span>
+      <span style={{ fontWeight: 700 }}>{text}</span>
     </div>
   )
 
@@ -556,16 +715,22 @@ export default function ClientDocuments() {
        NO indicator rather than a broken screen. */
     let openRequest = false
     try {
-      openRequest = isDocumentActionRequired(doc, versions, userId)
+      openRequest = isDocumentActionRequired(doc)
     } catch (e) {
       console.warn('isDocumentActionRequired failed for doc', doc && doc.id, e)
       openRequest = false
     }
     const isUploading = uploadingDocId === doc.id
-    const rowError    = !!uploadErrors[doc.id]
-    const editable    = doc.client_access === 'view_edit'
+    const rowError    = uploadErrors[doc.id] || ''
+    const editable    = UPLOADABLE_STATES.includes(doc.client_access)
     const docName     = clean(doc.name) || '—'
     const uploadLabel = hasFiles ? 'צרף עוד קובץ' : 'העלה קובץ'
+    /* The red sentence, if this state has one and the row is still
+       open. Unlike before it is NOT tied to the row being empty — a
+       'sign' row with a file on it is still an open request. */
+    const openText    = openRequest ? OPEN_REQUEST_TEXT[doc.client_access] : null
+    const isApproving = approvingDocId === doc.id
+    const approveErr  = approveErrors[doc.id] || ''
 
     return (
       <div key={doc.id} className="cp-doc-row">
@@ -578,10 +743,12 @@ export default function ClientDocuments() {
               {docName}
             </div>
             {/* Empty row: when it's an open request the dot+sentence
-                REPLACES "טרם הועלה קובץ" — never both. */}
+                REPLACES "טרם הועלה קובץ" — never both. A row WITH files
+                shows its sentence beneath the file list instead, so the
+                per-file lines stay together. */}
             {!hasFiles && (
-              openRequest
-                ? renderOpenRequestNote()
+              openText
+                ? renderOpenRequestNote(openText)
                 : <div className="cp-doc-meta">טרם הועלה קובץ</div>
             )}
           </div>
@@ -693,14 +860,47 @@ export default function ClientDocuments() {
           </ul>
         )}
 
-        {/* Row already has a file (uploaded by the team) but the
-            client hasn't uploaded: keep the existing per-file
-            "date · uploader" lines untouched and add the dot+sentence
-            directly beneath them as an ADDITIONAL line. */}
-        {hasFiles && openRequest && renderOpenRequestNote({ marginTop: 6 })}
+        {/* Row already has a file but the request is still open: keep
+            the per-file "date · uploader" lines untouched and add the
+            dot+sentence directly beneath them as an ADDITIONAL line. */}
+        {hasFiles && openText && renderOpenRequestNote(openText, { marginTop: 6 })}
+
+        {/* אישור — only for 'approve' rows that actually have something
+            to look at. Once ticked it becomes a permanent record: the
+            client cannot untick it, and only a staff permission change
+            clears it. */}
+        {doc.client_access === 'approve' && hasFiles && (
+          <div style={{ marginTop: 8, direction: 'rtl' }}>
+            {doc.client_completed_at ? (
+              <div className="cp-doc-meta" style={{ fontWeight: 700, color: '#1D9E75' }}>
+                {`אושר ע״י ${clean(nameByUserId[doc.client_completed_by]) || '—'} בתאריך ${formatDateFull(doc.client_completed_at)}`}
+              </div>
+            ) : (
+              <label
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  cursor: approvingDocId ? 'default' : 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={false}
+                  disabled={!!approvingDocId}
+                  onChange={() => approveDoc(doc.id)}
+                />
+                <span className="cp-doc-meta" style={{ fontWeight: 700 }}>
+                  {isApproving ? 'מאשר…' : 'אני מאשר/ת את הקובץ'}
+                </span>
+              </label>
+            )}
+            {approveErr && (
+              <div className="cp-doc-error" role="alert">{approveErr}</div>
+            )}
+          </div>
+        )}
 
         {rowError && (
-          <div className="cp-doc-error" role="alert">שגיאה בהעלאה, נסה שוב</div>
+          <div className="cp-doc-error" role="alert">{rowError}</div>
         )}
       </div>
     )
@@ -712,6 +912,28 @@ export default function ClientDocuments() {
       <div className="cp-container">
 
         <h1 className="cp-screen-title">מסמכים</h1>
+
+        {/* Standing note for the staff preview. Writes are inert here by
+            design, so say so once at the top instead of letting each
+            action fail on its own. */}
+        {previewMode && (
+          <div
+            className="cp-doc-meta"
+            role="note"
+            style={{
+              direction: 'rtl',
+              margin: '0 0 12px',
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: '#f3efe7',
+              border: '1px solid #e0d9cc',
+              fontWeight: 500,
+            }}
+          >
+            תצוגת לקוח — פעולות שמירה (העלאת קובץ, אישור) מושבתות כאן.
+            כדי לבדוק אותן יש להיכנס לפורטל כלקוח.
+          </div>
+        )}
 
         {loading ? (
           <div className="cp-loading"><p>טוען...</p></div>

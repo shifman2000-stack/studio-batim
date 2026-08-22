@@ -9,6 +9,10 @@ import FilePreviewPane, {
   fileExt, storagePathIn, isExternalUrlFor, downloadBlob,
   previewType, getFileExtension,
 } from './filePreview'
+/* Shared uuid → display-name resolver. client_completed_by can hold a
+   CLIENT uuid, which lives in client_users/project_contacts rather than
+   profiles, and this is the one helper that already walks all three. */
+import { resolveUserNames } from '../../lib/resolveUserNames'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -81,57 +85,123 @@ const IconTrash2 = () => (
    options on click; outside-click or Esc closes; clicking an option
    updates the row.
 
-   Closed cell shows ONLY the icon for the current state — coloured sage
-   when shared (view / view_edit) and muted gray when 'hidden'. The open
-   dropdown lists all three options in uniform charcoal with a green
-   highlight on the current selection — matching the StatusPopover layout. */
+   Closed cell shows ONLY the icon for the current state, in that
+   state's own colour (CLIENT_ACCESS_COLOR). The open dropdown lists all
+   five options with a green highlight on the current selection —
+   matching the StatusPopover layout.
+
+   Three of the five ASK the client for something (sign / upload /
+   approve); those are the states isDocumentActionRequired treats as an
+   open request until client_completed_at is set. */
 
 const CLIENT_ACCESS_OPTIONS = [
-  { value: 'hidden',    label: 'ללא שיתוף לקוח' },
-  { value: 'view',      label: 'צפייה בלבד'     },
-  { value: 'view_edit', label: 'עריכה'          },
+  { value: 'hidden',  label: 'ללא שיתוף לקוח'   },
+  { value: 'view',    label: 'לצפייה בלבד'      },
+  { value: 'sign',    label: 'נדרשת חתימה'      },
+  { value: 'upload',  label: 'נדרשת העלאת קובץ' },
+  { value: 'approve', label: 'נדרש אישור'       },
 ]
 
-const CLIENT_ACCESS_TRIGGER_TITLE = {
-  hidden:    'הלקוח לא רואה את הקובץ',
-  view:      'הלקוח יכול לצפות בקובץ',
-  view_edit: 'הלקוח יכול לראות ולהחליף את הקובץ',
+const CLIENT_ACCESS_COLOR = {
+  hidden:  '#b4453a',
+  view:    '#7a9478',
+  sign:    '#7a9478',
+  upload:  '#7a9478',
+  approve: '#7a9478',
 }
 
-/* X — client_access = 'hidden'. Clean lucide-style X (two crossing
-   strokes), no surrounding figure. Stays muted gray in the closed cell
-   and sage when highlighted as the active option in the dropdown — same
-   color treatment as IconEyeAccess and IconPencilAccess. */
-const IconXAccess = ({ size = 18 }) => (
+const CLIENT_ACCESS_TRIGGER_TITLE = {
+  hidden:  'הלקוח לא רואה את הקובץ',
+  view:    'הלקוח יכול לצפות בקובץ',
+  sign:    'הלקוח מתבקש להוריד, לחתום ולהעלות מחדש',
+  upload:  'הלקוח מתבקש להעלות קובץ',
+  approve: 'הלקוח מתבקש לעיין בקובץ ולאשרו',
+}
+
+/* The single word the ביצוע לקוח cell shows once the client has acted.
+   Keyed by the row's CURRENT client_access — a permission change resets
+   client_completed_at, so the two can never disagree. Who did it and
+   when lives in the cell's `title` tooltip rather than on screen, so the
+   column stays scannable at a glance. */
+const CLIENT_DONE_LABEL = {
+  sign:    'נחתם',
+  upload:  'הועלה',
+  approve: 'אושר',
+}
+
+/* dd/mm/yyyy HH:mm, 24-hour — the admin table's own format (the client
+   portal's formatDate is deliberately 2-digit and is not shared).
+   Built from the local Date parts rather than toLocaleString so the
+   order and separators can't shift with the browser's locale. */
+function formatDoneStamp(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const day   = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const hh    = String(d.getHours()).padStart(2, '0')
+  const mm    = String(d.getMinutes()).padStart(2, '0')
+  return `${day}/${month}/${d.getFullYear()} ${hh}:${mm}`
+}
+
+/* ── One icon per client_access state ──
+   All five share the same drawing contract: 24x24 viewBox, stroke-width
+   1.7, round caps and joins, no fill, currentColor — so they read as one
+   set at any size. Colour comes from CLIENT_ACCESS_COLOR via the
+   trigger's inline style, never from the glyph itself. */
+
+/* Eye with a diagonal slash — 'hidden'. */
+const IconHiddenAccess = ({ size = 18 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6"  x2="6"  y2="18" />
-    <line x1="6"  y1="6"  x2="18" y2="18" />
+    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+    <line x1="4" y1="20" x2="20" y2="4" />
   </svg>
 )
 
-/* Eye — client_access = 'view'. Standalone, accepts size prop (the
-   existing IconEye in this file is fixed-size; this one matches the
-   dropdown's needs without touching the file-preview icon). */
+/* Plain eye — 'view'. */
 const IconEyeAccess = ({ size = 18 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 )
 
-/* Pencil — client_access = 'view_edit'. Lucide Edit3 shape. */
-const IconPencilAccess = ({ size = 18 }) => (
+/* Document with a pen over it — 'sign'. Approved artwork; the two path
+   `d` values are verbatim and must not be redrawn or re-fitted. The
+   wrapper keeps the set's shared contract (size prop, 24x24 viewBox,
+   stroke-width 1.7, round caps/joins, currentColor). */
+const IconSignAccess = ({ size = 18 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 20h9" />
-    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>
+    <path d="M20.4 3.6a1.9 1.9 0 0 1 0 2.7L14.5 12l-3 .8.8-3 5.9-5.9a1.9 1.9 0 0 1 2.7 0z"/>
+  </svg>
+)
+
+/* Upward arrow into a tray — 'upload'. */
+const IconUploadAccess = ({ size = 18 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+)
+
+/* Check mark inside a circle — 'approve'. */
+const IconApproveAccess = ({ size = 18 }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="8.5 12.5 11 15 15.5 9.5" />
   </svg>
 )
 
 /* Share2 — "propagate this permission to child projects" affordance.
-   Only rendered (parent projects, view/view_edit rows) next to the
+   Only rendered (parent projects, any non-hidden row) next to the
    ClientAccessPopover trigger; opens PropagateAccessModal. */
 const IconShare2 = ({ size = 14 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
@@ -145,9 +215,11 @@ const IconShare2 = ({ size = 14 }) => (
 )
 
 function accessIcon(value, size = 18) {
-  if (value === 'view')      return <IconEyeAccess size={size} />
-  if (value === 'view_edit') return <IconPencilAccess size={size} />
-  return <IconXAccess size={size} />
+  if (value === 'view')    return <IconEyeAccess     size={size} />
+  if (value === 'sign')    return <IconSignAccess    size={size} />
+  if (value === 'upload')  return <IconUploadAccess  size={size} />
+  if (value === 'approve') return <IconApproveAccess size={size} />
+  return <IconHiddenAccess size={size} />
 }
 
 function ClientAccessPopover({ value, docId, onChange }) {
@@ -156,9 +228,9 @@ function ClientAccessPopover({ value, docId, onChange }) {
   const triggerRef = useRef(null)
   const popoverRef = useRef(null)
 
-  /* Normalize to one of the three known values; unknown → 'hidden'. */
+  /* Normalize to one of the five known values; unknown → 'hidden'. */
   const current = CLIENT_ACCESS_OPTIONS.find(o => o.value === value)?.value || 'hidden'
-  const triggerColor = current === 'hidden' ? '#c8c4be' : '#7a9478'
+  const triggerColor = CLIENT_ACCESS_COLOR[current] || CLIENT_ACCESS_COLOR.hidden
 
   /* Outside-click + Esc close (same behaviour pattern as StatusPopover). */
   useEffect(() => {
@@ -183,7 +255,7 @@ function ClientAccessPopover({ value, docId, onChange }) {
   const handleOpen = () => {
     if (open) { setOpen(false); return }
     const rect          = triggerRef.current.getBoundingClientRect()
-    const popoverHeight = 120     /* approximate; flips upward if it would overflow */
+    const popoverHeight = 190     /* approximate (5 options); flips upward if it would overflow */
     const below         = rect.bottom + 4
     const above         = rect.top - popoverHeight
     const top           = below + popoverHeight > window.innerHeight ? above : below
@@ -261,7 +333,7 @@ function StatusIcon({ status }) {
    Now supports MULTIPLE attached files per row (each surfaced from a
    document_versions row; a legacy row with only project_documents
    .file_url is shown as a synthetic pseudo-version — see loadDocs). */
-function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate }) {
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
@@ -362,8 +434,29 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
         />
       </div>
 
+      {/* ביצוע לקוח — what the client has already done on this row.
+          RTL: this sits BEFORE הרשאות לקוח in DOM order, which paints it
+          to the visual RIGHT of that column. Empty until the client acts;
+          a permission change clears it (see patchClientAccess). */}
+      <div className="dt-col-client-done">
+        {doc.client_completed_at && CLIENT_DONE_LABEL[doc.client_access] && (
+          /* Native `title`, the convention this file already uses for
+             "short on screen, full detail on hover" (see the truncated
+             file name above). An unresolved name drops out so the
+             tooltip never opens with a dangling separator. */
+          <span
+            className="dt-client-done"
+            title={[doneByName, formatDoneStamp(doc.client_completed_at)]
+              .filter(Boolean)
+              .join(' · ')}
+          >
+            {CLIENT_DONE_LABEL[doc.client_access]}
+          </span>
+        )}
+      </div>
+
       {/* הרשאות לקוח — closed cell shows the icon for the current state;
-          clicking opens a small dropdown with three options. Layout +
+          clicking opens a small dropdown with five options. Layout +
           behaviour mirror StatusPopover from TasksTab. */}
       <div className="dt-col-client-access">
         <ClientAccessPopover
@@ -372,7 +465,7 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
           onChange={onClientAccessChange}
         />
         {isParentProject && doc.template_id != null &&
-          (doc.client_access === 'view' || doc.client_access === 'view_edit') && (
+          doc.client_access !== 'hidden' && (
           <button
             type="button"
             className="dt-propagate-btn"
@@ -455,6 +548,9 @@ export default function DocumentsTab({ projectId, isParentProject }) {
   const [openStages,  setOpenStages]  = useState({})
   const [previewFile,    setPreviewFile]    = useState(null) // { url, name }
   const [accessError,    setAccessError]    = useState('')   /* transient toast for client_access save failures */
+  /* client_completed_by uuid → display name, for the ביצוע לקוח column.
+     Batched once per load via the shared resolver — never per row. */
+  const [doneByName,     setDoneByName]     = useState({})
 
   useEffect(() => { loadDocs() }, [projectId])
 
@@ -523,6 +619,25 @@ export default function DocumentsTab({ projectId, isParentProject }) {
     })
 
     setDocs(merged)
+
+    /* Resolve who completed each row, for the ביצוע לקוח column. One
+       batched call over the union of ids; a failure here must not blank
+       the table, so it degrades to "no name" and surfaces the reason in
+       the same toast the access dropdown uses. */
+    const doneIds = merged.map(d => d.client_completed_by).filter(Boolean)
+    if (doneIds.length > 0) {
+      try {
+        setDoneByName(await resolveUserNames(doneIds))
+      } catch (e) {
+        console.error('resolveUserNames (client_completed_by) failed:', e)
+        setDoneByName({})
+        setAccessError('לא הצלחנו לטעון את שמות המבצעים')
+        setTimeout(() => setAccessError(''), 3000)
+      }
+    } else {
+      setDoneByName({})
+    }
+
     const state = {}
     STAGES.forEach(s => { state[s.name] = false })
     setOpenStages(state)
@@ -545,19 +660,34 @@ export default function DocumentsTab({ projectId, isParentProject }) {
     const prev = doc.client_access
     if (value === prev) return
 
+    /* Changing the permission ALWAYS clears the recorded completion.
+       Without this the row would keep claiming the client signed or
+       approved something, while now asking them for something else —
+       a record of consent the client never actually gave. */
+    const prevDoneAt = doc.client_completed_at
+    const prevDoneBy = doc.client_completed_by
+
     setDocs(prevDocs => prevDocs.map(d =>
-      d.id === docId ? { ...d, client_access: value } : d
+      d.id === docId
+        ? { ...d, client_access: value, client_completed_at: null, client_completed_by: null }
+        : d
     ))
 
     const { error } = await supabase
       .from('project_documents')
-      .update({ client_access: value })
+      .update({
+        client_access:       value,
+        client_completed_at: null,
+        client_completed_by: null,
+      })
       .eq('id', docId)
 
     if (error) {
       console.error('client_access update error:', error)
       setDocs(prevDocs => prevDocs.map(d =>
-        d.id === docId ? { ...d, client_access: prev } : d
+        d.id === docId
+          ? { ...d, client_access: prev, client_completed_at: prevDoneAt, client_completed_by: prevDoneBy }
+          : d
       ))
       setAccessError('לא הצלחנו לעדכן, נסה שוב')
       setTimeout(() => setAccessError(''), 3000)
@@ -832,6 +962,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                         <div className="dt-col-date">תאריך</div>
                         <div className="dt-col-file">קובץ</div>
                         <div className="dt-col-notes">הערות</div>
+                        <div className="dt-col-client-done">ביצוע לקוח</div>
                         <div className="dt-col-client-access">הרשאות לקוח</div>
                         <div className="dt-col-delete" />
                       </div>
@@ -859,6 +990,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                                 onClientAccessChange={patchClientAccess}
                                 isParentProject={isParentProject}
                                 onOpenPropagate={openPropagate}
+                                doneByName={doneByName[doc.client_completed_by] || ''}
                               />
                             ))}
                             <AddDocRow
@@ -886,6 +1018,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                             onClientAccessChange={patchClientAccess}
                             isParentProject={isParentProject}
                             onOpenPropagate={openPropagate}
+                            doneByName={doneByName[doc.client_completed_by] || ''}
                           />
                         ))}
                         <AddDocRow

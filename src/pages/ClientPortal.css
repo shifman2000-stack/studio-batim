@@ -27,6 +27,58 @@
   overflow: hidden;            /* drawer is fixed; clip anything stray */
 }
 
+/* ── Staff-view bar — admin mobile "client view" only (see
+   StaffClientViewMount.jsx / StaffViewPicker.jsx). A thin amber-accented
+   strip above the normal topbar so it's never mistaken for the client's
+   own UI. First child (back button) paints rightmost in RTL, the
+   project name fills the rest. ── */
+.cp-staffview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 5px 10px;
+  background: #fbf0dc;
+  border-bottom: 1px solid #e8d3a3;
+  flex-shrink: 0;
+  z-index: 6;
+}
+
+.cp-staffview-back {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #8a6a1f;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cp-staffview-back:hover,
+.cp-staffview-back:focus-visible {
+  background: rgba(0, 0, 0, 0.05);
+  outline: none;
+}
+
+.cp-staffview-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Heebo', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6e5522;
+}
+
 /* ── Top bar ── */
 .cp-topbar {
   position: relative;

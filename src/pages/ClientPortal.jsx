@@ -18,6 +18,7 @@
 //     flat buttons, multi-child groups expand inline as an accordion.
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useClient } from '../components/ClientRoute'
 import { InstallAppButton, InstallAppPrompt } from '../components/client/PwaInstall'
@@ -110,7 +111,11 @@ export const MENU_ITEMS = [
 const LABEL_BY_KEY = MENU_ITEMS.reduce((acc, m) => { acc[m.key] = m.label; return acc }, {})
 
 export default function ClientPortal() {
-  const { id: clientUserId, first_name: ctxFirstName, project_id, previewMode } = useClient()
+  const {
+    id: clientUserId, first_name: ctxFirstName, project_id, previewMode,
+    isStaffView, staffProjectName,
+  } = useClient()
+  const navigate = useNavigate()
   const [activeKey, setActiveKey]                = useState('home')   // default landing screen
   const [drawerOpen, setDrawerOpen]              = useState(false)
   /* Group this screen was navigated FROM (or null if entered from the
@@ -360,6 +365,24 @@ export default function ClientPortal() {
     <ClientFooterProvider whatsappGroupUrl={whatsappGroupUrl}>
     <ClientNavContext.Provider value={navValue}>
     <div className="cp-shell">
+
+      {/* ── Staff-view bar — admin mobile "client view" only. Persistent
+          so it's always obvious which project is open (writes here are
+          real), and the ONLY way to switch projects: back to the picker,
+          not a nav concept added to this shell's own drawer/nav state. ── */}
+      {isStaffView && (
+        <div className="cp-staffview-bar" dir="rtl">
+          <button
+            type="button"
+            className="cp-staffview-back"
+            onClick={() => navigate('/staff-view')}
+          >
+            <IconBack size={15} />
+            <span>פרויקטים</span>
+          </button>
+          <span className="cp-staffview-name">{staffProjectName}</span>
+        </div>
+      )}
 
       {/* ── Top bar — hamburger on the right, studio logo centered ──
           The logo here REUSES the shared <Logo /> component (same fonts,

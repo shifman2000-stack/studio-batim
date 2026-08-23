@@ -24,6 +24,8 @@ import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
 import ClientRoute from './components/ClientRoute'
+import StaffViewPicker from './pages/staffview/StaffViewPicker'
+import StaffClientViewMount from './components/StaffClientViewMount'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import ChildInquiryForm from './pages/ChildInquiryForm'
@@ -65,6 +67,13 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<App />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/client" element={<ClientRoute><ClientPortal /></ClientRoute>} />
+        {/* Admin mobile "client view" — a real staff session rendering the
+            client portal for real writes, not the desktop-only read-only
+            "תצוגת לקוח" preview (that one lives inside ProjectsKanban.jsx
+            and never leaves the desktop app). Top-level routes, same as
+            /client itself — full phone screen, no manager Header/sidebar. */}
+        <Route path="/staff-view" element={<StaffViewPicker />} />
+        <Route path="/staff-view/:projectId" element={<StaffClientViewMount />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />

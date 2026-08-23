@@ -120,7 +120,7 @@ const IconTrash = () => (
 )
 
 export default function ClientDocuments() {
-  const { id: userId, project_id, previewMode } = useClient()
+  const { id: userId, project_id, previewMode, isStaffView } = useClient()
   const logCtx = { projectId: project_id, clientUserId: userId, previewMode }
   const isMounted = useRef(true)
 
@@ -361,6 +361,11 @@ export default function ClientDocuments() {
      can't be quietly withdrawn by the person who gave it. */
   const approveDoc = async (docId) => {
     if (approvingDocId) return
+    /* Approval is the client's act. The checkbox is never rendered under
+       isStaffView (see renderDocRow), so this should be unreachable —
+       kept as a defense-in-depth guard anyway, matching this file's own
+       established double-guard pattern (UI hide + handler check). */
+    if (isStaffView) return
     /* Writes are inert in the staff preview, so refuse up front and say
        why rather than letting the guard swallow it downstream. */
     if (previewMode) {
@@ -527,7 +532,13 @@ export default function ClientDocuments() {
          document_versions.uploaded_by: a signed re-upload looks
          identical to any other client upload. */
       const doc = documents.find(d => d.id === docId)
-      const completes = UPLOADABLE_STATES.includes(doc?.client_access)
+      /* Under isStaffView this is a manager upload, not a client
+         completion — client_completed_at/by must never be stamped here,
+         or the client's own red action badge would clear on a document
+         they never touched. Everything else about the upload (the
+         version row, file_url/file_name/status/date on the parent row)
+         stays identical to a real client upload. */
+      const completes = !isStaffView && UPLOADABLE_STATES.includes(doc?.client_access)
       const { data: updatedRows, error: updateError } = await supabase
         .from('project_documents')
         .update({
@@ -869,12 +880,23 @@ export default function ClientDocuments() {
             to look at. Once ticked it becomes a permanent record: the
             client cannot untick it, and only a staff permission change
             clears it. */}
+        {/* Under isStaffView, an UNAPPROVED row shows a plain status line
+            instead of the checkbox — not a disabled checkbox, and not
+            nothing either: an admin looking at the row needs to be able
+            to tell the client was asked to approve it. No click target,
+            same muted .cp-doc-meta style every other meta line on this
+            screen already uses. An ALREADY approved row still shows the
+            "אושר ע״י..." line regardless of isStaffView — that's
+            informational view-parity with what the client sees, not a
+            control. */}
         {doc.client_access === 'approve' && hasFiles && (
           <div style={{ marginTop: 8, direction: 'rtl' }}>
             {doc.client_completed_at ? (
               <div className="cp-doc-meta" style={{ fontWeight: 700, color: '#1D9E75' }}>
                 {`אושר ע״י ${clean(nameByUserId[doc.client_completed_by]) || '—'} בתאריך ${formatDateFull(doc.client_completed_at)}`}
               </div>
+            ) : isStaffView ? (
+              <div className="cp-doc-meta">ממתין לאישור הלקוח</div>
             ) : (
               <label
                 style={{

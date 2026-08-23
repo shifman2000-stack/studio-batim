@@ -1,0 +1,53 @@
+/* src/pages/staffview/StaffViewPicker.css
+   Small additions on top of ClientPortal.css's shared .cp-page /
+   .cp-container / .cp-card / .cp-input chrome — this screen borrows
+   that system rather than duplicating it. */
+
+.sv-picker-page {
+  min-height: 100vh;
+  background: #F7F5F2;
+  box-sizing: border-box;
+}
+
+.sv-picker-subtitle {
+  margin: 0 0 16px;
+  font-family: 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 13px;
+  color: #8a8680;
+  line-height: 1.55;
+}
+
+.sv-picker-search {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.sv-picker-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* .cp-card is normally a plain div; reset the <button> defaults this
+   screen renders it as, keeping the same visual card. */
+.sv-picker-row {
+  display: block;
+  width: 100%;
+  border: none;
+  font-family: 'Heebo', sans-serif;
+  text-align: right;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.sv-picker-row:hover,
+.sv-picker-row:focus-visible {
+  background: #fbf9f4;
+  outline: none;
+}
+
+.sv-picker-row-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1a1a18;
+}

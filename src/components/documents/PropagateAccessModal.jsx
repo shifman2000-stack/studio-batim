@@ -17,6 +17,9 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../supabaseClient'
+/* Shared with DocumentsTab — the reset rule is defined once, in the
+   module that owns what "client completion" means. */
+import { CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
 import '../../DocumentsTab.css'
 
 const ACCESS_LABEL = {
@@ -101,19 +104,23 @@ export default function PropagateAccessModal({ parentProjectId, templateId, docN
       if (findErr) throw findErr
 
       if (matchedRows && matchedRows.length > 0) {
-        /* Same reset as DocumentsTab.patchClientAccess: changing a
-           child's permission clears any completion recorded against the
-           OLD one, so a row can never claim the client approved or
-           signed something under a permission it no longer carries. */
-        const { error: updErr } = await supabase
+        /* Same reset as DocumentsTab.patchClientAccess — the shared
+           CLIENT_COMPLETION_RESET, not a local copy of the rule:
+           changing a child's permission clears any completion recorded
+           against the OLD one, so a row can never claim the client
+           approved or signed something under a permission it no longer
+           carries. */
+        const { data: updatedRows, error: updErr } = await supabase
           .from('project_documents')
-          .update({
-            client_access:       accessValue,
-            client_completed_at: null,
-            client_completed_by: null,
-          })
+          .update({ client_access: accessValue, ...CLIENT_COMPLETION_RESET })
           .in('id', matchedRows.map(r => r.id))
+          .select('id')
         if (updErr) throw updErr
+        /* A refused UPDATE answers 204 with no body — indistinguishable
+           from success without asking for the rows back. */
+        if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+          throw new Error('propagate update affected 0 rows')
+        }
       }
 
       const matchedProjectCount = new Set((matchedRows || []).map(r => r.project_id)).size

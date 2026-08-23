@@ -102,6 +102,23 @@ function stageKey(doc) {
  */
 export const CLIENT_ACTION_STATES = ['sign', 'upload', 'approve']
 
+/**
+ * The single definition of "clear the client's recorded completion".
+ *
+ * Lives here rather than in a component because THREE independent flows
+ * need it and must never disagree: a permission change (DocumentsTab),
+ * a permission change propagated to child projects
+ * (PropagateAccessModal), and a new-version upload in the
+ * 'תוכניות לביצוע' sub-stage. Each of those is a statement that what the
+ * client previously did no longer answers what is being asked — so the
+ * record of it has to go, or the row would claim a consent that was
+ * never given for the thing now on screen.
+ */
+export const CLIENT_COMPLETION_RESET = {
+  client_completed_at: null,
+  client_completed_by: null,
+}
+
 export function isDocumentActionRequired(doc) {
   if (!doc) return false
   if (!CLIENT_ACTION_STATES.includes(doc.client_access)) return false

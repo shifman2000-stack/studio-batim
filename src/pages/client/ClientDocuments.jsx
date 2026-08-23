@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
-import { computeDocumentActionRequired, isDocumentActionRequired } from '../../lib/actionRequired'
+import { computeDocumentActionRequired, isDocumentActionRequired, CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
 import ActionRequiredBadge, { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
 import { logError } from '../../lib/clientActivityLog'
 
@@ -63,6 +63,14 @@ const OPEN_REQUEST_TEXT = {
 
 /* States in which the client may attach a file. */
 const UPLOADABLE_STATES = ['sign', 'upload']
+
+/* The one sub-stage where each upload is a NEW VERSION rather than
+   another part of the same submission. The client is only ever shown the
+   newest one here — no history, no older files. Matched BY NAME through
+   the sub_stages LUT (readable by any authenticated user via the
+   "Auth users can read sub_stages" policy), never by a hard-coded id. */
+const EXECUTION_PLANS_SUB_STAGE = 'תוכניות לביצוע'
+const isExecutionPlansRow = (doc) => doc?.sub_stages?.name === EXECUTION_PLANS_SUB_STAGE
 
 /* Shown instead of attempting a write while the staff-side "תצוגת לקוח"
    preview is open. Every mutation is a no-op there (see
@@ -175,7 +183,7 @@ export default function ClientDocuments() {
     /* Stage 1 — visible documents for this project. */
     const { data: docs } = await supabase
       .from('project_documents')
-      .select('id, name, stage, stage_id, file_url, file_name, client_access, client_completed_at, client_completed_by, sort_order')
+      .select('id, name, stage, stage_id, sub_stage_id, sub_stages!sub_stage_id(name), file_url, file_name, client_access, client_completed_at, client_completed_by, sort_order')
       .eq('project_id', project_id)
       .neq('client_access', 'hidden')
       .order('stage_id',   { ascending: true, nullsFirst: true })
@@ -539,6 +547,16 @@ export default function ClientDocuments() {
          version row, file_url/file_name/status/date on the parent row)
          stays identical to a real client upload. */
       const completes = !isStaffView && UPLOADABLE_STATES.includes(doc?.client_access)
+      /* A MANAGER upload (staff view) to a versioned row is a NEW
+         REQUEST: clear any completion recorded against the previous
+         version so the client's red badge returns and they act again.
+
+         The two rules cannot collide — `completes` requires
+         !isStaffView and `resets` requires isStaffView, so they are
+         mutually exclusive by construction. A REAL client upload never
+         resets: the client doing what was asked must not immediately
+         un-complete their own row. */
+      const resets = isStaffView && isExecutionPlansRow(doc)
       const { data: updatedRows, error: updateError } = await supabase
         .from('project_documents')
         .update({
@@ -550,6 +568,7 @@ export default function ClientDocuments() {
             client_completed_at: new Date().toISOString(),
             client_completed_by: userId,
           } : {}),
+          ...(resets ? CLIENT_COMPLETION_RESET : {}),
         })
         .eq('id', docId)
         .select('id')
@@ -720,7 +739,12 @@ export default function ClientDocuments() {
   )
 
   const renderDocRow = (doc) => {
-    const versions    = versionsByDoc[doc.id] || []
+    const allVersions = versionsByDoc[doc.id] || []
+    /* In the versioned sub-stage the client sees ONLY the newest file —
+       versions is uploaded_at DESC, so [0]. Everywhere else the full
+       stack renders as before, because there it means "several parts of
+       one submission", not history. */
+    const versions    = isExecutionPlansRow(doc) ? allVersions.slice(0, 1) : allVersions
     const hasFiles    = versions.length > 0
     /* Same defensive posture as the badge path: a failure here yields
        NO indicator rather than a broken screen. */

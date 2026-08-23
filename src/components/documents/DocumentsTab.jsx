@@ -13,6 +13,9 @@ import FilePreviewPane, {
    CLIENT uuid, which lives in client_users/project_contacts rather than
    profiles, and this is the one helper that already walks all three. */
 import { resolveUserNames } from '../../lib/resolveUserNames'
+/* The reset rule is shared with PropagateAccessModal — defined once in
+   the module that owns client-completion semantics. */
+import { CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -36,6 +39,21 @@ const STATUS_OPTIONS = ['חסר', 'התקבל']
    The pure file helpers now live in ./filePreview (shared with the
    models table). These thin, bucket-bound wrappers keep this file's
    existing call sites unchanged. */
+/* Display-only: drop a trailing extension, because the type chip beside
+   the name already says it. Deliberately conservative —
+     · no dot at all            → unchanged  ("plan")
+     · dot only at position 0   → unchanged  (".gitignore")
+     · dot only at the very end → unchanged  ("plan.")
+     · dots inside the name     → only the LAST segment goes
+                                  ("plan.v2.pdf" → "plan.v2")
+   Never touches file_name in the DB; the full name stays in the title. */
+function stripExtension(name) {
+  if (!name) return name
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0 || dot === name.length - 1) return name
+  return name.slice(0, dot)
+}
+
 const storagePath   = (url) => storagePathIn(BUCKET, url)
 const isExternalUrl = (url) => isExternalUrlFor(BUCKET, url)
 
@@ -200,6 +218,60 @@ const IconApproveAccess = ({ size = 18 }) => (
   </svg>
 )
 
+/* ── The one sub-stage where an upload means a NEW VERSION ──
+   Everywhere else in the system a row holding several files means
+   "several parts of one thing" (two photos of an ID, two files of one
+   submission). Under this sub-stage each upload supersedes the last, so
+   the row shows only the newest and puts the rest behind a history
+   toggle.
+
+   Matched BY NAME through the sub_stages LUT, never by id — the rule
+   this codebase already follows for stages, because ids are not
+   guaranteed equal between Dev and Prod. Detected from the row's
+   sub_stage, never from the document name. */
+const EXECUTION_PLANS_SUB_STAGE = 'תוכניות לביצוע'
+
+/* History — clock with a back arrow. Same drawing contract as IconEye /
+   IconDownload in ./filePreview (13x13, viewBox 24, stroke-width 2,
+   round caps and joins) so it sits in the icon strip without standing
+   out. Deliberately not a new icon dependency. */
+const IconHistory = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3v5h5"/>
+    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
+    <path d="M12 7v5l3 2"/>
+  </svg>
+)
+
+/* Stacked files — two overlapping sheets. Used on every NON-versioned
+   row, where extra files are "more parts of the same thing" rather than
+   history. Deliberately nothing like the clock: at a glance the two
+   icons must not be mistaken for each other. Same 13x13 contract as
+   IconEye / IconDownload / IconHistory. */
+const IconStackedFiles = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="8" y="8" width="14" height="14" rx="2" ry="2"/>
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+  </svg>
+)
+
+/* Per-FILE delete. Deliberately 11px against the row-delete trash's
+   14px, and muted grey against its red (#E24B4A) — the row trash
+   removes the whole document, this one removes a single attachment, and
+   the two sit close enough together that they must never read alike. */
+const IconTrashFile = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+)
+
 /* Share2 — "propagate this permission to child projects" affordance.
    Only rendered (parent projects, any non-hidden row) next to the
    ClientAccessPopover trigger; opens PropagateAccessModal. */
@@ -333,12 +405,33 @@ function StatusIcon({ status }) {
    Now supports MULTIPLE attached files per row (each surfaced from a
    document_versions row; a legacy row with only project_documents
    .file_url is shown as a synthetic pseudo-version — see loadDocs). */
-function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName }) {
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName, isVersioned, nameById }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const versions = doc.versions || []
   const hasFiles = versions.length > 0
+
+  /* versions is uploaded_at DESC, so [0] is the newest. EVERY row now
+     shows only that one inline and puts the rest behind an icon — the
+     pattern is uniform across the table, and only the wording and the
+     glyph differ by what the extra files MEAN:
+
+       תוכניות לביצוע → they are older versions   (clock, "גירסאות קודמות")
+       everywhere else → they are more parts of
+                         the same submission      (sheets, "קבצים נוספים")
+
+     The panel, its layout and its per-file actions are identical in
+     both cases. */
+  const shownVersions = hasFiles ? versions.slice(0, 1) : versions
+  const olderVersions = versions.slice(1)
+  const expandLabel   = isVersioned ? 'גירסאות קודמות' : 'קבצים נוספים'
+  /* Four labels: the sub-stage decides the noun (version vs file), and
+     whether the row already holds one decides first-vs-next. */
+  const attachLabel   = isVersioned
+    ? (hasFiles ? 'העלאת גירסה עדכנית' : 'העלאת גירסה ראשונה')
+    : (hasFiles ? 'העלאת קובץ נוסף'    : 'העלאת קובץ')
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0]
@@ -372,22 +465,61 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
         />
       </div>
 
-      {/* קובץ — רשימת קבצים מצורפים (versions).
-          Each attached file is one line: [ext badge] [preview] [download] [×].
-          A "+ צרף" control always sits at the bottom of the list to add
-          another file. Hidden input is shared — always mounted so the
-          picker works whether or not files already exist. */}
+      {/* קובץ — the row's control line, then the newest attached file.
+          Control line: [attach button] [expand toggle, when there are
+          more files]. File line: [ext badge] [preview] [download]
+          [per-file trash]. Any further files live in the expand panel
+          below. Hidden input is shared — always mounted so the picker
+          works whether or not files already exist. */}
       <div className="dt-col-file">
         <input type="file" ref={fileRef} style={{ display: 'none' }} onChange={handleFileChange} />
         <div className="dt-file-list" style={{ display: 'flex', flexDirection: 'column', gap: 4, direction: 'rtl' }}>
-          {hasFiles && versions.map((v) => {
+          {/* The row's own control line: the attach button, and beside
+              it the expand toggle. The toggle acts on the ROW (show the
+              other files), which is why it lives here rather than in a
+              file's icon strip — those icons act on one specific file.
+              The button keeps its fixed width and does not move when the
+              icon appears or disappears. */}
+          <div className="dt-file-controls">
+            {uploading ? (
+              <span className="dt-file-uploading">מעלה...</span>
+            ) : (
+              <button
+                type="button"
+                className="dt-file-pick-btn"
+                onClick={() => fileRef.current?.click()}
+              >
+                {attachLabel}
+              </button>
+            )}
+            {/* Rendered only when there is something behind it — no
+                reserved placeholder. A row without extra files lets the
+                attach button stretch the full width of the column, so it
+                ends slightly further along than a row that has the icon.
+                That difference is intentional. */}
+            {olderVersions.length > 0 && (
+              <button
+                type="button"
+                className={'dt-file-icon-btn' + (showHistory ? ' dt-file-icon-btn--on' : '')}
+                onClick={() => setShowHistory(h => !h)}
+                title={expandLabel}
+                aria-label={expandLabel}
+                aria-expanded={showHistory}
+              >
+                {isVersioned ? <IconHistory /> : <IconStackedFiles />}
+              </button>
+            )}
+          </div>
+
+          {hasFiles && shownVersions.map((v) => {
             const vExt = getFileExtension(v)
             const vName = v.file_name
               || (v.file_url ? decodeURIComponent(v.file_url.split('/').pop()) : '')
             return (
-              <div key={v.id} className="dt-file-existing" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <span className="dt-file-name" title={vName}>{vExt}</span>
-                <button type="button" className="dt-file-icon-btn"
+              <div key={v.id} className="dt-file-existing" style={{ alignItems: 'center', gap: 4 }}>
+                <span className="dt-file-ext">{vExt}</span>
+                <span className="dt-file-name" title={vName}>{stripExtension(vName)}</span>
+                <button type="button" className="dt-file-icon-btn" data-preview-control="1"
                   onClick={() => onPreview({ url: v.file_url, name: vName })} title="תצוגה מקדימה">
                   <IconEye />
                 </button>
@@ -400,25 +532,53 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
                 </button>
                 <button type="button" className="dt-file-icon-btn dt-file-delete-btn"
                   onClick={() => onVersionDelete(doc, v)} title="מחק קובץ">
-                  ×
+                  <IconTrashFile />
                 </button>
               </div>
             )
           })}
-          {uploading ? (
-            <span className="dt-file-uploading">מעלה...</span>
-          ) : (
-            <button
-              type="button"
-              className="dt-file-pick-btn"
-              onClick={() => fileRef.current?.click()}
-              /* Compact when files already exist — visually reads as
-                 "add another" rather than a first-time picker. */
-              style={hasFiles ? { alignSelf: 'flex-start' } : undefined}
-            >
-              + צרף
-            </button>
+
+          {/* The extra files — inline panel, not a modal. This tab has
+              no per-row expand pattern of its own, so it reuses the file
+              cell's own dt-file-* vocabulary rather than inventing one.
+              Per-file delete here is the SAME onVersionDelete the inline
+              list uses, so Storage cleanup is unchanged. */}
+          {showHistory && olderVersions.length > 0 && (
+            <div className="dt-version-history">
+              <div className="dt-version-history-title">{expandLabel}</div>
+              {olderVersions.map(v => {
+                const vName = v.file_name
+                  || (v.file_url ? decodeURIComponent(v.file_url.split('/').pop()) : 'קובץ')
+                const who = ((nameById && nameById[v.uploaded_by]) || '').trim() || '—'
+                const when = formatDoneStamp(v.uploaded_at)
+                return (
+                  <div key={v.id} className="dt-version-row">
+                    <span className="dt-file-ext">{getFileExtension(v)}</span>
+                    <span className="dt-file-name" title={vName}>{stripExtension(vName)}</span>
+                    <span className="dt-version-meta">
+                      {[when, who].filter(Boolean).join(' · ')}
+                    </span>
+                    <button type="button" className="dt-file-icon-btn" data-preview-control="1"
+                      onClick={() => onPreview({ url: v.file_url, name: vName })} title="תצוגה מקדימה">
+                      <IconEye />
+                    </button>
+                    <button type="button" className="dt-file-icon-btn"
+                      onClick={() => isExternalUrl(v.file_url)
+                        ? window.open(v.file_url, '_blank', 'noopener,noreferrer')
+                        : downloadBlob(v.file_url, vName)
+                      } title="הורד">
+                      <IconDownload />
+                    </button>
+                    <button type="button" className="dt-file-icon-btn dt-file-delete-btn"
+                      onClick={() => onVersionDelete(doc, v)} title="מחק קובץ">
+                      <IconTrashFile />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
           )}
+
         </div>
       </div>
 
@@ -547,6 +707,60 @@ export default function DocumentsTab({ projectId, isParentProject }) {
   const [loading,     setLoading]     = useState(true)
   const [openStages,  setOpenStages]  = useState({})
   const [previewFile,    setPreviewFile]    = useState(null) // { url, name }
+  /* The tab's own root and the preview panel. The outside-click listener
+     is scoped to the root, so "outside" means elsewhere IN THIS TAB —
+     not the whole page. */
+  const rootRef        = useRef(null)
+  const previewPaneRef = useRef(null)
+  /* A ref, not state: it must be current when the click handler reads it
+     but must never cause the listener to be torn down and re-attached
+     mid-upload. */
+  const uploadingRef   = useRef(false)
+
+  /* Eye click. Same file → close (toggle); a different file → switch
+     straight to it without an intermediate closed state. Functional
+     update so it always compares against the live value. */
+  const togglePreview = (file) => {
+    setPreviewFile(prev => (prev && prev.url === file.url) ? null : file)
+  }
+
+  /* ── Auto-close the preview ──
+     Listeners exist ONLY while the pane is open and are removed the
+     moment it closes — nothing permanent is attached to document.
+
+     The click listener lives on the tab root rather than on document,
+     so it cannot fire for clicks elsewhere in the app. It uses
+     mousedown, which matters: the effect is registered after the render
+     caused by the opening click, so the click that opened the pane is
+     already finished and cannot close it again. The
+     [data-preview-control] check is the second guard on the same
+     point — an eye button's own onClick owns that decision. */
+  useEffect(() => {
+    if (!previewFile) return
+    const root = rootRef.current
+    if (!root) return
+
+    const onMouseDown = (e) => {
+      /* Never yank the pane out from under an upload in flight — it
+         would read as the upload having failed. */
+      if (uploadingRef.current) return
+      /* Interactions that belong to the preview itself. */
+      if (previewPaneRef.current && previewPaneRef.current.contains(e.target)) return
+      /* An eye button — its own handler decides open/close/switch. */
+      if (e.target.closest && e.target.closest('[data-preview-control]')) return
+      setPreviewFile(null)
+    }
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !uploadingRef.current) setPreviewFile(null)
+    }
+
+    root.addEventListener('mousedown', onMouseDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      root.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [previewFile])
   const [accessError,    setAccessError]    = useState('')   /* transient toast for client_access save failures */
   /* client_completed_by uuid → display name, for the ביצוע לקוח column.
      Batched once per load via the shared resolver — never per row. */
@@ -624,7 +838,12 @@ export default function DocumentsTab({ projectId, isParentProject }) {
        batched call over the union of ids; a failure here must not blank
        the table, so it degrades to "no name" and surfaces the reason in
        the same toast the access dropdown uses. */
-    const doneIds = merged.map(d => d.client_completed_by).filter(Boolean)
+    /* Both the ביצוע לקוח column and the version-history panel need
+       names, so they share one batched resolve over the union of ids. */
+    const doneIds = Array.from(new Set([
+      ...merged.map(d => d.client_completed_by),
+      ...merged.flatMap(d => (d.versions || []).map(v => v.uploaded_by)),
+    ].filter(Boolean)))
     if (doneIds.length > 0) {
       try {
         setDoneByName(await resolveUserNames(doneIds))
@@ -669,21 +888,20 @@ export default function DocumentsTab({ projectId, isParentProject }) {
 
     setDocs(prevDocs => prevDocs.map(d =>
       d.id === docId
-        ? { ...d, client_access: value, client_completed_at: null, client_completed_by: null }
+        ? { ...d, client_access: value, ...CLIENT_COMPLETION_RESET }
         : d
     ))
 
-    const { error } = await supabase
+    /* .select() + row count: a refused UPDATE answers 204 with no body,
+       which is otherwise indistinguishable from a successful one. */
+    const { data: updatedRows, error } = await supabase
       .from('project_documents')
-      .update({
-        client_access:       value,
-        client_completed_at: null,
-        client_completed_by: null,
-      })
+      .update({ client_access: value, ...CLIENT_COMPLETION_RESET })
       .eq('id', docId)
+      .select('id')
 
-    if (error) {
-      console.error('client_access update error:', error)
+    if (error || !Array.isArray(updatedRows) || updatedRows.length === 0) {
+      console.error('client_access update failed:', error || '0 rows affected')
       setDocs(prevDocs => prevDocs.map(d =>
         d.id === docId
           ? { ...d, client_access: prev, client_completed_at: prevDoneAt, client_completed_by: prevDoneBy }
@@ -713,6 +931,15 @@ export default function DocumentsTab({ projectId, isParentProject }) {
      to 'התקבל' and date to today on every upload (row-level "received"
      signal keeps existing counters correct). */
   const uploadFile = async (doc, file) => {
+    uploadingRef.current = true
+    try {
+      return await doUploadFile(doc, file)
+    } finally {
+      uploadingRef.current = false
+    }
+  }
+
+  const doUploadFile = async (doc, file) => {
     const fileExt = file.name.includes('.') ? file.name.split('.').pop() : 'bin'
     const path    = `${projectId}/${doc.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`
     const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(path, file)
@@ -744,14 +971,41 @@ export default function DocumentsTab({ projectId, isParentProject }) {
       .single()
     if (insertErr) { console.error('Version insert error:', insertErr); return }
 
+    /* In the versioned sub-stage a manager upload is a NEW REQUEST: the
+       client must sign / upload / approve against the new version, so
+       any completion recorded against the PREVIOUS one is cleared. Same
+       reset the permission change uses — one shared constant, not a
+       second copy of the rule.
+
+       This is always a manager upload (it is the manager's tab), so
+       there is no collision with the staff-view rule in ClientDocuments:
+       that rule only prevents SETTING completion, and this only clears
+       it. Nothing here ever stamps a completion. */
+    const subStageName  = subStages.find(ss => ss.id === doc.sub_stage_id)?.name || null
+    const isVersionedRow = subStageName === EXECUTION_PLANS_SUB_STAGE
+
     /* Denormalize the latest onto the parent so single-file consumers
-       (client portal, older code) keep working. */
-    await supabase.from('project_documents').update({
-      file_url:  publicUrl,
-      file_name: file.name,
-      status:    'התקבל',
-      date:      today,
-    }).eq('id', doc.id)
+       (client portal, older code) keep working. .select() + row count is
+       required: a refused UPDATE answers 204 with no body and is
+       otherwise indistinguishable from success. */
+    const { data: updatedRows, error: parentErr } = await supabase
+      .from('project_documents')
+      .update({
+        file_url:  publicUrl,
+        file_name: file.name,
+        status:    'התקבל',
+        date:      today,
+        ...(isVersionedRow ? CLIENT_COMPLETION_RESET : {}),
+      })
+      .eq('id', doc.id)
+      .select('id')
+
+    if (parentErr || !Array.isArray(updatedRows) || updatedRows.length === 0) {
+      console.error('Parent document update failed:', parentErr || '0 rows affected')
+      setAccessError('הקובץ הועלה אך עדכון השורה נכשל — רענני ונסי שוב')
+      setTimeout(() => setAccessError(''), 4000)
+      return
+    }
 
     setDocs(prev => prev.map(d => {
       if (d.id !== doc.id) return d
@@ -767,6 +1021,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
         status:    'התקבל',
         date:      today,
         versions:  [inserted, ...prevVersions],
+        ...(isVersionedRow ? CLIENT_COMPLETION_RESET : {}),
       }
     }))
   }
@@ -896,6 +1151,11 @@ export default function DocumentsTab({ projectId, isParentProject }) {
   const stageIdByName = {}
   stagesLut.forEach(s => { stageIdByName[s.name] = s.id })
 
+  /* sub_stage_id → name, so a row can be recognised as belonging to the
+     versioned sub-stage BY NAME rather than by a hard-coded id. */
+  const subStageNameById = {}
+  subStages.forEach(ss => { subStageNameById[ss.id] = ss.name })
+
   const subStagesByStageId = {}
   subStages.forEach(ss => {
     if (!subStagesByStageId[ss.stage_id]) subStagesByStageId[ss.stage_id] = []
@@ -908,7 +1168,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
   if (loading) return <p className="dt-loading">טוען מסמכים...</p>
 
   return (
-    <div className="dt-root" dir="rtl">
+    <div className="dt-root" dir="rtl" ref={rootRef}>
 
       {/* ── Right panel: accordion list ── */}
       <div className="dt-panel-right">
@@ -986,11 +1246,13 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                                 onUpload={uploadFile}
                                 onVersionDelete={deleteVersion}
                                 onDocDelete={deleteDoc}
-                                onPreview={setPreviewFile}
+                                onPreview={togglePreview}
                                 onClientAccessChange={patchClientAccess}
                                 isParentProject={isParentProject}
                                 onOpenPropagate={openPropagate}
                                 doneByName={doneByName[doc.client_completed_by] || ''}
+                                isVersioned={subStageNameById[doc.sub_stage_id] === EXECUTION_PLANS_SUB_STAGE}
+                                nameById={doneByName}
                               />
                             ))}
                             <AddDocRow
@@ -1014,11 +1276,13 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                             onUpload={uploadFile}
                             onVersionDelete={deleteVersion}
                             onDocDelete={deleteDoc}
-                            onPreview={setPreviewFile}
+                            onPreview={togglePreview}
                             onClientAccessChange={patchClientAccess}
                             isParentProject={isParentProject}
                             onOpenPropagate={openPropagate}
                             doneByName={doneByName[doc.client_completed_by] || ''}
+                            isVersioned={subStageNameById[doc.sub_stage_id] === EXECUTION_PLANS_SUB_STAGE}
+                            nameById={doneByName}
                           />
                         ))}
                         <AddDocRow
@@ -1045,7 +1309,7 @@ export default function DocumentsTab({ projectId, isParentProject }) {
       )}
 
       {/* ── Left panel: preview ── */}
-      <div className="dt-panel-left">
+      <div className="dt-panel-left" ref={previewPaneRef}>
         <FilePreviewPane file={previewFile} bucket={BUCKET} />
       </div>
 

@@ -254,8 +254,12 @@
 .dt-col-name     { flex: 2;         min-width: 0; }
 .dt-col-status   { flex: 0 0 36px;  display: flex; justify-content: center; }
 .dt-col-date     { flex: 0 0 120px; }
-.dt-col-file     { flex: 1.4;       min-width: 0; }
-.dt-col-notes    { flex: 3;         min-width: 0; }
+/* File column widened (1.4 → 2.6) now that it carries the fixed-width
+   attach button and the expand icon. The space comes from הערות
+   (3 → 1.8), which is empty on most rows. Flex total across the three
+   fluid columns is unchanged, so overall table width is untouched. */
+.dt-col-file     { flex: 3.2;       min-width: 0; }
+.dt-col-notes    { flex: 1.2;       min-width: 0; }
 /* ביצוע לקוח — sits to the visual RIGHT of הרשאות לקוח (earlier in DOM
    order under RTL). Usually empty, so it stays narrow. */
 .dt-col-client-done {
@@ -417,9 +421,29 @@
   min-width: 0;
 }
 
+/* Type chip. Kept beside the name rather than replaced by it: the name
+   truncates with an ellipsis, and the extension is exactly the part at
+   the end that gets cut — so this still says something the visible part
+   of the name does not. */
+.dt-file-ext {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8a8680;
+  background: #eee9e1;
+  border-radius: 3px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+/* The file NAME — one class, used by both the main line and the expand
+   panel, so the two truncate and read identically. Body-text colour
+   (the same #1a1a2e .dt-doc-name uses), NOT the old link blue: nothing
+   happens when you click it, so it must not look like a link. */
 .dt-file-name {
   font-size: 12px;
-  color: #4F86C6;
+  color: #1a1a2e;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -445,14 +469,38 @@
   color: #555;
 }
 
+/* The per-file trash pins to the END of the file line — the same
+   visual-left edge the expand slot occupies one line above — so the two
+   read as a clean vertical line. Scoped to .dt-file-existing on
+   purpose: inside the expand panel .dt-version-meta already claims the
+   free space, and a second auto margin there would split it. */
+.dt-file-existing .dt-file-delete-btn {
+  margin-inline-start: auto;
+}
+
+/* Per-FILE delete. Subordinate by design to .dt-row-delete-btn, which
+   deletes the whole document row: that one is 14px and red (#E24B4A),
+   this one is an 11px glyph in muted grey and STAYS grey on hover. The
+   two sit close together, so colour is the thing that separates them. */
 .dt-file-delete-btn {
-  font-size: 15px;
+  color: #bbb;
 }
 
 .dt-file-delete-btn:hover {
-  color: #ef4444;
+  color: #8a8680;
 }
 
+/* The row's control line — attach button + expand toggle, side by side.
+   RTL: the button is the first child so it paints to the visual RIGHT,
+   with the icon beside it on its left. The button's fixed width plus
+   flex-shrink:0 mean the icon appearing or disappearing never moves it,
+   so the buttons stay aligned down the whole table. */
+.dt-file-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  direction: rtl;
+}
 .dt-file-pick-btn {
   background: none;
   border: 1px dashed #d1d5db;
@@ -464,11 +512,57 @@
   font-family: inherit;
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s;
+  /* Stretches to fill the control line, leaving only the expand slot.
+     Alignment across rows no longer comes from a fixed width but from
+     the column edges: the slot is always present, so every button in
+     the column starts and ends at the same two points. */
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dt-file-pick-btn:hover {
   border-color: #7bc1b5;
   color: #7bc1b5;
+}
+
+/* ── גירסאות קודמות — inline history panel inside the file cell ──
+   Sits under the newest file, indented so it reads as belonging to it.
+   RTL: border-right + padding-right put the rule on the visual RIGHT,
+   i.e. the side the content starts from. */
+.dt-version-history {
+  margin-top: 4px;
+  padding: 6px 8px 4px;
+  border-right: 2px solid #e0dcd4;
+  background: #faf8f5;
+  border-radius: 6px;
+  direction: rtl;
+}
+.dt-version-history-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8a8680;
+  margin-bottom: 4px;
+}
+.dt-version-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+.dt-version-meta {
+  font-size: 10px;
+  color: #8a8680;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+/* History toggle in the "on" state — same treatment the tab uses for an
+   active icon: it darkens rather than changing shape. */
+.dt-file-icon-btn--on {
+  color: #555;
 }
 
 .dt-file-uploading {

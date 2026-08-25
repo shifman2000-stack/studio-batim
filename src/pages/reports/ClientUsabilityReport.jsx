@@ -40,6 +40,52 @@ function formatDateTime(iso) {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/* dd/MM/yyyy HH:mm pinned to ISRAEL time, regardless of where the
+   viewer's machine is set. formatDateTime above deliberately uses the
+   local zone; this one must not, because the report is read as "when was
+   this client last here" in studio time. formatToParts avoids the
+   locale-dependent order and separators Intl would otherwise pick. */
+const IL_DATE_FMT = new Intl.DateTimeFormat('he-IL', {
+  timeZone: 'Asia/Jerusalem',
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+})
+function formatDateTimeIL(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const parts = IL_DATE_FMT.formatToParts(d)
+  const g = (t) => (parts.find(p => p.type === t) || {}).value || ''
+  return `${g('day')}/${g('month')}/${g('year')} ${g('hour')}:${g('minute')}`
+}
+
+/* first + last, with a missing last_name simply absent — never the string
+   "null" and never a trailing space. */
+function clientDisplayName(row) {
+  return [row.first_name, row.last_name]
+    .map(v => (v || '').trim())
+    .filter(Boolean)
+    .join(' ') || '—'
+}
+
+/* Sign-in status. Filled sage = has signed in; empty outline = never.
+   Both carry a Hebrew title and aria-label so the meaning never rests on
+   colour alone. Drawn inline, matching the app's 24-viewBox icon style. */
+const IconSignedIn = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+    fill="#7a9478" role="img" aria-label="התחבר" >
+    <title>התחבר</title>
+    <circle cx="12" cy="12" r="7" />
+  </svg>
+)
+const IconNeverSignedIn = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+    fill="none" stroke="#b0aca6" strokeWidth="2" role="img" aria-label="ממתין להתחברות ראשונה">
+    <title>ממתין להתחברות ראשונה</title>
+    <circle cx="12" cy="12" r="7" />
+  </svg>
+)
+
 function todayIso() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -107,6 +153,16 @@ export default function ClientUsabilityReport() {
        drillLoading  — Set of screen_keys with a fetch in flight.
      Cleared on every new report fetch (see fetchReport) so a cached
      list can never outlive the filters it was fetched under. */
+  /* ── "סטטוס התחברויות" tab ──
+     One RPC, no client-side joins: admin_user_directory() already
+     resolves the live contact name and the project name. A non-admin
+     caller gets zero rows BY DESIGN (the gate is inside the function),
+     so an empty result is a legitimate state, never an error. */
+  const [signinRows,    setSigninRows]    = useState([])
+  const [signinLoading, setSigninLoading] = useState(false)
+  const [signinError,   setSigninError]   = useState('')
+  const [signinLoaded,  setSigninLoaded]  = useState(false)
+
   const [drillExpanded, setDrillExpanded] = useState(() => new Set())
   const [drillCache,    setDrillCache]    = useState({})
   const [drillLoading,  setDrillLoading]  = useState(() => new Set())
@@ -323,6 +379,39 @@ export default function ClientUsabilityReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role])
 
+  /* Loaded once, the first time the tab is opened. */
+  useEffect(() => {
+    if (role !== 'admin' || viewMode !== 'signins' || signinLoaded) return
+    let cancelled = false
+    const load = async () => {
+      setSigninLoading(true)
+      setSigninError('')
+      const { data, error } = await supabase.rpc('admin_user_directory')
+      if (cancelled) return
+      if (error) {
+        console.error('admin_user_directory failed:', error)
+        setSigninError('לא הצלחנו לטעון את רשימת הלקוחות')
+        setSigninRows([])
+      } else {
+        /* Never signed in first — those are the rows that need action —
+           then most-recent sign-in first. */
+        const rows = Array.isArray(data) ? [...data] : []
+        rows.sort((a, b) => {
+          const aNever = !a.last_sign_in_at
+          const bNever = !b.last_sign_in_at
+          if (aNever !== bNever) return aNever ? -1 : 1
+          if (aNever) return 0
+          return new Date(b.last_sign_in_at) - new Date(a.last_sign_in_at)
+        })
+        setSigninRows(rows)
+      }
+      setSigninLoading(false)
+      setSigninLoaded(true)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [role, viewMode, signinLoaded])
+
   if (role !== 'admin') return null
 
   return (
@@ -337,6 +426,7 @@ export default function ClientUsabilityReport() {
         {[
           { key: 'all',     label: 'כלל הלקוחות' },
           { key: 'project', label: 'פרויקט ספציפי' },
+          { key: 'signins', label: 'סטטוס התחברויות' },
         ].map((opt, i) => {
           const selected = viewMode === opt.key
           return (
@@ -359,6 +449,9 @@ export default function ClientUsabilityReport() {
         })}
       </div>
 
+      {/* The date range and project picker belong to the two usage
+          tabs; the sign-in status tab takes no parameters. */}
+      {viewMode !== 'signins' && (
       <div className="report-controls" style={{ flexWrap: 'wrap' }}>
         {viewMode === 'project' && (
           <div style={{ position: 'relative', width: 320, maxWidth: '100%' }}>
@@ -422,6 +515,70 @@ export default function ClientUsabilityReport() {
           הצג
         </button>
       </div>
+      )}
+
+      {/* ── סטטוס התחברויות ── */}
+      {viewMode === 'signins' && signinLoading && (
+        <p className="report-loading">טוען...</p>
+      )}
+
+      {viewMode === 'signins' && !signinLoading && signinError && (
+        <p className="report-empty" role="alert">{signinError}</p>
+      )}
+
+      {viewMode === 'signins' && !signinLoading && !signinError && signinRows.length === 0 && (
+        <p className="report-empty">אין לקוחות רשומים</p>
+      )}
+
+      {viewMode === 'signins' && !signinLoading && !signinError && signinRows.length > 0 && (
+        <>
+          <div className="report-card" style={{ overflow: 'hidden', width: '100%' }}>
+            <table className="report-stage-table">
+              <thead>
+                {/* RTL: the first column is the RIGHTMOST on screen. */}
+                <tr>
+                  <th>שם</th>
+                  <th>פרויקט</th>
+                  <th>סטטוס</th>
+                  <th>התחברות אחרונה</th>
+                  <th>פעילות אחרונה</th>
+                </tr>
+              </thead>
+              <tbody>
+                {signinRows.map(row => {
+                  const signedIn = !!row.last_sign_in_at
+                  return (
+                    <tr key={row.user_id}>
+                      <td>{clientDisplayName(row)}</td>
+                      <td>{row.project_name || '—'}</td>
+                      <td>
+                        <span
+                          style={{ display: 'inline-flex', alignItems: 'center' }}
+                          title={signedIn ? 'התחבר' : 'ממתין להתחברות ראשונה'}
+                        >
+                          {signedIn ? <IconSignedIn /> : <IconNeverSignedIn />}
+                        </span>
+                      </td>
+                      <td>{formatDateTimeIL(row.last_sign_in_at)}</td>
+                      <td>{formatDateTimeIL(row.last_activity_at)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Both notes exist so neither column is misread later. */}
+          <p className="report-empty" style={{ textAlign: 'start', marginTop: 12 }}>
+            "פעילות אחרונה" היא הפעם האחרונה שהלקוח היה במערכת — כרגע נרשמות רק
+            כניסות למסכים ושגיאות, ולא הפעולות עצמן.
+          </p>
+          <p className="report-empty" style={{ textAlign: 'start', marginTop: 4 }}>
+            "התחברות אחרונה" מתעדכנת רק בהתחברות חדשה. לקוח שנשאר מחובר בטלפון לא
+            יעדכן אותה, ולכן פער גדול בין שתי העמודות הוא תקין.
+          </p>
+        </>
+      )}
 
       {viewMode === 'project' && !selectedProject && (
         <p className="report-empty">בחרי פרויקט וטווח תאריכים להצגת הדוח</p>

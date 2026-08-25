@@ -59,6 +59,26 @@ function formatDateTimeIL(iso) {
   return `${g('day')}/${g('month')}/${g('year')} ${g('hour')}:${g('minute')}`
 }
 
+/* A key that is unique per row. user_id is NULL for every contact who
+   has never signed in — the majority of the list — so it cannot be the
+   key on its own. project + email + name is unique in practice, and the
+   email segment stays stable whether it is null, '' or a real address. */
+function signinRowKey(row) {
+  return [
+    row.project_name || '',
+    (row.email || '').trim().toLowerCase(),
+    (row.first_name || '').trim(),
+    (row.last_name || '').trim(),
+  ].join('|')
+}
+
+/* The email EXACTLY as stored — not lowercased, not linkified. A typo or
+   stray space is the reason a client cannot log in, so it has to be
+   visible. NULL and '' are the same thing to a reader: no address. */
+function displayEmail(email) {
+  return (email || '').trim() ? email : '—'
+}
+
 /* first + last, with a missing last_name simply absent — never the string
    "null" and never a trailing space. */
 function clientDisplayName(row) {
@@ -71,18 +91,34 @@ function clientDisplayName(row) {
 /* Sign-in status. Filled sage = has signed in; empty outline = never.
    Both carry a Hebrew title and aria-label so the meaning never rests on
    colour alone. Drawn inline, matching the app's 24-viewBox icon style. */
-const IconSignedIn = () => (
+/* `decorative` drops the label and title: inside a filter chip the
+   BUTTON already carries the accessible name, and a nested one would be
+   read twice. The glyphs themselves are identical either way, which is
+   the point — the filter and the status column speak one language. */
+const IconSignedIn = ({ decorative = false }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-    fill="#7a9478" role="img" aria-label="התחבר" >
-    <title>התחבר</title>
+    fill="#7a9478"
+    {...(decorative ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': 'התחבר' })}>
+    {!decorative && <title>התחבר</title>}
     <circle cx="12" cy="12" r="7" />
   </svg>
 )
-const IconNeverSignedIn = () => (
+const IconNeverSignedIn = ({ decorative = false }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-    fill="none" stroke="#b0aca6" strokeWidth="2" role="img" aria-label="ממתין להתחברות ראשונה">
-    <title>ממתין להתחברות ראשונה</title>
+    fill="none" stroke="#b0aca6" strokeWidth="2"
+    {...(decorative ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': 'ממתין להתחברות ראשונה' })}>
+    {!decorative && <title>ממתין להתחברות ראשונה</title>}
     <circle cx="12" cy="12" r="7" />
+  </svg>
+)
+/* Neutral by construction — three lines, no circle — so it cannot be
+   mistaken for a third status. Only ever decorative. */
+const IconAllStatuses = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+    fill="none" stroke="#a8a49e" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <line x1="5" y1="8"  x2="19" y2="8"  />
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <line x1="5" y1="16" x2="19" y2="16" />
   </svg>
 )
 
@@ -162,6 +198,8 @@ export default function ClientUsabilityReport() {
   const [signinLoading, setSigninLoading] = useState(false)
   const [signinError,   setSigninError]   = useState('')
   const [signinLoaded,  setSigninLoaded]  = useState(false)
+  /* 'all' | 'in' | 'out' — keyed on last_sign_in_at, not user_id. */
+  const [signinFilter,  setSigninFilter]  = useState('all')
 
   const [drillExpanded, setDrillExpanded] = useState(() => new Set())
   const [drillCache,    setDrillCache]    = useState({})
@@ -412,6 +450,20 @@ export default function ClientUsabilityReport() {
     return () => { cancelled = true }
   }, [role, viewMode, signinLoaded])
 
+  /* Counts over the FULL loaded set, so each option keeps its own total
+     no matter which one is selected. The condition is last_sign_in_at —
+     user_id is null for anyone who never signed in and cannot be used. */
+  const signinCounts = {
+    all: signinRows.length,
+    in:  signinRows.filter(r => r.last_sign_in_at).length,
+    out: signinRows.filter(r => !r.last_sign_in_at).length,
+  }
+  /* The function already returns them sorted; filtering preserves that. */
+  const visibleSigninRows =
+    signinFilter === 'in'  ? signinRows.filter(r => r.last_sign_in_at)  :
+    signinFilter === 'out' ? signinRows.filter(r => !r.last_sign_in_at) :
+    signinRows
+
   if (role !== 'admin') return null
 
   return (
@@ -421,8 +473,12 @@ export default function ClientUsabilityReport() {
         <button className="report-back-btn" onClick={() => navigate('/reports')}>← חזרה לדוחות</button>
       </div>
 
-      {/* View-mode toggle */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
+      {/* View-mode toggle, with the sign-in filter riding at the far
+          visual LEFT of the same line. alignItems keeps the shorter
+          chips centred against the taller tabs; because the tabs are the
+          tallest item either way, the row's height does not change when
+          the filter appears or disappears. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 16 }}>
         {[
           { key: 'all',     label: 'כלל הלקוחות' },
           { key: 'project', label: 'פרויקט ספציפי' },
@@ -447,6 +503,50 @@ export default function ClientUsabilityReport() {
             </button>
           )
         })}
+
+        {/* Secondary refinement, deliberately NOT the tabs' dark joined
+            block: pill chips, sage tint when selected, smaller and
+            lighter text, and the count in a muted tone beside the label.
+            A different shape reads as a different level of control.
+            margin-inline-start:auto pins the group to the visual LEFT
+            under RTL, so it never collides with the tabs however their
+            labels change. Only shown once there are rows to filter. */}
+        {viewMode === 'signins' && !signinLoading && !signinError && signinRows.length > 0 && (
+          <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 6 }}>
+            {[
+              { key: 'all', label: 'הכל',        n: signinCounts.all, icon: <IconAllStatuses /> },
+              { key: 'in',  label: 'התחברו',     n: signinCounts.in,  icon: <IconSignedIn decorative /> },
+              { key: 'out', label: 'טרם התחברו', n: signinCounts.out, icon: <IconNeverSignedIn decorative /> },
+            ].map(opt => {
+              const selected = signinFilter === opt.key
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setSigninFilter(opt.key)}
+                  aria-pressed={selected}
+                  aria-label={`${opt.label} (${opt.n})`}
+                  title={opt.label}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: selected ? 'rgba(122,148,120,0.14)' : 'transparent',
+                    color:      selected ? '#4a6349' : '#8a8680',
+                    border: `1px solid ${selected ? 'rgba(122,148,120,0.55)' : '#e0dcd4'}`,
+                    borderRadius: 999,
+                    padding: '3px 10px',
+                    fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                    lineHeight: 1.6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {opt.icon}
+                  <span>{opt.label}</span>
+                  <span style={{ color: '#a8a49e', fontWeight: 400 }}>({opt.n})</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* The date range and project picker belong to the two usage
@@ -540,15 +640,25 @@ export default function ClientUsabilityReport() {
                   <th>שם</th>
                   <th>פרויקט</th>
                   <th>סטטוס</th>
+                  <th>מייל</th>
                   <th>התחברות אחרונה</th>
                   <th>פעילות אחרונה</th>
                 </tr>
               </thead>
               <tbody>
-                {signinRows.map(row => {
+                {/* Reachable by clicking a filter whose count is 0 — a
+                    headers-only table would read as a failure. */}
+                {visibleSigninRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="report-empty" style={{ textAlign: 'center' }}>
+                      אין תוצאות לסינון זה
+                    </td>
+                  </tr>
+                )}
+                {visibleSigninRows.map(row => {
                   const signedIn = !!row.last_sign_in_at
                   return (
-                    <tr key={row.user_id}>
+                    <tr key={signinRowKey(row)}>
                       <td>{clientDisplayName(row)}</td>
                       <td>{row.project_name || '—'}</td>
                       <td>
@@ -559,6 +669,7 @@ export default function ClientUsabilityReport() {
                           {signedIn ? <IconSignedIn /> : <IconNeverSignedIn />}
                         </span>
                       </td>
+                      <td>{displayEmail(row.email)}</td>
                       <td>{formatDateTimeIL(row.last_sign_in_at)}</td>
                       <td>{formatDateTimeIL(row.last_activity_at)}</td>
                     </tr>

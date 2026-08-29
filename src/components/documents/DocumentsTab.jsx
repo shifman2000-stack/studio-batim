@@ -16,6 +16,7 @@ import { resolveUserNames } from '../../lib/resolveUserNames'
 /* The reset rule is shared with PropagateAccessModal — defined once in
    the module that owns client-completion semantics. */
 import { CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
+import { CONTRACTOR_COMPLETION_RESET } from '../../lib/contractorActionRequired'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -136,15 +137,64 @@ const CLIENT_ACCESS_TRIGGER_TITLE = {
   approve: 'הלקוח מתבקש לעיין בקובץ ולאשרו',
 }
 
-/* The single word the ביצוע לקוח cell shows once the client has acted.
-   Keyed by the row's CURRENT client_access — a permission change resets
-   client_completed_at, so the two can never disagree. Who did it and
-   when lives in the cell's `title` tooltip rather than on screen, so the
-   column stays scannable at a glance. */
-const CLIENT_DONE_LABEL = {
-  sign:    'נחתם',
-  upload:  'הועלה',
-  approve: 'אושר',
+/* ── Contractor access ────────────────────────────────────────────────
+   The SAME idea applied to a second audience, not a second idea: the
+   same popover component, the same icon set, the same colour rule
+   ('hidden' red, everything else sage). Four values, not five —
+   'upload' is a client-only state; a contractor either signs or
+   approves. The DB CHECK on contractor_access allows exactly these four.
+
+   Only rendered on rows under תוכניות לביצוע, because the contractor's
+   RLS SELECT policy restricts him to that sub-stage — setting it
+   anywhere else would be a control that silently does nothing. */
+const CONTRACTOR_ACCESS_OPTIONS = [
+  { value: 'hidden',  label: 'ללא שיתוף קבלן' },
+  { value: 'view',    label: 'לצפייה בלבד'    },
+  { value: 'sign',    label: 'נדרשת חתימה'    },
+  { value: 'approve', label: 'נדרש אישור'     },
+]
+
+const CONTRACTOR_ACCESS_COLOR = {
+  hidden:  '#b4453a',
+  view:    '#7a9478',
+  sign:    '#7a9478',
+  approve: '#7a9478',
+}
+
+const CONTRACTOR_ACCESS_TRIGGER_TITLE = {
+  hidden:  'הקבלן לא רואה את הקובץ',
+  view:    'הקבלן יכול לצפות בקובץ',
+  sign:    'הקבלן מתבקש להוריד, לחתום ולהעלות מחדש',
+  approve: 'הקבלן מתבקש לעיין בקובץ ולאשרו',
+}
+
+/* ── פעולות שבוצעו — the verb each audience shows once it has acted ──
+   THE one place the audience→access→wording mapping lives. Both columns
+   of the cell read from here; there is no second table and no string
+   built by concatenation at the call site.
+
+   Keyed by the audience's OWN access value, and only by it. A permission
+   change resets that audience's completion (CLIENT_COMPLETION_RESET /
+   CONTRACTOR_COMPLETION_RESET), so a verb can never disagree with the
+   permission it is describing.
+
+   The two maps are independent by construction:
+     · 'upload' exists under client only — it is a client-only state, so
+       'הועלה ע"י קבלן' has no key and cannot be produced.
+     · 'view' and 'hidden' appear under neither: they ask nothing, so
+       they yield no line for either audience.
+   Who did it and when lives in the `title` tooltip, so the column stays
+   scannable at a glance. */
+const DONE_LABEL = {
+  client: {
+    sign:    'נחתם ע"י לקוח',
+    upload:  'הועלה ע"י לקוח',
+    approve: 'אושר ע"י לקוח',
+  },
+  contractor: {
+    sign:    'נחתם ע"י קבלן',
+    approve: 'אושר ע"י קבלן',
+  },
 }
 
 /* dd/mm/yyyy HH:mm, 24-hour — the admin table's own format (the client
@@ -294,15 +344,26 @@ function accessIcon(value, size = 18) {
   return <IconHiddenAccess size={size} />
 }
 
-function ClientAccessPopover({ value, docId, onChange }) {
+/* ONE popover, two audiences. The option list, colours and tooltips are
+   parameters with the client's set as defaults, so the contractor cell
+   reuses the identical interaction, positioning, outside-click/Esc
+   handling and markup rather than a second copy that would drift. */
+function AccessPopover({
+  value,
+  docId,
+  onChange,
+  options    = CLIENT_ACCESS_OPTIONS,
+  colorMap   = CLIENT_ACCESS_COLOR,
+  titleMap   = CLIENT_ACCESS_TRIGGER_TITLE,
+}) {
   const [open, setOpen] = useState(false)
   const [pos,  setPos]  = useState({ top: 0, left: 0 })
   const triggerRef = useRef(null)
   const popoverRef = useRef(null)
 
-  /* Normalize to one of the five known values; unknown → 'hidden'. */
-  const current = CLIENT_ACCESS_OPTIONS.find(o => o.value === value)?.value || 'hidden'
-  const triggerColor = CLIENT_ACCESS_COLOR[current] || CLIENT_ACCESS_COLOR.hidden
+  /* Normalize to one of the known values; unknown → 'hidden'. */
+  const current = options.find(o => o.value === value)?.value || 'hidden'
+  const triggerColor = colorMap[current] || colorMap.hidden
 
   /* Outside-click + Esc close (same behaviour pattern as StatusPopover). */
   useEffect(() => {
@@ -327,7 +388,10 @@ function ClientAccessPopover({ value, docId, onChange }) {
   const handleOpen = () => {
     if (open) { setOpen(false); return }
     const rect          = triggerRef.current.getBoundingClientRect()
-    const popoverHeight = 190     /* approximate (5 options); flips upward if it would overflow */
+    /* ~38px per option; flips upward if it would overflow the viewport.
+       Derived from the option count so the 4-option contractor list
+       positions as correctly as the 5-option client one. */
+    const popoverHeight = options.length * 38
     const below         = rect.bottom + 4
     const above         = rect.top - popoverHeight
     const top           = below + popoverHeight > window.innerHeight ? above : below
@@ -348,7 +412,7 @@ function ClientAccessPopover({ value, docId, onChange }) {
         className="dt-access-trigger"
         style={{ color: triggerColor }}
         onClick={handleOpen}
-        title={CLIENT_ACCESS_TRIGGER_TITLE[current]}
+        title={titleMap[current]}
       >
         {accessIcon(current)}
       </button>
@@ -358,7 +422,7 @@ function ClientAccessPopover({ value, docId, onChange }) {
           className="dt-access-popover"
           style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
         >
-          {CLIENT_ACCESS_OPTIONS.map(opt => (
+          {options.map(opt => (
             <button
               key={opt.value}
               type="button"
@@ -405,13 +469,46 @@ function StatusIcon({ status }) {
    Now supports MULTIPLE attached files per row (each surfaced from a
    document_versions row; a legacy row with only project_documents
    .file_url is shown as a synthetic pseudo-version — see loadDocs). */
-function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName, isVersioned, nameById }) {
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName, isVersioned, nameById, showContractorColumn = false, onContractorAccessChange }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const versions = doc.versions || []
   const hasFiles = versions.length > 0
+
+  /* ── פעולות שבוצעו — one entry per audience that has completed ──
+     Built from DONE_LABEL, the single audience→access→wording map. An
+     audience contributes a line only when BOTH its own access value has
+     an entry there (so 'view' and 'hidden' never do, and 'upload' can
+     only ever be a client line) AND its own completed_at is set.
+
+     Deliberately NOT a re-implementation of isDocumentActionRequired /
+     isContractorActionRequired: those answer "is something still owed",
+     this answers "what was done". They read the same two fields per
+     audience, which is why a permission change — which clears that
+     audience's completed_at — flips both at once and they cannot
+     disagree.
+
+     The contractor line is additionally gated on isVersioned, i.e. the
+     row is under תוכניות לביצוע. Elsewhere the cell behaves exactly as
+     it did before this column existed. */
+  const doneLines = []
+  if (doc.client_completed_at && DONE_LABEL.client[doc.client_access]) {
+    doneLines.push({
+      key:   'client',
+      text:  DONE_LABEL.client[doc.client_access],
+      title: [doneByName, formatDoneStamp(doc.client_completed_at)].filter(Boolean).join(' · '),
+    })
+  }
+  if (isVersioned && doc.contractor_completed_at && DONE_LABEL.contractor[doc.contractor_access]) {
+    doneLines.push({
+      key:   'contractor',
+      text:  DONE_LABEL.contractor[doc.contractor_access],
+      title: [(nameById || {})[doc.contractor_completed_by] || '',
+              formatDoneStamp(doc.contractor_completed_at)].filter(Boolean).join(' · '),
+    })
+  }
 
   /* versions is uploaded_at DESC, so [0] is the newest. EVERY row now
      shows only that one inline and puts the rest behind an icon — the
@@ -598,28 +695,62 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
           RTL: this sits BEFORE הרשאות לקוח in DOM order, which paints it
           to the visual RIGHT of that column. Empty until the client acts;
           a permission change clears it (see patchClientAccess). */}
+      {/* פעולות שבוצעו — one line per audience that has completed
+          something, stacked. Empty when neither has, exactly as before.
+
+          Each line is derived from that audience's OWN state and nothing
+          else: its access value picks the verb, its own completed_at
+          decides whether the line exists. The client's fields are never
+          read to decide the contractor's line, or the reverse. */}
       <div className="dt-col-client-done">
-        {doc.client_completed_at && CLIENT_DONE_LABEL[doc.client_access] && (
+        {doneLines.map(line => (
           /* Native `title`, the convention this file already uses for
-             "short on screen, full detail on hover" (see the truncated
-             file name above). An unresolved name drops out so the
-             tooltip never opens with a dangling separator. */
-          <span
-            className="dt-client-done"
-            title={[doneByName, formatDoneStamp(doc.client_completed_at)]
-              .filter(Boolean)
-              .join(' · ')}
-          >
-            {CLIENT_DONE_LABEL[doc.client_access]}
+             "short on screen, full detail on hover". An unresolved name
+             drops out so the tooltip never opens with a dangling
+             separator. */
+          <span key={line.key} className="dt-client-done" title={line.title}>
+            {line.text}
           </span>
-        )}
+        ))}
       </div>
+
+      {/* הרשאות קבלן — present only in a stage that HAS the
+          תוכניות לביצוע sub-stage (showContractorColumn), and carrying a
+          control only on rows actually IN it (isVersioned, which is
+          already "this row is under תוכניות לביצוע", matched BY NAME via
+          subStageNameById + EXECUTION_PLANS_SUB_STAGE).
+
+          Rows in the stage's OTHER sub-stages render an empty slot rather
+          than nothing: within one stage every row shares the header's
+          column layout, so omitting the div would misalign them. Stages
+          without the sub-stage never render this column at all, and their
+          layout is byte-for-byte what it was.
+
+          RTL ORDER: this sits BEFORE הרשאות לקוח in DOM order, which
+          paints it to the visual RIGHT of that column. That keeps
+          הרשאות לקוח in the same position from the left edge that it
+          holds in every other stage, so scanning down the table across
+          stages the client column never jumps. */}
+      {showContractorColumn && (
+        <div className="dt-col-contractor-access">
+          {isVersioned && (
+            <AccessPopover
+              value={doc.contractor_access}
+              docId={doc.id}
+              onChange={onContractorAccessChange}
+              options={CONTRACTOR_ACCESS_OPTIONS}
+              colorMap={CONTRACTOR_ACCESS_COLOR}
+              titleMap={CONTRACTOR_ACCESS_TRIGGER_TITLE}
+            />
+          )}
+        </div>
+      )}
 
       {/* הרשאות לקוח — closed cell shows the icon for the current state;
           clicking opens a small dropdown with five options. Layout +
           behaviour mirror StatusPopover from TasksTab. */}
       <div className="dt-col-client-access">
-        <ClientAccessPopover
+        <AccessPopover
           value={doc.client_access}
           docId={doc.id}
           onChange={onClientAccessChange}
@@ -842,6 +973,13 @@ export default function DocumentsTab({ projectId, isParentProject }) {
        names, so they share one batched resolve over the union of ids. */
     const doneIds = Array.from(new Set([
       ...merged.map(d => d.client_completed_by),
+      /* contractor_completed_by too, so the קבלן line's tooltip can name
+         whoever acted. resolveUserNames walks profiles / client_users /
+         project_contacts — a pure contractor uuid resolves in none of
+         them, so that tooltip degrades to the timestamp alone rather
+         than showing a wrong name. Collected here anyway because a
+         STAFF member acting through a contractor view does resolve. */
+      ...merged.map(d => d.contractor_completed_by),
       ...merged.flatMap(d => (d.versions || []).map(v => v.uploaded_by)),
     ].filter(Boolean)))
     if (doneIds.length > 0) {
@@ -905,6 +1043,50 @@ export default function DocumentsTab({ projectId, isParentProject }) {
       setDocs(prevDocs => prevDocs.map(d =>
         d.id === docId
           ? { ...d, client_access: prev, client_completed_at: prevDoneAt, client_completed_by: prevDoneBy }
+          : d
+      ))
+      setAccessError('לא הצלחנו לעדכן, נסה שוב')
+      setTimeout(() => setAccessError(''), 3000)
+    }
+  }
+
+  /* ── Patch contractor_access ───────────────────────────────────────
+     The exact counterpart of patchClientAccess above, and deliberately a
+     separate function rather than a shared one parameterised by column:
+     the two payloads must never be able to leak into each other. This
+     one writes contractor_access + CONTRACTOR_COMPLETION_RESET and
+     nothing else, so client_completed_at / client_completed_by are not
+     in the statement at all — a contractor permission change cannot
+     touch the client's completion, and patchClientAccess cannot touch
+     the contractor's. */
+  const patchContractorAccess = async (docId, value) => {
+    const doc = docs.find(d => d.id === docId)
+    if (!doc) return
+    const prev = doc.contractor_access
+    if (value === prev) return
+
+    const prevDoneAt = doc.contractor_completed_at
+    const prevDoneBy = doc.contractor_completed_by
+
+    setDocs(prevDocs => prevDocs.map(d =>
+      d.id === docId
+        ? { ...d, contractor_access: value, ...CONTRACTOR_COMPLETION_RESET }
+        : d
+    ))
+
+    /* .select() + row count — a refused UPDATE answers 204 with no body,
+       otherwise indistinguishable from a successful one. */
+    const { data: updatedRows, error } = await supabase
+      .from('project_documents')
+      .update({ contractor_access: value, ...CONTRACTOR_COMPLETION_RESET })
+      .eq('id', docId)
+      .select('id')
+
+    if (error || !Array.isArray(updatedRows) || updatedRows.length === 0) {
+      console.error('contractor_access update failed:', error || '0 rows affected')
+      setDocs(prevDocs => prevDocs.map(d =>
+        d.id === docId
+          ? { ...d, contractor_access: prev, contractor_completed_at: prevDoneAt, contractor_completed_by: prevDoneBy }
           : d
       ))
       setAccessError('לא הצלחנו לעדכן, נסה שוב')
@@ -1194,6 +1376,12 @@ export default function DocumentsTab({ projectId, isParentProject }) {
             const stageId        = stageIdByName[stage] ?? null
             const stageSubStages = stageId != null ? (subStagesByStageId[stageId] || []) : []
             const hasSubStages   = stageSubStages.length > 0
+            /* The contractor column exists only in the stage that owns
+               the תוכניות לביצוע sub-stage — matched BY NAME, like every
+               other reference to it in this file. Every other stage
+               renders exactly the columns it always did. */
+            const showContractorColumn =
+              stageSubStages.some(ss => ss.name === EXECUTION_PLANS_SUB_STAGE)
 
             return (
               <div key={stage} className="dt-accordion">
@@ -1222,7 +1410,14 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                         <div className="dt-col-date">תאריך</div>
                         <div className="dt-col-file">קובץ</div>
                         <div className="dt-col-notes">הערות</div>
-                        <div className="dt-col-client-done">ביצוע לקוח</div>
+                        <div className="dt-col-client-done">פעולות שבוצעו</div>
+                        {/* RTL: earlier in DOM = further RIGHT on screen.
+                            הרשאות קבלן therefore sits to the RIGHT of
+                            הרשאות לקוח, and הרשאות לקוח keeps the position
+                            it holds in every other stage. */}
+                        {showContractorColumn && (
+                          <div className="dt-col-contractor-access">הרשאות קבלן</div>
+                        )}
                         <div className="dt-col-client-access">הרשאות לקוח</div>
                         <div className="dt-col-delete" />
                       </div>
@@ -1253,6 +1448,8 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                                 doneByName={doneByName[doc.client_completed_by] || ''}
                                 isVersioned={subStageNameById[doc.sub_stage_id] === EXECUTION_PLANS_SUB_STAGE}
                                 nameById={doneByName}
+                                showContractorColumn={showContractorColumn}
+                                onContractorAccessChange={patchContractorAccess}
                               />
                             ))}
                             <AddDocRow
@@ -1283,6 +1480,8 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                             doneByName={doneByName[doc.client_completed_by] || ''}
                             isVersioned={subStageNameById[doc.sub_stage_id] === EXECUTION_PLANS_SUB_STAGE}
                             nameById={doneByName}
+                            showContractorColumn={showContractorColumn}
+                            onContractorAccessChange={patchContractorAccess}
                           />
                         ))}
                         <AddDocRow

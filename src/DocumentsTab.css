@@ -266,6 +266,10 @@
   flex: 0 0 132px;
   min-width: 0;
   display: flex;
+  /* Column, because the cell now carries up to TWO lines — one per
+     audience (לקוח / קבלן) — stacked one under the other. With a single
+     line the result is identical to the previous `row` centring. */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -278,6 +282,18 @@
   cursor: default;   /* it carries a tooltip, but nothing to click */
 }
 .dt-col-client-access {
+  flex: 0 0 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+/* הרשאות קבלן — same fixed width and centring as הרשאות לקוח, so the
+   two permission cells read as one pair. Rendered ONLY inside the stage
+   that owns the תוכניות לביצוע sub-stage; every other stage's row is
+   laid out exactly as before, with no extra slot. */
+.dt-col-contractor-access {
   flex: 0 0 96px;
   display: flex;
   align-items: center;

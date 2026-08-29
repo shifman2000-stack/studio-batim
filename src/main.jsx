@@ -24,6 +24,8 @@ import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport
 import AuthCallback from './pages/AuthCallback'
 import ClientPortal from './pages/ClientPortal'
 import ClientRoute from './components/ClientRoute'
+import ContractorPortal from './pages/ContractorPortal'
+import ContractorRoute from './components/ContractorRoute'
 import StaffViewPicker from './pages/staffview/StaffViewPicker'
 import StaffClientViewMount from './components/StaffClientViewMount'
 import NoAccess from './pages/NoAccess'
@@ -67,6 +69,11 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<App />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/client" element={<ClientRoute><ClientPortal /></ClientRoute>} />
+        {/* Contractor portal — OUTSIDE <Layout>, exactly as /client is, so
+            the manager Header/sidebar never renders for a contractor.
+            Nothing on the staff desktop changes. */}
+        <Route path="/contractor" element={<ContractorRoute><ContractorPortal /></ContractorRoute>} />
+        <Route path="/contractor/:projectId" element={<ContractorRoute><ContractorPortal /></ContractorRoute>} />
         {/* Admin mobile "client view" — a real staff session rendering the
             client portal for real writes, not the desktop-only read-only
             "תצוגת לקוח" preview (that one lives inside ProjectsKanban.jsx

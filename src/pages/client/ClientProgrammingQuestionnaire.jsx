@@ -140,6 +140,43 @@ async function seedPeopleFromContacts(project_id) {
 }
 
 /* ── Shared inline styles (kept tiny, cp-* classes carry the base) ── */
+/* ── The house-size sentence, and its colour, in ONE place ──
+   requested = what the client typed at Step 1  (שטח הבית המבוקש)
+   computed  = what the placed spaces add up to (שטח הבית המחושב)
+
+   Exactly one case is a problem: requested < computed means the house
+   came out BIGGER than they asked for. That is the only red state.
+   Being under target — or matching it — is fine, and both are sage.
+
+   Both numbers always appear, so the reader never has to hold one of
+   them in their head. They arrive already rounded (estimateArea returns
+   Math.round, and the target is stored rounded), so nothing is
+   re-rounded here. */
+const HOUSE_AREA_SAGE = '#7a9478'
+const HOUSE_AREA_RED  = '#a83232'
+/* Same colour as hubTileDesc — the tile's ordinary body text. */
+const HOUSE_AREA_BODY = '#4a4a48'
+
+function houseAreaMessage(comparison, requestedM2, computedM2) {
+  /* No requested area at all (comparison is null exactly when
+     targetArea is missing). There is nothing to compare against, so
+     there is nothing to warn about: state the computed size plainly, in
+     body colour. Without this the tile would render a title and nothing
+     else, which reads as broken. */
+  if (!comparison) {
+    return { color: HOUSE_AREA_BODY, text: `שטח הבית המחושב: ${computedM2} מ״ר` }
+  }
+  const requested = `שטח הבית המבוקש (${requestedM2} מ״ר)`
+  const computed  = `שטח הבית המחושב (${computedM2} מ״ר)`
+  if (comparison === 'smaller') {
+    return { color: HOUSE_AREA_RED,  text: `${requested} קטן מ${computed}` }
+  }
+  if (comparison === 'bigger') {
+    return { color: HOUSE_AREA_SAGE, text: `${requested} גדול מ${computed}` }
+  }
+  return   { color: HOUSE_AREA_SAGE, text: `${requested} תואם ל${computed}` }
+}
+
 const STYLE_FIELD_LABEL = { display: 'block', fontSize: 13, color: '#4a4a48', marginBottom: 4, textAlign: 'right' }
 const STYLE_INPUT       = {
   width: '100%', padding: '9px 10px', fontFamily: 'inherit', fontSize: 14,
@@ -1897,32 +1934,22 @@ export default function ClientProgrammingQuestionnaire({
                 </span>
                 <span style={hubTileTitle}>בונה הבית</span>
                 {houseDone ? (
+                  /* ONE sentence. The old introductory line ("בחישוב
+                     החללים... יוצא כ-N מ״ר") is gone: both numbers now
+                     live in the comparison itself, so repeating one of
+                     them above it said nothing extra. */
                   <>
-                    <span style={hubTileDesc}>
-                      בחישוב החללים והמאפיינים גודל הבית יוצא כ-{computedHouseArea} מ״ר
-                    </span>
-                    {targetAreaY != null && houseAreaComparison && (
-                      <span style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4a4a48' }}>
-                        {houseAreaComparison === 'matches' ? (
-                          <>
-                            שימו לב שהגודל{' '}
-                            <span style={{ color: '#4a7f4a', fontWeight: 600 }}>תואם</span>
-                            {' '}למה שרשמתם בהתחלה ({targetAreaY} מ״ר)
-                          </>
-                        ) : (
-                          <>
-                            שימו לב שהשטח המבוקש{' '}
-                            <span style={{
-                              color:      houseAreaComparison === 'bigger' ? '#4a7f4a' : '#a83232',
-                              fontWeight: 600,
-                            }}>
-                              {houseAreaComparison === 'bigger' ? 'גדול' : 'קטן'}
-                            </span>
-                            {' '}מהשטח המחושב ({targetAreaY} מ״ר)
-                          </>
-                        )}
-                      </span>
-                    )}
+                    {(() => {
+                      const msg = houseAreaMessage(houseAreaComparison, targetAreaY, computedHouseArea)
+                      return msg ? (
+                        <span style={{
+                          fontSize: 12.5, lineHeight: 1.5,
+                          color: msg.color, fontWeight: 500,
+                        }}>
+                          {msg.text}
+                        </span>
+                      ) : null
+                    })()}
                   </>
                 ) : (
                   <>

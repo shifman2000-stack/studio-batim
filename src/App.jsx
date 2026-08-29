@@ -124,37 +124,35 @@ function App() {
 
     setLoading(true)
 
-    // 1. Validate the authorization code against TWO independent sources:
-    //    (a) projects.auth_code — per-project code (BATIM####) for CLIENTS.
-    //        A match implies role='client'. The actual project the client
-    //        ends up linked to is decided later by link_client_on_login,
-    //        which matches their email against project_contacts — the
-    //        code is just a gate, not a project selector.
-    //    (b) authorization_codes.code — legacy staff codes (admin/employee).
-    //    maybeSingle on both so a "no row" response is `data: null`, not
-    //    a thrown error.
-    let role = null
+    // 1. Validate the registration code through ONE SECURITY DEFINER RPC.
+    //
+    //    THIS IS A BUG FIX, not a refactor. The previous version read
+    //    `projects` directly — but a visitor registering has no account
+    //    yet and is therefore the `anon` role, and `projects` has RLS on
+    //    with no anon policy. That SELECT returned zero rows for every
+    //    client who ever tried, so the BATIM code in Einav's welcome
+    //    message could never validate and every client was told
+    //    "קוד הרשאה שגוי". validate_registration_code runs as its owner,
+    //    so it can check the code without `projects` being open to anon.
+    //
+    //    It returns 'client', 'contractor', or null — a KIND and nothing
+    //    else. Never a project id, a professional id, a name or a row, so
+    //    a caller cannot use it to enumerate anything beyond the single
+    //    code they already hold.
+    //
+    //    The authorization_codes lookup is GONE. Staff self-registration
+    //    by shared code is removed by decision: a staff account is created
+    //    by an admin, not self-served from a string. The RPC cannot return
+    //    'admin' or 'employee' at all.
+    const { data: role, error: codeError } = await supabase
+      .rpc('validate_registration_code', { p_code: authCode })
 
-    const { data: projMatch } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('auth_code', authCode)
-      .maybeSingle()
-
-    if (projMatch) {
-      role = 'client'
-    } else {
-      const { data: codeData } = await supabase
-        .from('authorization_codes')
-        .select('role')
-        .eq('code', authCode)
-        .maybeSingle()
-      if (codeData) {
-        role = codeData.role
-      }
-    }
-
-    if (!role) {
+    //    ONE message for every kind of bad code. The function deliberately
+    //    makes unknown / malformed / empty indistinguishable — showing a
+    //    more specific message here would hand that distinction back and
+    //    turn the form into an oracle.
+    if (codeError || !role) {
+      if (codeError) console.error('validate_registration_code failed:', codeError)
       setErrorMsg('קוד הרשאה שגוי')
       setLoading(false)
       return
@@ -175,13 +173,23 @@ function App() {
     const userId = signUpData.user?.id
 
     // 3. Branch by role.
-    //    - staff (admin/employee) → profiles row (unchanged legacy path).
-    //    - client                 → NO profiles row; the client_users row
-    //      is created on the next authenticated request by the
-    //      link_client_on_login RPC (Phase B), same path the Google flow
-    //      uses. Inserting into profiles here would create a stale
-    //      legacy "client" profile that breaks the AuthCallback router.
-    if (role !== 'client') {
+    //    - client     → NO profiles row; the client_users row is created
+    //      on the next authenticated request by link_client_on_login,
+    //      the same path the Google flow uses. Inserting into profiles
+    //      here would create a stale legacy "client" profile that breaks
+    //      the AuthCallback router.
+    //    - contractor → NO profiles row either; contractor_users is
+    //      created by link_contractor_on_login on the same next request.
+    //
+    //    ALLOW-LIST, not deny-list. The old condition was
+    //    `if (role !== 'client')`, which gave a profiles row — i.e. STAFF
+    //    identity — to every kind that was not the one hardcoded here.
+    //    Naming the two staff roles explicitly means a future user kind
+    //    can never acquire one by default. After this change neither
+    //    branch value can occur through this form at all, since the RPC
+    //    returns only 'client' or 'contractor'; the guard stays as the
+    //    structural statement of who may get a profiles row.
+    if (role === 'admin' || role === 'employee') {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({ id: userId, first_name: firstName, last_name: lastName, role })

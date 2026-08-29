@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import '../../Professionals.css'
 
@@ -33,6 +33,10 @@ export const EMPTY_PROF_FORM = {
   file_certificate:     '',
   file_license:         '',
   extra_files:          [],
+  /* Portal login. portal_access is an ACCESS GRANT, not a preference;
+     portal_code is minted by the DB and never edited here. */
+  portal_access:        false,
+  portal_code:          '',
 }
 
 /* ── Normalise a DB row into form shape ── */
@@ -55,6 +59,8 @@ export function rowToForm(row) {
     emails,
     address:              row.address              ?? '',
     notes:                row.notes                ?? '',
+    portal_access:        row.portal_access === true,
+    portal_code:          row.portal_code          ?? '',
     file_signature:       row.file_signature       ?? '',
     file_stamp:           row.file_stamp           ?? '',
     file_signature_stamp: row.file_signature_stamp ?? '',
@@ -198,7 +204,173 @@ export default function ProfessionalModal({ editRow, onClose, onSaved, onDeleted
   const [addingExtra, setAddingExtra]       = useState(false)
   const [newExtraLabel, setNewExtraLabel]   = useState('')
 
+  /* ── Portal login controls — ADMIN ONLY ──────────────────────────────
+     The DB enforces this twice over: enforce_professional_portal_columns
+     raises PT006 on a non-admin write to portal_access/portal_code, and
+     issue_contractor_portal_code raises PT003 for a non-admin caller.
+     This probe only decides whether to RENDER the controls, so an
+     employee is never shown an affordance that would fail. Same
+     profiles.role probe Reports.jsx and ProjectsKanban.jsx already use. */
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [codeBusy, setCodeBusy] = useState(false)
+  const [codeError, setCodeError] = useState('')
+  const [codeCopied, setCodeCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session || cancelled) return
+        const { data } = await supabase
+          .from('profiles').select('role').eq('id', session.user.id).maybeSingle()
+        if (!cancelled) setIsAdmin(data?.role === 'admin')
+      } catch {
+        /* Probe failure leaves isAdmin false — the controls stay hidden
+           rather than being shown to someone who may not be an admin. */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const handleClose = () => { setSaveError(''); setDeleteConfirm(false); onClose() }
+
+  /* ── Mint the registration code ──────────────────────────────────────
+     MINT-ONCE by design: the RPC returns the existing code unchanged if
+     one is already set, so there is deliberately no "regenerate" or
+     "refresh" control anywhere — a code Einav has already sent must stay
+     valid. */
+  const handleIssueCode = async () => {
+    if (!editId || codeBusy) return
+    setCodeBusy(true); setCodeError('')
+    try {
+      const { data, error } = await supabase
+        .rpc('issue_contractor_portal_code', { p_professional_id: editId })
+
+      if (error) {
+        console.error('issue_contractor_portal_code failed:', error)
+        setCodeError(
+          error.code === 'PT003' ? 'רק מנהלת יכולה להפיק קוד הרשאה.' :
+          error.code === 'PT004' ? 'בעל המקצוע לא נמצא. יש לשמור את הכרטיס ולנסות שוב.' :
+          error.code === 'PT005' ? 'לא נמצא קוד פנוי. יש לפנות לתמיכה.' :
+          'לא הצלחנו להפיק קוד, נסי שוב.'
+        )
+        return
+      }
+      if (!data) {
+        /* No error and no code — treat as a failure rather than showing
+           an empty code field as if it had worked. */
+        console.error('issue_contractor_portal_code returned no code')
+        setCodeError('לא הצלחנו להפיק קוד, נסי שוב.')
+        return
+      }
+
+      setForm(prev => ({ ...prev, portal_code: data }))
+      onRowPatched?.(editId, { portal_code: data })
+    } catch (e) {
+      console.error('issue_contractor_portal_code threw:', e)
+      setCodeError('לא הצלחנו להפיק קוד, נסי שוב.')
+    } finally {
+      setCodeBusy(false)
+    }
+  }
+
+  /* ── Toggle portal access ────────────────────────────────────────────
+     Written immediately rather than on save, matching how the file slots
+     on this card already behave. Row count is checked: a refused UPDATE
+     answers 204 with no body, which is otherwise indistinguishable from
+     success, and this particular write decides whether a person can log
+     in to the studio's data. */
+  const handleTogglePortalAccess = async (next) => {
+    if (!editId || codeBusy) return
+    setCodeBusy(true); setCodeError('')
+    const prev = form.portal_access
+    setForm(f => ({ ...f, portal_access: next }))
+    try {
+      const { data, error } = await supabase
+        .from('professionals')
+        .update({ portal_access: next })
+        .eq('id', editId)
+        .select('id')
+
+      if (error || !Array.isArray(data) || data.length === 0) {
+        console.error('portal_access update failed:', error || '0 rows affected')
+        setForm(f => ({ ...f, portal_access: prev }))
+        setCodeError(error?.code === 'PT006'
+          ? 'רק מנהלת יכולה לשנות הרשאת כניסה.'
+          : 'לא הצלחנו לעדכן את ההרשאה, נסי שוב.')
+        return
+      }
+      onRowPatched?.(editId, { portal_access: next })
+    } catch (e) {
+      console.error('portal_access update threw:', e)
+      setForm(f => ({ ...f, portal_access: prev }))
+      setCodeError('לא הצלחנו לעדכן את ההרשאה, נסי שוב.')
+    } finally {
+      setCodeBusy(false)
+    }
+  }
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(form.portal_code)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    } catch { /* clipboard blocked — the code is on screen to read */ }
+  }
+
+  /* ── Invitation message ──────────────────────────────────────────────
+     The contractor counterpart of ProjectsKanban.handleOpenWelcomeMessage:
+     same structure (greeting → what the space is for → the login URL and
+     the כניסת משתמשים button → which address to use → prefer Google →
+     the code for the non-Google path → sign-off), same voice, same
+     emoji. Two deliberate differences, both forced by who is reading it:
+     it is singular rather than the client message's plural family
+     address, and it is sourced from THIS CARD rather than from a project,
+     because a contractor may work on several projects or none yet. */
+  const [invitePopup, setInvitePopup] = useState(null)
+
+  const buildInviteMessage = () => {
+    const name = [form.first_name, form.last_name].filter(Boolean).join(' ').trim()
+      || (form.business_name || '').trim()
+
+    const addresses = cleanArray(form.emails)
+    const emailsBlock =
+      addresses.length === 0
+        ? 'חשוב: ההתחברות חייבת להיות עם המייל הרשום אצלנו.'
+        : addresses.length === 1
+          ? `חשוב: ההתחברות חייבת להיות עם המייל הרשום אצלנו: ${addresses[0]}`
+          : `חשוב: ההתחברות חייבת להיות עם אחד מהמיילים הרשומים אצלנו:\n${addresses.join('\n')}`
+
+    return `שלום ${name || ''} 🏠
+
+שמחה לפתוח עבורך גישה אישית למערכת של סטודיו בתים — מקום אחד שבו תוכל לצפות בתוכניות לביצוע של הפרויקטים שלך, להוריד אותן, ולהחזיר אלינו קבצים חתומים.
+
+הכניסה למערכת היא דרך האתר שלנו:
+https://batim-es.com/
+דרך כפתור "כניסת משתמשים"
+
+${emailsBlock}
+
+ההמלצה שלנו היא להתחבר עם חשבון Google (הכי פשוט ומאובטח).
+
+אם המייל שלך אינו חשבון Google, ניתן להירשם עם המייל הזה וסיסמה שתבחר, באמצעות קוד ההרשאה:
+${form.portal_code || '—'}
+
+אשמח לעמוד לרשותך בכל שאלה 🤍
+עינב | סטודיו בתים`
+  }
+
+  const handleCopyInvite = async () => {
+    if (!invitePopup) return
+    try {
+      await navigator.clipboard.writeText(invitePopup.message)
+      setInvitePopup(prev => prev ? { ...prev, copied: true } : null)
+      setTimeout(() => {
+        setInvitePopup(prev => prev ? { ...prev, copied: false } : null)
+      }, 2000)
+    } catch { /* clipboard blocked — the text is selectable on screen */ }
+  }
 
   /* ── View mode: build flat field list ── */
   const viewFields = [
@@ -474,6 +646,104 @@ export default function ProfessionalModal({ editRow, onClose, onSaved, onDeleted
                   </div>
                 </div>
 
+                {/* ── כניסה למערכת — ADMIN ONLY, and only on a saved card ──
+                    HIDDEN rather than disabled for non-admins: a disabled
+                    control advertises a capability an employee cannot use
+                    and invites "why not?", and greying out the code would
+                    still put it on their screen. Hiding is a UI-clarity
+                    choice, not a security boundary — the boundary is the
+                    DB trigger (PT006) and the RPC's own admin check
+                    (PT003), both of which hold regardless of this render.
+
+                    Sits directly under מיילים because it acts ON those
+                    addresses: the code lets the person register, and
+                    link_contractor_on_login matches whatever they sign in
+                    with against emails[]. */}
+                {isAdmin && editId && (
+                  <div className="prof-form-row">
+                    <label className="prof-form-label">כניסה למערכת</label>
+                    <div className="prof-list-group">
+
+                      <label style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                        cursor: codeBusy ? 'default' : 'pointer', direction: 'rtl',
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={!!form.portal_access}
+                          disabled={codeBusy}
+                          onChange={e => handleTogglePortalAccess(e.target.checked)}
+                          style={{ marginTop: 3, flexShrink: 0 }}
+                        />
+                        <span>
+                          <span style={{ fontWeight: 600 }}>
+                            מאפשר לבעל המקצוע להתחבר למערכת של הסטודיו
+                          </span>
+                          <span style={{ display: 'block', fontSize: 12, color: '#8a8680', lineHeight: 1.5 }}>
+                            סימון האפשרות נותן גישה אישית למערכת עם אחת מכתובות המייל שלמעלה.
+                            הפרויקטים שיוצגו לו נקבעים לפי שיוכו כקבלן בכרטיסי הפרויקטים.
+                          </span>
+                        </span>
+                      </label>
+
+                      <div className="prof-list-item" style={{ marginTop: 10, alignItems: 'center' }}>
+                        {form.portal_code ? (
+                          <>
+                            <span
+                              dir="ltr"
+                              style={{
+                                fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
+                                letterSpacing: 1, color: '#1a1a18',
+                                background: '#eee9e1', borderRadius: 4, padding: '4px 8px',
+                              }}
+                            >
+                              {form.portal_code}
+                            </span>
+                            <button type="button" className="prof-list-add" onClick={copyCode}>
+                              {codeCopied ? 'הועתק ✓' : 'העתק קוד'}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="prof-list-add"
+                            onClick={handleIssueCode}
+                            disabled={codeBusy}
+                          >
+                            {codeBusy ? 'מפיק…' : 'הפק קוד הרשאה'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 12, color: '#8a8680', lineHeight: 1.5, marginTop: 4 }}>
+                        הקוד נועד למי שכתובת המייל שלו אינה חשבון Google. הוא אישי, קבוע, ומשמש פעם אחת ליצירת החשבון.
+                      </div>
+
+                      {form.portal_code && (
+                        <div className="prof-list-item" style={{ marginTop: 8 }}>
+                          <button
+                            type="button"
+                            className="prof-list-add"
+                            onClick={() => setInvitePopup({ message: buildInviteMessage(), copied: false })}
+                          >
+                            הודעת הזמנה
+                          </button>
+                        </div>
+                      )}
+
+                      {codeError && (
+                        <div style={{
+                          marginTop: 8, fontSize: 12, color: '#a83232',
+                          background: '#fff5f5', border: '1px solid #f4c8c8',
+                          borderRadius: 6, padding: '6px 10px',
+                        }} role="alert">
+                          {codeError}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* כתובת */}
                 <div className="prof-form-row">
                   <label className="prof-form-label">כתובת</label>
@@ -559,6 +829,42 @@ export default function ProfessionalModal({ editRow, onClose, onSaved, onDeleted
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="prof-modal-cancel" onClick={() => setDeleteConfirm(false)}>ביטול</button>
                 <button className="prof-modal-delete" onClick={handleDelete}>מחק</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invitation message popup ──
+          Overlays the card and returns to it on close, the same way
+          ProjectsKanban's welcome popup overlays the settings modal.
+          Einav copies the text and sends it herself — nothing is sent
+          from the app. */}
+      {invitePopup && (
+        <div className="prof-modal-overlay">
+          <div className="prof-modal">
+            <div className="prof-modal-header">
+              <span className="prof-modal-title">הודעת הזמנה לבעל מקצוע</span>
+              <button className="prof-modal-close" onClick={() => setInvitePopup(null)}>×</button>
+            </div>
+            <div className="prof-modal-body">
+              <textarea
+                readOnly
+                value={invitePopup.message}
+                rows={18}
+                dir="rtl"
+                className="prof-form-input prof-form-textarea"
+                style={{ width: '100%', lineHeight: 1.6, fontSize: 13, resize: 'vertical' }}
+                onFocus={e => e.target.select()}
+              />
+            </div>
+            <div className="prof-modal-footer">
+              <span />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button className="prof-modal-cancel" onClick={() => setInvitePopup(null)}>סגור</button>
+                <button className="prof-modal-save" onClick={handleCopyInvite}>
+                  {invitePopup.copied ? 'הועתק ✓' : 'העתק הודעה'}
+                </button>
               </div>
             </div>
           </div>

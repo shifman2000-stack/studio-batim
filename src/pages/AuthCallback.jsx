@@ -44,6 +44,12 @@ export default function AuthCallback() {
      usual "מתחבר..." pass-through. Desktop admins never see this: the
      phone-viewport check below gates it entirely. */
   const [choicePending, setChoicePending] = useState(false)
+  /* Set only when the contractor RPC fails. A login error must be SEEN,
+     not swallowed into a /no-access redirect that looks identical to
+     "we don't know who you are" — the two need different actions from
+     the user. Mutually exclusive with choicePending: that one is set
+     for admins only, this one only on the non-staff path. */
+  const [fatalMessage, setFatalMessage] = useState('')
 
   useEffect(() => {
     const handle = async () => {
@@ -86,7 +92,50 @@ export default function AuthCallback() {
         return
       }
 
-      // ── 2. Not in profiles — try linking as a client via Phase B RPC ──
+      // ── 2. Not in profiles — try linking as a CONTRACTOR first ──
+      //   CONTRACTOR IS EVALUATED BEFORE CLIENT, by explicit decision:
+      //   someone invited as a contractor is a contractor even if their
+      //   email also appears in project_contacts.
+      //
+      //   The two RPCs are INDEPENDENT — link_contractor_on_login reads
+      //   only professionals, link_client_on_login reads only
+      //   project_contacts, and neither vetoes the other. Calling the
+      //   contractor one first therefore does not by itself stop a
+      //   client link from being created afterwards; every branch below
+      //   must RETURN so the client RPC is never reached once this one
+      //   has answered.
+      const { data: contractorResult, error: contractorError } = await supabase
+        .rpc('link_contractor_on_login')
+
+      if (contractorError) {
+        //   PT001 — two professionals with portal_access share this
+        //   address, so the function refuses rather than guessing which
+        //   one the person is. That is a studio data-configuration
+        //   problem, not a login failure the user can fix.
+        //
+        //   Any OTHER error is also terminal here. Falling through to
+        //   the client branch would silently reclassify a contractor as
+        //   a client, which is precisely the failure this ordering
+        //   exists to prevent — so we fail visibly instead.
+        setFatalMessage(
+          contractorError.code === 'PT001'
+            ? 'לא ניתן להתחבר: כתובת המייל שלך רשומה אצל יותר מבעל מקצוע אחד. נא לפנות לסטודיו.'
+            : 'אירעה שגיאה בתהליך ההתחברות. נא לנסות שוב, ואם הבעיה חוזרת לפנות לסטודיו.'
+        )
+        return
+      }
+
+      //   Empty return means "not a contractor" — fall through to the
+      //   client check below. A row means we are done.
+      const hasContractorRow = Array.isArray(contractorResult)
+        ? contractorResult.length > 0
+        : !!contractorResult
+      if (hasContractorRow) {
+        navigate('/contractor')
+        return
+      }
+
+      // ── 3. Not a contractor — try linking as a client via Phase B RPC ──
       //   The SECURITY DEFINER function `link_client_on_login` matches
       //   the authenticated email against `project_contacts` and, on
       //   first hit, creates the client_users row. Returns the row(s)
@@ -105,12 +154,46 @@ export default function AuthCallback() {
         }
       }
 
-      // ── 3. Unrecognized — silent redirect, no special message ──
+      // ── 4. Unrecognized — silent redirect, no special message ──
       navigate('/no-access')
     }
 
     handle()
   }, [navigate])
+
+  if (fatalMessage) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        minHeight: '100vh',
+        padding: '0 32px',
+        boxSizing: 'border-box',
+        background: '#F7F5F2',
+        fontFamily: "'Heebo', sans-serif",
+        direction: 'rtl',
+        textAlign: 'center',
+      }}>
+        <p style={{ color: '#1a1a18', fontSize: 16, fontWeight: 400, margin: 0, maxWidth: 360, lineHeight: 1.6 }}>
+          {fatalMessage}
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          style={{
+            width: '100%', maxWidth: 320, background: '#ffffff', color: '#1a1a18',
+            border: '1px solid #C1BCAF', borderRadius: 10, padding: '13px 16px',
+            fontFamily: 'inherit', fontSize: 15, fontWeight: 500, cursor: 'pointer',
+          }}
+        >
+          חזרה למסך הכניסה
+        </button>
+      </div>
+    )
+  }
 
   if (choicePending) {
     return (

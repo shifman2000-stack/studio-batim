@@ -78,6 +78,17 @@ const isExecutionPlansRow = (doc) => doc?.sub_stages?.name === EXECUTION_PLANS_S
    to refuse up front rather than let the action appear to run. */
 const PREVIEW_WRITE_NOTE = 'תצוגת לקוח — פעולות שמירה מושבתות כאן'
 
+/* Shown when the DB refused the delete — the row count came back zero.
+   Deliberately states that the file was NOT deleted: the old code showed
+   a generic "try again" while the Storage object had already been
+   destroyed, which is the opposite of what had happened. */
+const DELETE_REFUSED_NOTE = 'המחיקה נחסמה — הקובץ לא נמחק. פנו לסטודיו.'
+/* The version row and its file are already gone here, but the document
+   row could not be re-pointed. Says so plainly rather than claiming a
+   clean success. */
+const DELETE_PARTIAL_NOTE  = 'הקובץ נמחק, אך עדכון המסמך נכשל. פנו לסטודיו.'
+const DELETE_GENERIC_NOTE  = 'שגיאה במחיקה, נסה שוב'
+
 /* Extract a lowercase extension from a filename; fallback to 'bin'. */
 function fileExt(name) {
   if (!name) return 'bin'
@@ -153,7 +164,7 @@ export default function ClientDocuments() {
      uploadErrors is keyed by doc id, so a failure on one file's delete
      never blocks another. */
   const [confirmDeleteVersionId, setConfirmDeleteVersionId] = useState(null)
-  const [deleteErrors, setDeleteErrors] = useState({})  // { versionId: true }
+  const [deleteErrors, setDeleteErrors] = useState({})  // { versionId: message }
 
   /* Accordion state — Set of currently-open group keys. Default: all
      blocks collapsed; the user opens whatever they want. */
@@ -604,13 +615,35 @@ export default function ClientDocuments() {
     if (isMounted.current) setUploadingDocId(null)
   }
 
+  /* Set a per-version message and clear it after 3s. Extracted because
+     the handler below now has three distinct outcomes to report, not one. */
+  const flashDeleteError = (versionId, message) => {
+    if (!isMounted.current) return
+    setDeleteErrors(prev => ({ ...prev, [versionId]: message }))
+    setTimeout(() => {
+      if (!isMounted.current) return
+      setDeleteErrors(prev => {
+        if (!(versionId in prev)) return prev
+        const next = { ...prev }
+        delete next[versionId]
+        return next
+      })
+    }, 3000)
+  }
+
   /* ── Delete a file the CLIENT uploaded themselves ──────────────────
-     Mirrors the staff-side deleteVersion in DocumentsTab.jsx exactly:
-     same order (storage, then the row), same "was this doc's CURRENT
-     file" branch, and the SAME reset shape when nothing is left —
-     file_url/file_name null, status back to 'חסר', date null — which
-     is exactly the state DocumentsTab's own delete already puts a row
-     into, i.e. exactly how a row looks before its first upload.
+     Shares the staff-side deleteVersion's "was this doc's CURRENT file"
+     branch and its reset shape when nothing is left — file_url/file_name
+     null, status back to 'חסר', date null — i.e. exactly how a row looks
+     before its first upload.
+
+     It deliberately does NOT share that function's ORDER. DocumentsTab
+     removes the Storage object first and then the row, which is safe for
+     staff because staff_full_access grants them both. A client's two
+     grants can come apart: on Prod the storage DELETE policy existed
+     while the document_versions one did not, so file-first destroyed the
+     file and then silently failed to remove the row. This handler proves
+     the row is gone before it touches Storage.
 
      RLS (client_can_delete_own_document_versions on document_versions,
      client_can_delete_own_project_files on storage.objects) is the
@@ -626,17 +659,43 @@ export default function ClientDocuments() {
   const handleDeleteVersion = async (doc, version) => {
     if (version.uploaded_by !== userId) return
     try {
+      /* ORDER MATTERS — this ordering IS the fix.
+
+         The DB delete runs FIRST and is judged by the AFFECTED ROW
+         COUNT, not by `.error`. An RLS refusal is not an error: it comes
+         back 204 with an empty result, so `.error` alone cannot tell
+         "removed" from "silently refused". `.select('id')` makes the
+         statement return the rows it actually removed.
+
+         The old code removed the Storage object first. On Prod, which had
+         no client DELETE policy on document_versions, that destroyed the
+         file and then left the row behind still pointing at it — with no
+         error shown. Storage is not touched now until the row is proven
+         gone, so a refusal costs nothing. */
+      const { data: deletedRows, error: delErr } = await supabase
+        .from('document_versions')
+        .delete()
+        .eq('id', version.id)
+        .select('id')
+      if (delErr) throw delErr
+
+      if (!deletedRows || deletedRows.length === 0) {
+        /* Refused. Nothing has been touched: the file is intact, the row
+           is intact, and no local state moves — so the list still shows
+           exactly what the database still holds. */
+        flashDeleteError(version.id, DELETE_REFUSED_NOTE)
+        logError('documents', 'delete_refused', logCtx, { document_id: doc.id, version_id: version.id })
+        return
+      }
+
+      /* The row is gone; only now is the file safe to remove. A failure
+         here leaves an unreferenced object in the bucket — wasted space,
+         never lost data — so it stays a warning, as it was before. */
       const path = storagePath(version.file_url)
       if (path) {
         const { error: rmErr } = await supabase.storage.from(BUCKET).remove([path])
         if (rmErr) console.warn('storage remove warning:', rmErr) /* non-fatal, matches ClientSharedFiles */
       }
-
-      const { error: delErr } = await supabase
-        .from('document_versions')
-        .delete()
-        .eq('id', version.id)
-      if (delErr) throw delErr
 
       /* versionsByDoc[doc.id] is already sorted uploaded_at DESC (the
          Stage-2 query's own order), so remaining[0] — if any — is the
@@ -644,20 +703,32 @@ export default function ClientDocuments() {
       const remaining = (versionsByDoc[doc.id] || []).filter(v => v.id !== version.id)
       const wasCurrent = doc.file_url && doc.file_url === version.file_url
 
+      /* Same row-count rule as the delete above, for the same reason.
+         client_can_update_editable_documents requires client_access to
+         still be sign/upload/approve — if the studio has since set the
+         document to 'view', this update is refused silently and the
+         document row would keep pointing at the file we just removed.
+         The version really is gone at this point and cannot be brought
+         back, so this reports honestly rather than claiming success. */
       if (wasCurrent) {
-        if (remaining.length > 0) {
-          const next = remaining[0]
-          const { error: updErr } = await supabase
-            .from('project_documents')
-            .update({ file_url: next.file_url, file_name: next.file_name })
-            .eq('id', doc.id)
-          if (updErr) throw updErr
-        } else {
-          const { error: updErr } = await supabase
-            .from('project_documents')
-            .update({ file_url: null, file_name: null, status: 'חסר', date: null })
-            .eq('id', doc.id)
-          if (updErr) throw updErr
+        const patch = remaining.length > 0
+          ? { file_url: remaining[0].file_url, file_name: remaining[0].file_name }
+          : { file_url: null, file_name: null, status: 'חסר', date: null }
+
+        const { data: updatedRows, error: updErr } = await supabase
+          .from('project_documents')
+          .update(patch)
+          .eq('id', doc.id)
+          .select('id')
+        if (updErr) throw updErr
+
+        if (!updatedRows || updatedRows.length === 0) {
+          flashDeleteError(version.id, DELETE_PARTIAL_NOTE)
+          logError('documents', 'delete_doc_update_refused', logCtx, { document_id: doc.id, version_id: version.id })
+          if (!isMounted.current) return
+          setConfirmDeleteVersionId(null)
+          await loadData()   /* the version IS gone — show the real state */
+          return
         }
       }
 
@@ -667,18 +738,7 @@ export default function ClientDocuments() {
     } catch (err) {
       if (isPreviewBlockedError(err)) return   /* preview: silent no-op */
       console.error('client document version delete error:', err)
-      if (isMounted.current) {
-        setDeleteErrors(prev => ({ ...prev, [version.id]: true }))
-        setTimeout(() => {
-          if (!isMounted.current) return
-          setDeleteErrors(prev => {
-            if (!(version.id in prev)) return prev
-            const next = { ...prev }
-            delete next[version.id]
-            return next
-          })
-        }, 3000)
-      }
+      flashDeleteError(version.id, DELETE_GENERIC_NOTE)
       logError('documents', 'delete_failed', logCtx, { document_id: doc.id, version_id: version.id })
     }
   }
@@ -886,7 +946,7 @@ export default function ClientDocuments() {
 
                   {deleteErrors[v.id] && (
                     <div className="cp-doc-error" role="alert" style={{ flexBasis: '100%' }}>
-                      שגיאה במחיקה, נסה שוב
+                      {deleteErrors[v.id]}
                     </div>
                   )}
                 </li>

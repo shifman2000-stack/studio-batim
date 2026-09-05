@@ -1010,6 +1010,35 @@ export default function MeetingSummariesTab({
           <IconPlus size={14} />
           סיכום פגישת פרוגרמה
         </button>
+
+        {/* ── צפייה בשאלון פרוגרמה — a link, not a summary and not a
+            third create button ────────────────────────────────────────
+            ALWAYS present, never conditional on a programme meeting
+            summary existing. Deliberately NOT an ms-card and NOT in the
+            `summaries` array: every piece of the list's machinery —
+            openSet, confirmingId, editingId, toggleOpen and the
+            ms-card-${id} deep-link anchor — is keyed on a summary id,
+            and this has none. Staying out of that array means none of it
+            has to learn about this.
+
+            LAST in the toolbar's DOM order, with margin-inline-start:auto
+            eating the free space, so it sits at the FAR END of the row —
+            visually the LEFT in this RTL screen, opposite the two create
+            buttons. Sized to its own text: it is a secondary action.
+
+            CLICKING THIS CLEARS NOTHING. It only navigates. Clearing
+            happens one side at a time on the page it opens. */}
+        <button
+          type="button"
+          className="ms-questionnaire-link"
+          onClick={() => navigate(`/staff-questionnaire/${projectId}`)}
+        >
+          <span className="ms-questionnaire-link-label">צפייה בשאלון פרוגרמה</span>
+          <ActionRequiredBadge
+            count={questionnaireNotifCount}
+            label={(n) => `${n} עדכונים חדשים`}
+          />
+        </button>
       </div>
 
       {errorMsg && (
@@ -1028,29 +1057,6 @@ export default function MeetingSummariesTab({
           >×</button>
         </div>
       )}
-
-      {/* ── שאלון פרוגרמה — a link, not a summary ────────────────────
-          ALWAYS present, never conditional on a programme meeting
-          summary existing. Deliberately a SIBLING above the list and NOT
-          an ms-card: every piece of the list's machinery — openSet,
-          confirmingId, editingId, toggleOpen and the ms-card-${id}
-          deep-link anchor — is keyed on a summary id, and this row has
-          none. Staying out of the `summaries` array means none of that
-          machinery has to learn about it.
-
-          CLICKING THIS CLEARS NOTHING. It only navigates. Clearing
-          happens one side at a time on the page it opens. */}
-      <button
-        type="button"
-        className="ms-questionnaire-link"
-        onClick={() => navigate(`/staff-questionnaire/${projectId}`)}
-      >
-        <span className="ms-questionnaire-link-label">שאלון פרוגרמה</span>
-        <ActionRequiredBadge
-          count={questionnaireNotifCount}
-          label={(n) => `${n} עדכונים חדשים`}
-        />
-      </button>
 
       {/* The form no longer renders here — creating and editing both
           take over the tab (see the focused-editor early return above),

@@ -244,7 +244,9 @@ const SPEC_SUB_TABS = [
   { id: 9, label: 'מפרט לקבלן' },
 ]
 const SPEC_SUB_TAB_IDS = SPEC_SUB_TABS.map(t => t.id)
-/* Clicking the parent lands here — the first sub-tab, per spec. */
+/* Where the parent lands you when you arrive from OUTSIDE the group.
+   Clicking it while already on one of the three does nothing — see the
+   tabs-bar onClick. */
 const SPEC_DEFAULT_SUB_TAB_ID = SPEC_SUB_TABS[0].id
 
 const TABS = [
@@ -1013,7 +1015,18 @@ function ProjectDetail() {
               }
               onClick={() => {
                 if (tab.disabled) return
-                setActiveTab(isSpecParent ? SPEC_DEFAULT_SUB_TAB_ID : tab.id)
+                if (!isSpecParent) { setActiveTab(tab.id); return }
+                /* The parent only moves you when you arrive from OUTSIDE
+                   the group. Clicking it while already on one of the three
+                   is a no-op, so it can't knock you off חומרי גמר back to
+                   כתב כמויות.
+
+                   Deliberately stateless: there is no remembered sub-tab.
+                   Leaving the group and coming back starts at the first
+                   sub-tab again, on every project and every navigation. */
+                if (!SPEC_SUB_TAB_IDS.includes(activeTab)) {
+                  setActiveTab(SPEC_DEFAULT_SUB_TAB_ID)
+                }
               }}
               onContextMenu={ctrl ? (e) => handleTabContextMenu(e, ctrl.clientKey) : undefined}
               disabled={tab.disabled}

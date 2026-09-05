@@ -47,6 +47,7 @@ import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
    handlers when there's no provider (embedded/admin usage), so it's
    safe to call unconditionally. */
 import { useClientNav } from '../ClientPortal'
+import { notifyClientQuestionnaireDone, notifyClientHouseDone } from '../../lib/staffNotify'
 import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
 import { logError } from '../../lib/clientActivityLog'
 import {
@@ -948,6 +949,22 @@ export default function ClientProgrammingQuestionnaire({
      Safe no-ops when rendered outside the portal (embedded admin). */
   const { goBack } = useClientNav()
 
+  /* Who to attribute a staff notification to, or null for "nobody — this
+     is not a client finishing anything". Deliberately the SAME
+     clientCtx-only sourcing rule as logCtx above, for the same reason:
+     this component renders in four contexts and only ONE of them is a
+     real client.
+       · admin split-screen (embedded, forceAdminEdit) → no clientCtx
+       · desktop "תצוגת לקוח" preview                  → previewMode
+       · admin mobile client view (StaffClientViewMount) → isStaffView,
+         and the admin's own uid, which has no client_users row and would
+         be refused by client_can_create_own_notification as a 42501
+       · a real client in the portal                    → notifies */
+  const notifyingClientId =
+    (clientCtx && !clientCtx.previewMode && !clientCtx.isStaffView)
+      ? clientCtx.id
+      : null
+
   const [loading,          setLoading]          = useState(true)
   const [tableUnavailable, setTableUnavailable] = useState(false)
   const [pageError,        setPageError]        = useState('')
@@ -1384,6 +1401,13 @@ export default function ClientProgrammingQuestionnaire({
       metaOverride: { house_done: true },
     })
     if (ok) {
+      /* house_done is set from TWO places — the builder's own "סיימתי"
+         here, and the hub checkbox in handleHouseDoneChange. Both notify;
+         the partial unique index caps the pair at one pending row, so
+         using both in sequence raises one dot, not two. */
+      if (notifyingClientId) {
+        void notifyClientHouseDone({ projectId: project_id, actorId: notifyingClientId })
+      }
       setView('hub')
     }
   }
@@ -1410,7 +1434,12 @@ export default function ClientProgrammingQuestionnaire({
     /* metaOverride sidesteps the setAnswers stale-closure race so the
        write includes the fresh flag on the FIRST save, not a follow-up. */
     const ok = await saveDraftNow({ silent: true, metaOverride: { questionnaire_done: true } })
-    if (ok) setView('hub')
+    if (ok) {
+      if (notifyingClientId) {
+        void notifyClientQuestionnaireDone({ projectId: project_id, actorId: notifyingClientId })
+      }
+      setView('hub')
+    }
   }
 
   const handleHouseDoneChange = async (nextChecked) => {
@@ -1420,7 +1449,13 @@ export default function ClientProgrammingQuestionnaire({
       ...(prev || {}),
       meta: { ...((prev && prev.meta) || {}), house_done: !!nextChecked },
     }))
-    await saveDraftNow({ silent: false, metaOverride: { house_done: !!nextChecked } })
+    const ok = await saveDraftNow({ silent: false, metaOverride: { house_done: !!nextChecked } })
+    /* ONLY ticking is an event. Unticking inserts nothing and deletes
+       nothing — a pending dot stays pending, because the studio still
+       ought to look, and a later re-tick is capped to that same one row. */
+    if (ok && nextChecked && notifyingClientId) {
+      void notifyClientHouseDone({ projectId: project_id, actorId: notifyingClientId })
+    }
   }
 
   /* ── DEV-ONLY: reset the row to fully-editable/not-submitted ─────

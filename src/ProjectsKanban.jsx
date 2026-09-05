@@ -6,7 +6,13 @@ import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentPr
 import NewTaskModal from './NewTaskModal'
 import ClientPreviewOverlay from './components/ClientPreviewOverlay'
 import InlineField from './components/InlineField'
+import ActionRequiredBadge from './components/ActionRequiredBadge'
+import { loadAllProjectTotals } from './lib/staffNotifications'
 import './ProjectsKanban.css'
+
+/* Staff wording for the shared badge — the client's default says
+   "פריטים הדורשים טיפול", which is not what this number means here. */
+const NOTIF_LABEL = (n) => `${n} עדכונים חדשים`
 
 function getTextColor(bgHex) {
   if (!bgHex) return '#1a1a18'
@@ -120,6 +126,10 @@ function ProjectsKanban() {
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
   const [filterResponsible, setFilterResponsible] = useState('')
   const [tasksByProject, setTasksByProject]       = useState({})
+  /* Unread staff notifications per project — { [project_id]: count }.
+     Loaded by ONE query for the whole board and grouped in memory,
+     exactly like tasksByProject above. No per-card query. */
+  const [notifsByProject, setNotifsByProject]     = useState({})
   const menuRef                             = useRef(null)
 
   // Inquiry search state
@@ -312,6 +322,13 @@ function ProjectsKanban() {
         })
         setTasksByProject(grouped)
       }
+
+      /* One query for the whole board, same shape as the tasks query
+         above. Counts BOTH streams — a questionnaire notification shows
+         in this total even though the place to click through to it does
+         not exist yet (that is step 3). Expected and temporary; do not
+         filter it out here. */
+      setNotifsByProject(await loadAllProjectTotals())
     }
     init()
   }, [parentId])
@@ -1335,6 +1352,15 @@ ${authCode || '—'}
                               {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                             </span>
                           )}
+                          {/* Unread staff notifications for this project —
+                              the TOTAL across both streams. Renders nothing
+                              at 0 (the badge returns null), so an untouched
+                              board looks exactly as it does today. */}
+                          <ActionRequiredBadge
+                            count={notifsByProject[project.id] || 0}
+                            label={NOTIF_LABEL}
+                            style={{ marginInlineStart: 6, verticalAlign: 'middle' }}
+                          />
                         </div>
                         <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
                       </div>

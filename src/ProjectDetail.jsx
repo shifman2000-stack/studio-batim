@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
@@ -21,7 +21,17 @@ import {
   DEFAULT_CLIENT_TAB_VISIBILITY,
   isClientTabVisible,
 } from './lib/clientTabVisibility'
+import ActionRequiredBadge from './components/ActionRequiredBadge'
+import { loadProjectNotifications, documentNotifications } from './lib/staffNotifications'
 import './ProjectDetail.css'
+
+/* Staff wording for the shared badge (its default is the client's). */
+const NOTIF_LABEL = (n) => `${n} עדכונים חדשים`
+
+/* The tab that owns the document stream. Its badge counts the project's
+   DOCUMENT notifications; the questionnaire stream gets its own home in
+   step 3 and is deliberately not counted here. */
+const DOCUMENTS_TAB_ID = 2
 
 /* Lookup: manager tab id → CONTROLLABLE_TABS entry (or undefined). Used
    in the tab bar to know whether a given tab gets the person icon + the
@@ -365,6 +375,27 @@ function ProjectDetail() {
   /* Tab right-click context menu state — { x, y, clientKey } when open. */
   const [tabContextMenu, setTabContextMenu] = useState(null)
   const tabMenuRef = useRef(null)
+
+  /* ── Staff notifications — THE single source for levels 2, 3 and 4 ──
+     One query per project, loaded here rather than inside DocumentsTab
+     because the tab BADGE has to be visible before the tab is opened,
+     and DocumentsTab only mounts once activeTab === 2.
+
+     The raw rows go down to DocumentsTab, which derives its group badges
+     and row lines from this same array. That is what makes it impossible
+     for the tab badge to count something the rows cannot show: there is
+     one array, not two queries that could disagree. */
+  const [notifications, setNotifications] = useState([])
+
+  const reloadNotifications = useCallback(async () => {
+    if (!id) return
+    setNotifications(await loadProjectNotifications(id))
+  }, [id])
+
+  useEffect(() => { reloadNotifications() }, [reloadNotifications])
+
+  /* Level 2 — the מעקב מסמכים tab badge. Document rows only. */
+  const documentNotifCount = documentNotifications(notifications).length
 
   /* professionals list */
   const [profList, setProfList] = useState([])
@@ -1032,6 +1063,12 @@ function ProjectDetail() {
               disabled={tab.disabled}
             >
               {tab.label}
+              {/* Level 2 — unread DOCUMENT notifications for this project.
+                  Same array the rows inside the tab render from, so this
+                  number can never point at something invisible. */}
+              {tab.id === DOCUMENTS_TAB_ID && (
+                <ActionRequiredBadge count={documentNotifCount} label={NOTIF_LABEL} />
+              )}
               {ctrl && visible && (
                 <span
                   className="pd-tab-vis-icon"
@@ -1425,7 +1462,16 @@ function ProjectDetail() {
 
         {/* ── Tab 2 — מעקב מסמכים ── */}
         {activeTab === 2 && (
-          <DocumentsTab projectId={id} isParentProject={!!project?.is_parent_project} />
+          <DocumentsTab
+            projectId={id}
+            isParentProject={!!project?.is_parent_project}
+            /* Levels 3 and 4 derive from THIS array — the same one the
+               tab badge above counted. onNotificationsChanged refetches
+               after a row is cleared, which is what makes all four
+               levels update without a page reload. */
+            notifications={notifications}
+            onNotificationsChanged={reloadNotifications}
+          />
         )}
 
         {/* ── Tab 3 — מעקב שלבי התקדמות ── */}

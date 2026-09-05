@@ -65,7 +65,10 @@
 
 import { supabase } from '../supabaseClient'
 
-const TABLE = 'staff_notifications'
+/* Exported so the READ side (lib/staffNotifications.js) names the same
+   table from the same place — one definition, no drift. */
+export const STAFF_NOTIFICATIONS_TABLE = 'staff_notifications'
+const TABLE = STAFF_NOTIFICATIONS_TABLE
 
 /* ── Private writer: document-targeted events ─────────────────────────
    Exactly one row, or it failed. `.select('id')` is what makes a refusal

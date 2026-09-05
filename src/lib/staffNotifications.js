@@ -107,6 +107,20 @@ export function documentNotifications(rows) {
   return (Array.isArray(rows) ? rows : []).filter(r => r && r.document_id)
 }
 
+/* The other half of the same array: project-targeted rows, no document.
+   Exactly the complement of documentNotifications(), so every row belongs
+   to precisely one stream and the two counts can never double-count. */
+export function questionnaireNotifications(rows) {
+  return (Array.isArray(rows) ? rows : []).filter(r => r && !r.document_id)
+}
+
+/* Is one SIDE still pending? action is 'questionnaire_done' | 'house_done'.
+   The partial unique index caps each side at one row, so this is a
+   boolean question and the link's total is 0, 1 or 2 — never more. */
+export function isQuestionnaireSidePending(rows, action) {
+  return questionnaireNotifications(rows).some(r => r.action === action)
+}
+
 /* { [document_id]: rows[] } — the map levels 3 and 4 both read. */
 export function groupByDocument(rows) {
   const byDoc = {}
@@ -172,6 +186,38 @@ export async function clearDocumentNotifications(documentId) {
     return true
   } catch (e) {
     console.error('[staffNotifications] clear threw', e)
+    return false
+  }
+}
+
+/* Clear ONE SIDE of the questionnaire for one project.
+   Entering the questionnaire clears 'questionnaire_done' and nothing
+   else; entering the house-builder clears 'house_done' and nothing else.
+   The `.is('document_id', null)` term is what keeps this off the document
+   stream — without it an action name collision could never happen today
+   (the two vocabularies are disjoint), but the row shape, not luck,
+   should be what guarantees it.
+
+   ⚠️ ZERO ROWS IS NORMAL, exactly as in clearDocumentNotifications above:
+   it means that side was not pending. Do not add a row-count check.
+
+   @returns {Promise<boolean>} false only on a REAL error */
+export async function clearQuestionnaireSide(projectId, action) {
+  if (!projectId || !action) return false
+  try {
+    const { error } = await supabase
+      .from(STAFF_NOTIFICATIONS_TABLE)
+      .delete()
+      .eq('project_id', projectId)
+      .eq('action', action)
+      .is('document_id', null)
+    if (error) {
+      console.error('[staffNotifications] side clear failed', { projectId, action, code: error.code, error })
+      return false
+    }
+    return true
+  } catch (e) {
+    console.error('[staffNotifications] side clear threw', e)
     return false
   }
 }

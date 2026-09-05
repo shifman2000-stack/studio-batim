@@ -14,7 +14,9 @@
 // our own sandbox editor, not external input.
 
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
+import ActionRequiredBadge from '../ActionRequiredBadge'
 import RichTextEditor, { hasRichText } from './RichTextEditor'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { clientDoneHint, DONE_STATUS } from './meetingTasksStatus'
@@ -327,7 +329,13 @@ export default function MeetingSummariesTab({
   /* Switches the project file over to its משימות tab. Supplied by
      ProjectDetail; when absent the studio block simply shows no link. */
   onOpenTasksTab = null,
+  /* Unread questionnaire notifications for this project — 0, 1 or 2.
+     Computed by ProjectDetail from the SAME array it counted the tab
+     badge from, so the number on the link and the number on the tab are
+     the same number, not two counts that could drift. */
+  questionnaireNotifCount = 0,
 }) {
+  const navigate = useNavigate()
   const [summaries,      setSummaries]      = useState([])
   const [loading,        setLoading]        = useState(true)
   /* uuid → display name, for client_tasks_done_by. Resolved in ONE
@@ -1020,6 +1028,29 @@ export default function MeetingSummariesTab({
           >×</button>
         </div>
       )}
+
+      {/* ── שאלון פרוגרמה — a link, not a summary ────────────────────
+          ALWAYS present, never conditional on a programme meeting
+          summary existing. Deliberately a SIBLING above the list and NOT
+          an ms-card: every piece of the list's machinery — openSet,
+          confirmingId, editingId, toggleOpen and the ms-card-${id}
+          deep-link anchor — is keyed on a summary id, and this row has
+          none. Staying out of the `summaries` array means none of that
+          machinery has to learn about it.
+
+          CLICKING THIS CLEARS NOTHING. It only navigates. Clearing
+          happens one side at a time on the page it opens. */}
+      <button
+        type="button"
+        className="ms-questionnaire-link"
+        onClick={() => navigate(`/staff-questionnaire/${projectId}`)}
+      >
+        <span className="ms-questionnaire-link-label">שאלון פרוגרמה</span>
+        <ActionRequiredBadge
+          count={questionnaireNotifCount}
+          label={(n) => `${n} עדכונים חדשים`}
+        />
+      </button>
 
       {/* The form no longer renders here — creating and editing both
           take over the tab (see the focused-editor early return above),

@@ -22,7 +22,11 @@ import {
   isClientTabVisible,
 } from './lib/clientTabVisibility'
 import ActionRequiredBadge from './components/ActionRequiredBadge'
-import { loadProjectNotifications, documentNotifications } from './lib/staffNotifications'
+import {
+  loadProjectNotifications,
+  documentNotifications,
+  questionnaireNotifications,
+} from './lib/staffNotifications'
 import './ProjectDetail.css'
 
 /* Staff wording for the shared badge (its default is the client's). */
@@ -394,8 +398,11 @@ function ProjectDetail() {
 
   useEffect(() => { reloadNotifications() }, [reloadNotifications])
 
-  /* Level 2 — the מעקב מסמכים tab badge. Document rows only. */
-  const documentNotifCount = documentNotifications(notifications).length
+  /* The two tab badges, both derived from the ONE array above — the two
+     streams are exact complements (document_id set vs null), so between
+     them they account for every row once and never twice. */
+  const documentNotifCount      = documentNotifications(notifications).length
+  const questionnaireNotifCount = questionnaireNotifications(notifications).length
 
   /* professionals list */
   const [profList, setProfList] = useState([])
@@ -1069,6 +1076,11 @@ function ProjectDetail() {
               {tab.id === DOCUMENTS_TAB_ID && (
                 <ActionRequiredBadge count={documentNotifCount} label={NOTIF_LABEL} />
               )}
+              {/* The questionnaire stream's home. Same array, same badge,
+                  complementary half of the rows. */}
+              {tab.id === MEETINGS_TAB_ID && (
+                <ActionRequiredBadge count={questionnaireNotifCount} label={NOTIF_LABEL} />
+              )}
               {ctrl && visible && (
                 <span
                   className="pd-tab-vis-icon"
@@ -1495,6 +1507,9 @@ function ProjectDetail() {
                that block links here. Switches tab in place rather than
                through the URL — the URL is read, never written. */
             onOpenTasksTab={() => setActiveTab(5)}
+            /* The שאלון פרוגרמה link's badge reads THIS — the same array
+               the tab badge above counted, not a second query. */
+            questionnaireNotifCount={questionnaireNotifCount}
           />
         )}
 

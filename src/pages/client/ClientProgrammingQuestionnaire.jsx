@@ -924,6 +924,26 @@ export default function ClientProgrammingQuestionnaire({
   embeddedProjectId,
   forceAdminEdit = false,
   embedded       = false,
+  /* ── STAFF notifications — a single opt-in prop, default null ────────
+     THE CLIENT NEVER SEES THESE DOTS, and not because of a runtime role
+     check that could be got wrong: the client portal renders
+     <ClientProgrammingQuestionnaire /> with no props at all, so this is
+     null there and every staff affordance below is unreachable by
+     construction. Only the staff full page (StaffQuestionnaireView)
+     passes it.
+
+     These dots mean the OPPOSITE of the client's own dots on the same
+     two tiles. The client's say "you still have this to do" and come
+     from computeQuestionnaireActionRequired via questionnaireDone /
+     houseDone. These say "the client FINISHED — go look". The two are
+     computed from different sources, named differently, and positioned
+     on opposite corners, so a staff member who sees both at once (the
+     client un-ticked a side while a notification was still pending) can
+     tell them apart.
+
+     Shape: { questionnairePending, housePending, onEnterQuestionnaire,
+              onEnterHouse } — one object so it cannot be half-wired. */
+  staffNotifications = null,
 } = {}) {
   /* ClientContext is null when we render OUTSIDE a ClientRoute (the
      admin split-screen case). Reading it via useContext is safe —
@@ -964,6 +984,13 @@ export default function ClientProgrammingQuestionnaire({
     (clientCtx && !clientCtx.previewMode && !clientCtx.isStaffView)
       ? clientCtx.id
       : null
+
+  /* Staff dot state, read once. Deliberately NOT named *Done or
+     *Required — those belong to the client's mechanism a few lines
+     below, and mixing the vocabularies is how the two would get
+     confused. `staffPending*` means "a notification is waiting". */
+  const staffPendingQuestionnaire = !!(staffNotifications && staffNotifications.questionnairePending)
+  const staffPendingHouse         = !!(staffNotifications && staffNotifications.housePending)
 
   const [loading,          setLoading]          = useState(true)
   const [tableUnavailable, setTableUnavailable] = useState(false)
@@ -1932,11 +1959,27 @@ export default function ClientProgrammingQuestionnaire({
               {/* Tile 1 — מילוי השאלון (enabled) */}
               <button
                 type="button"
-                onClick={openQuestionnaire}
+                onClick={() => {
+                  /* Entering this side clears ONLY this side. Click only —
+                     nothing here is bound to hover or visibility. */
+                  staffNotifications?.onEnterQuestionnaire?.()
+                  openQuestionnaire()
+                }}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {/* CLIENT's dot — "you still have this to do". Untouched. */}
                 {!questionnaireDone && (
                   <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
+                {/* STAFF's dot — "the client finished, go look". Opposite
+                    corner (top-LEFT, i.e. visually left in this RTL page)
+                    so the two are never mistaken for one another on the
+                    rare render where both are true. */}
+                {staffPendingQuestionnaire && (
+                  <ActionRequiredDot
+                    label="הלקוח סיים את מילוי השאלון"
+                    style={{ position: 'absolute', top: 10, left: 10 }}
+                  />
                 )}
                 <span style={hubTileIconWrap}>
                   <IconDocument size={28} />
@@ -1958,11 +2001,22 @@ export default function ClientProgrammingQuestionnaire({
                   based on answers.house. */}
               <button
                 type="button"
-                onClick={() => setView('house')}
+                onClick={() => {
+                  staffNotifications?.onEnterHouse?.()
+                  setView('house')
+                }}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {/* CLIENT's dot — untouched. */}
                 {!houseDone && (
                   <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
+                {/* STAFF's dot — opposite corner, see tile 1. */}
+                {staffPendingHouse && (
+                  <ActionRequiredDot
+                    label="הלקוח סיים את בונה הבית"
+                    style={{ position: 'absolute', top: 10, left: 10 }}
+                  />
                 )}
                 <span style={hubTileIconWrap}>
                   <IconHouse size={28} />

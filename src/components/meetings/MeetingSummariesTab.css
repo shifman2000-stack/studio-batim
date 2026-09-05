@@ -767,3 +767,36 @@
     max-height: 70vh;
   }
 }
+
+/* ── שאלון פרוגרמה link ────────────────────────────────────────────────
+   A link row, NOT a summary card — it deliberately shares none of
+   .ms-card's chrome, because it does not expand, has no edit or delete
+   affordance, and carries no summary id. Sits above the list.
+   RTL: the label leads at the RIGHT, the badge follows to its left. */
+.ms-questionnaire-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  direction: rtl;
+  text-align: right;
+  background: #ffffff;
+  border: 1px solid #e6e1d8;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ms-questionnaire-link:hover {
+  border-color: #c8bfb0;
+  background: #fdfcfa;
+}
+
+.ms-questionnaire-link-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a18;
+}

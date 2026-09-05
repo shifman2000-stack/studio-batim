@@ -6,13 +6,24 @@ import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentPr
 import NewTaskModal from './NewTaskModal'
 import ClientPreviewOverlay from './components/ClientPreviewOverlay'
 import InlineField from './components/InlineField'
-import ActionRequiredBadge from './components/ActionRequiredBadge'
-import { loadAllProjectTotals } from './lib/staffNotifications'
+import { ActionRequiredDot } from './components/ActionRequiredBadge'
+import { loadAllProjectStreams } from './lib/staffNotifications'
 import './ProjectsKanban.css'
 
-/* Staff wording for the shared badge — the client's default says
-   "פריטים הדורשים טיפול", which is not what this number means here. */
-const NOTIF_LABEL = (n) => `${n} עדכונים חדשים`
+/* ── The card's notification dots ──────────────────────────────────────
+   The board shows PRESENCE, not quantity: one dot if anything is pending
+   in the document stream, a second if anything is pending in the
+   questionnaire stream. 0, 1 or 2 dots, never a number.
+
+   Counting continues everywhere below the board — the two tab badges,
+   the stage-group badges, the per-row lines and the שאלון פרוגרמה link
+   all still carry real counts. A card is a "look here", not a tally.
+
+   Reinstated in the exact slot and dimensions the removed task dots
+   occupied (6px, 3px apart, bottom of the card, visual LEFT), so the
+   board reads the way it always did. Nothing here touches
+   tasksByProject, which stays wired to the two board filters only. */
+const NOTIF_DOT_SIZE = 6
 
 function getTextColor(bgHex) {
   if (!bgHex) return '#1a1a18'
@@ -126,9 +137,10 @@ function ProjectsKanban() {
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
   const [filterResponsible, setFilterResponsible] = useState('')
   const [tasksByProject, setTasksByProject]       = useState({})
-  /* Unread staff notifications per project — { [project_id]: count }.
-     Loaded by ONE query for the whole board and grouped in memory,
-     exactly like tasksByProject above. No per-card query. */
+  /* Unread staff notifications per project, as two booleans:
+     { [project_id]: { documents, questionnaire } }. Loaded by ONE query
+     for the whole board and grouped in memory, exactly like
+     tasksByProject above. No per-card query. */
   const [notifsByProject, setNotifsByProject]     = useState({})
   const menuRef                             = useRef(null)
 
@@ -328,7 +340,7 @@ function ProjectsKanban() {
          in this total even though the place to click through to it does
          not exist yet (that is step 3). Expected and temporary; do not
          filter it out here. */
-      setNotifsByProject(await loadAllProjectTotals())
+      setNotifsByProject(await loadAllProjectStreams())
     }
     init()
   }, [parentId])
@@ -1352,15 +1364,6 @@ ${authCode || '—'}
                               {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                             </span>
                           )}
-                          {/* Unread staff notifications for this project —
-                              the TOTAL across both streams. Renders nothing
-                              at 0 (the badge returns null), so an untouched
-                              board looks exactly as it does today. */}
-                          <ActionRequiredBadge
-                            count={notifsByProject[project.id] || 0}
-                            label={NOTIF_LABEL}
-                            style={{ marginInlineStart: 6, verticalAlign: 'middle' }}
-                          />
                         </div>
                         <div className="kanban-card-days">{daysInStage(project.stage_entered_at)}</div>
                       </div>
@@ -1371,11 +1374,25 @@ ${authCode || '—'}
                           </span>
                         )}
                       </div>
-                      {/* The task-status dots were removed here. tasksByProject
-                          is deliberately NOT removed with them: it still backs
+                      {/* Notification dots — the task-status dots that used
+                          to sit here are gone for good, and tasksByProject
+                          is deliberately NOT consulted below: it still backs
                           the two board filters (יש משימות דחופות / יש משימות
-                          פעילות) in isVisible() above, which would silently
-                          match nothing without it. */}
+                          פעילות) in isVisible() above and nothing else. */}
+                      {(() => {
+                        const n = notifsByProject[project.id]
+                        if (!n || (!n.documents && !n.questionnaire)) return null
+                        return (
+                          <div className="kanban-card-notifs">
+                            {n.documents && (
+                              <ActionRequiredDot size={NOTIF_DOT_SIZE} label="עדכון חדש במסמכים" />
+                            )}
+                            {n.questionnaire && (
+                              <ActionRequiredDot size={NOTIF_DOT_SIZE} label="עדכון חדש בשאלון פרוגרמה" />
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   ))}
                 </div>

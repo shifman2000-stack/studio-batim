@@ -16,7 +16,7 @@
 // this module is shaped to prevent. So there is ONE loader per screen,
 // and every level below it derives from that one array in memory:
 //
-//   ProjectsKanban  → loadAllProjectTotals()      one query, whole board
+//   ProjectsKanban  → loadAllProjectStreams()     one query, whole board
 //   ProjectDetail   → loadProjectNotifications()  one query, one project
 //                     ├─ the מעקב מסמכים tab badge
 //                     └─ passed down to DocumentsTab, which derives
@@ -50,30 +50,41 @@ export function notificationText(row) {
    Exactly the shape tasksByProject already uses — one round-trip, then
    grouped in memory. No per-card query, no N+1.
 
-   Counts EVERY row for the project, document and questionnaire alike.
-   A questionnaire notification therefore shows in this total while the
-   only place to click through to it (the סיכומי פגישות link) does not
-   exist yet — that is STEP 3, and it is expected, not a bug. Please do
-   not "fix" it by filtering questionnaire rows out here: the kanban
-   number is the project's total across both streams by design, and
-   filtering would make it disagree with itself once step 3 lands.
+   Two columns, not one: project_id AND document_id. document_id is the
+   only thing that separates the streams, and asking for it is what lets
+   the card show a dot PER STREAM without a second query. The rows are
+   never counted here — the card is a presence indicator, not a number,
+   so each stream collapses to a boolean the moment it is seen.
 
-   @returns {Promise<Object>} { [project_id]: count }, {} on failure */
-export async function loadAllProjectTotals() {
+   Counting still happens everywhere below the board: the two tab badges,
+   the stage-group badges, the per-row lines and the link all carry real
+   counts, derived from loadProjectNotifications() further down.
+
+   @returns {Promise<Object>} { [project_id]: { documents:bool, questionnaire:bool } },
+                              {} on failure */
+export async function loadAllProjectStreams() {
   try {
     const { data, error } = await supabase
       .from(STAFF_NOTIFICATIONS_TABLE)
-      .select('project_id')
+      .select('project_id, document_id')
     if (error) throw error
 
     const byProject = {}
     for (const row of data || []) {
       if (!row.project_id) continue
-      byProject[row.project_id] = (byProject[row.project_id] || 0) + 1
+      if (!byProject[row.project_id]) {
+        byProject[row.project_id] = { documents: false, questionnaire: false }
+      }
+      /* Same rule as documentNotifications / questionnaireNotifications:
+         a row with a document belongs to the document stream, one
+         without belongs to the questionnaire stream. Exact complements,
+         so every row raises exactly one of the two flags. */
+      if (row.document_id) byProject[row.project_id].documents = true
+      else                 byProject[row.project_id].questionnaire = true
     }
     return byProject
   } catch (e) {
-    console.warn('[staffNotifications] board totals failed:', e)
+    console.warn('[staffNotifications] board streams failed:', e)
     return {}
   }
 }

@@ -767,3 +767,44 @@
     max-height: 70vh;
   }
 }
+
+/* ── צפייה בשאלון פרוגרמה — the toolbar's secondary action ────────────
+   Lives INSIDE .ms-toolbar as its last child, so it shares that row with
+   the two + buttons instead of taking a row of its own.
+
+   margin-inline-start: auto absorbs the free space on its start side,
+   pushing it to the FAR END of the flex line — visually the LEFT in this
+   RTL screen, opposite the two create buttons at the right.
+
+   Sized to its content, NOT stretched: no width, inline-flex, and
+   deliberately quieter than .ms-add-btn — smaller text, tighter padding,
+   no border, no green. It is a way to go and look at something, not a
+   third thing to create, and it must not read as one. */
+.ms-questionnaire-link {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+  direction: rtl;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: 'Heebo', sans-serif;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ms-questionnaire-link:hover .ms-questionnaire-link-label {
+  color: #1a1a18;
+  text-decoration: underline;
+}
+
+.ms-questionnaire-link-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6b6259;
+  white-space: nowrap;
+}

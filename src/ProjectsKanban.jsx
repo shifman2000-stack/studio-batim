@@ -6,7 +6,24 @@ import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentPr
 import NewTaskModal from './NewTaskModal'
 import ClientPreviewOverlay from './components/ClientPreviewOverlay'
 import InlineField from './components/InlineField'
+import { ActionRequiredDot } from './components/ActionRequiredBadge'
+import { loadAllProjectStreams } from './lib/staffNotifications'
 import './ProjectsKanban.css'
+
+/* ── The card's notification dots ──────────────────────────────────────
+   The board shows PRESENCE, not quantity: one dot if anything is pending
+   in the document stream, a second if anything is pending in the
+   questionnaire stream. 0, 1 or 2 dots, never a number.
+
+   Counting continues everywhere below the board — the two tab badges,
+   the stage-group badges, the per-row lines and the שאלון פרוגרמה link
+   all still carry real counts. A card is a "look here", not a tally.
+
+   Reinstated in the exact slot and dimensions the removed task dots
+   occupied (6px, 3px apart, bottom of the card, visual LEFT), so the
+   board reads the way it always did. Nothing here touches
+   tasksByProject, which stays wired to the two board filters only. */
+const NOTIF_DOT_SIZE = 6
 
 function getTextColor(bgHex) {
   if (!bgHex) return '#1a1a18'
@@ -120,6 +137,11 @@ function ProjectsKanban() {
   const [contextMenu, setContextMenu]       = useState(null) // { x, y, project }
   const [filterResponsible, setFilterResponsible] = useState('')
   const [tasksByProject, setTasksByProject]       = useState({})
+  /* Unread staff notifications per project, as two booleans:
+     { [project_id]: { documents, questionnaire } }. Loaded by ONE query
+     for the whole board and grouped in memory, exactly like
+     tasksByProject above. No per-card query. */
+  const [notifsByProject, setNotifsByProject]     = useState({})
   const menuRef                             = useRef(null)
 
   // Inquiry search state
@@ -312,6 +334,13 @@ function ProjectsKanban() {
         })
         setTasksByProject(grouped)
       }
+
+      /* One query for the whole board, same shape as the tasks query
+         above. Counts BOTH streams — a questionnaire notification shows
+         in this total even though the place to click through to it does
+         not exist yet (that is step 3). Expected and temporary; do not
+         filter it out here. */
+      setNotifsByProject(await loadAllProjectStreams())
     }
     init()
   }, [parentId])
@@ -1345,20 +1374,22 @@ ${authCode || '—'}
                           </span>
                         )}
                       </div>
-                      {tasksByProject[project.id]?.length > 0 && (() => {
-                        const statuses = tasksByProject[project.id]
-                        const dots = statuses.slice(0, 5)
-                        const overflow = statuses.length > 5
+                      {/* Notification dots — the task-status dots that used
+                          to sit here are gone for good, and tasksByProject
+                          is deliberately NOT consulted below: it still backs
+                          the two board filters (יש משימות דחופות / יש משימות
+                          פעילות) in isVisible() above and nothing else. */}
+                      {(() => {
+                        const n = notifsByProject[project.id]
+                        if (!n || (!n.documents && !n.questionnaire)) return null
                         return (
-                          <div className="kanban-card-tasks">
-                            {dots.map((s, i) => (
-                              <span
-                                key={i}
-                                className="kanban-task-dot"
-                                style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
-                              />
-                            ))}
-                            {overflow && <span className="kanban-task-overflow">5+</span>}
+                          <div className="kanban-card-notifs">
+                            {n.documents && (
+                              <ActionRequiredDot size={NOTIF_DOT_SIZE} label="עדכון חדש במסמכים" />
+                            )}
+                            {n.questionnaire && (
+                              <ActionRequiredDot size={NOTIF_DOT_SIZE} label="עדכון חדש בשאלון פרוגרמה" />
+                            )}
                           </div>
                         )
                       })()}
@@ -1508,28 +1539,9 @@ ${authCode || '—'}
                                 </span>
                               )}
                             </div>
-                            {/* Task-status dots — archived projects have
-                                their tasks deleted at archive time, so
-                                this normally shows nothing, but keeping
-                                the exact same conditional preserves
-                                markup parity with regular cards. */}
-                            {tasksByProject[project.id]?.length > 0 && (() => {
-                              const statuses = tasksByProject[project.id]
-                              const dots = statuses.slice(0, 5)
-                              const overflow = statuses.length > 5
-                              return (
-                                <div className="kanban-card-tasks">
-                                  {dots.map((s, i) => (
-                                    <span
-                                      key={i}
-                                      className="kanban-task-dot"
-                                      style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
-                                    />
-                                  ))}
-                                  {overflow && <span className="kanban-task-overflow">5+</span>}
-                                </div>
-                              )
-                            })()}
+                            {/* Task-status dots removed here too — this was
+                                the archive board's duplicate of the active
+                                card's block. */}
                           </div>
                         ))
                       )}

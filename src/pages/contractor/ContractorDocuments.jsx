@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useContractor } from '../../components/ContractorRoute'
 import { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
+import { notifyContractorSign, notifyContractorApprove } from '../../lib/staffNotify'
 import { getFileExtension } from '../../components/documents/filePreview'
 import {
   isContractorActionRequired,
@@ -258,6 +259,14 @@ export default function ContractorDocuments({ projectId }) {
         setRowError(docId, 'האישור לא נשמר, נסו שוב')
         return
       }
+
+      /* Tell the studio. This portal is only ever reached by a real
+         contractor through ContractorRoute — there is no staff-view or
+         preview variant of it, so no gate is needed here (unlike the
+         client screens, which double as the admin's mobile client view).
+         Fire-and-forget: never rejects, never undoes the approval. */
+      void notifyContractorApprove({ projectId, documentId: docId, actorId: contractorUid })
+
       await loadData()
     } catch (e) {
       console.error('contractor approve threw:', e)
@@ -332,6 +341,13 @@ export default function ContractorDocuments({ projectId }) {
         setRowError(docId, 'הקובץ נשמר אך הסימון לא נרשם, נסו שוב')
         return
       }
+
+      /* Tell the studio — 'sign', never 'upload'. contractor_access has no
+         upload state on either environment, and the DB CHECK would reject
+         ('contractor','upload'). Placed after the completion write, so a
+         signed file that failed to record its completion notifies nobody
+         and the row stays visibly open. */
+      void notifyContractorSign({ projectId, documentId: docId, actorId: contractorUid })
 
       await loadData()
     } catch (err) {

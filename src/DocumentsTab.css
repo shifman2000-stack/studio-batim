@@ -169,9 +169,17 @@
   opacity: 0.8;
 }
 
+/* flex:1 makes the title fill the row, which is what pushes the X/Y chip
+   to the far end. The notification badge is nested INSIDE this span so it
+   stays next to the stage name instead of being pushed out with it —
+   hence the flex row here. RTL: the first child (the name) sits at the
+   RIGHT, the badge immediately to its left. */
 .dt-accordion-title {
   flex: 1;
   text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dt-accordion-count {

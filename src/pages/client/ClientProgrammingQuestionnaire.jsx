@@ -47,6 +47,7 @@ import { ActionRequiredDot } from '../../components/ActionRequiredBadge'
    handlers when there's no provider (embedded/admin usage), so it's
    safe to call unconditionally. */
 import { useClientNav } from '../ClientPortal'
+import { notifyClientQuestionnaireDone, notifyClientHouseDone } from '../../lib/staffNotify'
 import HouseBuilderV2 from '../../components/questionnaire/HouseBuilderV2'
 import { logError } from '../../lib/clientActivityLog'
 import {
@@ -923,6 +924,26 @@ export default function ClientProgrammingQuestionnaire({
   embeddedProjectId,
   forceAdminEdit = false,
   embedded       = false,
+  /* ── STAFF notifications — a single opt-in prop, default null ────────
+     THE CLIENT NEVER SEES THESE DOTS, and not because of a runtime role
+     check that could be got wrong: the client portal renders
+     <ClientProgrammingQuestionnaire /> with no props at all, so this is
+     null there and every staff affordance below is unreachable by
+     construction. Only the staff full page (StaffQuestionnaireView)
+     passes it.
+
+     These dots mean the OPPOSITE of the client's own dots on the same
+     two tiles. The client's say "you still have this to do" and come
+     from computeQuestionnaireActionRequired via questionnaireDone /
+     houseDone. These say "the client FINISHED — go look". The two are
+     computed from different sources, named differently, and positioned
+     on opposite corners, so a staff member who sees both at once (the
+     client un-ticked a side while a notification was still pending) can
+     tell them apart.
+
+     Shape: { questionnairePending, housePending, onEnterQuestionnaire,
+              onEnterHouse } — one object so it cannot be half-wired. */
+  staffNotifications = null,
 } = {}) {
   /* ClientContext is null when we render OUTSIDE a ClientRoute (the
      admin split-screen case). Reading it via useContext is safe —
@@ -947,6 +968,29 @@ export default function ClientProgrammingQuestionnaire({
   /* Portal nav — the hub's back-arrow leaves the programming module.
      Safe no-ops when rendered outside the portal (embedded admin). */
   const { goBack } = useClientNav()
+
+  /* Who to attribute a staff notification to, or null for "nobody — this
+     is not a client finishing anything". Deliberately the SAME
+     clientCtx-only sourcing rule as logCtx above, for the same reason:
+     this component renders in four contexts and only ONE of them is a
+     real client.
+       · admin split-screen (embedded, forceAdminEdit) → no clientCtx
+       · desktop "תצוגת לקוח" preview                  → previewMode
+       · admin mobile client view (StaffClientViewMount) → isStaffView,
+         and the admin's own uid, which has no client_users row and would
+         be refused by client_can_create_own_notification as a 42501
+       · a real client in the portal                    → notifies */
+  const notifyingClientId =
+    (clientCtx && !clientCtx.previewMode && !clientCtx.isStaffView)
+      ? clientCtx.id
+      : null
+
+  /* Staff dot state, read once. Deliberately NOT named *Done or
+     *Required — those belong to the client's mechanism a few lines
+     below, and mixing the vocabularies is how the two would get
+     confused. `staffPending*` means "a notification is waiting". */
+  const staffPendingQuestionnaire = !!(staffNotifications && staffNotifications.questionnairePending)
+  const staffPendingHouse         = !!(staffNotifications && staffNotifications.housePending)
 
   const [loading,          setLoading]          = useState(true)
   const [tableUnavailable, setTableUnavailable] = useState(false)
@@ -1384,6 +1428,13 @@ export default function ClientProgrammingQuestionnaire({
       metaOverride: { house_done: true },
     })
     if (ok) {
+      /* house_done is set from TWO places — the builder's own "סיימתי"
+         here, and the hub checkbox in handleHouseDoneChange. Both notify;
+         the partial unique index caps the pair at one pending row, so
+         using both in sequence raises one dot, not two. */
+      if (notifyingClientId) {
+        void notifyClientHouseDone({ projectId: project_id, actorId: notifyingClientId })
+      }
       setView('hub')
     }
   }
@@ -1410,7 +1461,12 @@ export default function ClientProgrammingQuestionnaire({
     /* metaOverride sidesteps the setAnswers stale-closure race so the
        write includes the fresh flag on the FIRST save, not a follow-up. */
     const ok = await saveDraftNow({ silent: true, metaOverride: { questionnaire_done: true } })
-    if (ok) setView('hub')
+    if (ok) {
+      if (notifyingClientId) {
+        void notifyClientQuestionnaireDone({ projectId: project_id, actorId: notifyingClientId })
+      }
+      setView('hub')
+    }
   }
 
   const handleHouseDoneChange = async (nextChecked) => {
@@ -1420,7 +1476,13 @@ export default function ClientProgrammingQuestionnaire({
       ...(prev || {}),
       meta: { ...((prev && prev.meta) || {}), house_done: !!nextChecked },
     }))
-    await saveDraftNow({ silent: false, metaOverride: { house_done: !!nextChecked } })
+    const ok = await saveDraftNow({ silent: false, metaOverride: { house_done: !!nextChecked } })
+    /* ONLY ticking is an event. Unticking inserts nothing and deletes
+       nothing — a pending dot stays pending, because the studio still
+       ought to look, and a later re-tick is capped to that same one row. */
+    if (ok && nextChecked && notifyingClientId) {
+      void notifyClientHouseDone({ projectId: project_id, actorId: notifyingClientId })
+    }
   }
 
   /* ── DEV-ONLY: reset the row to fully-editable/not-submitted ─────
@@ -1897,11 +1959,27 @@ export default function ClientProgrammingQuestionnaire({
               {/* Tile 1 — מילוי השאלון (enabled) */}
               <button
                 type="button"
-                onClick={openQuestionnaire}
+                onClick={() => {
+                  /* Entering this side clears ONLY this side. Click only —
+                     nothing here is bound to hover or visibility. */
+                  staffNotifications?.onEnterQuestionnaire?.()
+                  openQuestionnaire()
+                }}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {/* CLIENT's dot — "you still have this to do". Untouched. */}
                 {!questionnaireDone && (
                   <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
+                {/* STAFF's dot — "the client finished, go look". Opposite
+                    corner (top-LEFT, i.e. visually left in this RTL page)
+                    so the two are never mistaken for one another on the
+                    rare render where both are true. */}
+                {staffPendingQuestionnaire && (
+                  <ActionRequiredDot
+                    label="הלקוח סיים את מילוי השאלון"
+                    style={{ position: 'absolute', top: 10, left: 10 }}
+                  />
                 )}
                 <span style={hubTileIconWrap}>
                   <IconDocument size={28} />
@@ -1923,11 +2001,22 @@ export default function ClientProgrammingQuestionnaire({
                   based on answers.house. */}
               <button
                 type="button"
-                onClick={() => setView('house')}
+                onClick={() => {
+                  staffNotifications?.onEnterHouse?.()
+                  setView('house')
+                }}
                 style={{ ...hubTileBase, cursor: 'pointer' }}
               >
+                {/* CLIENT's dot — untouched. */}
                 {!houseDone && (
                   <ActionRequiredDot style={{ position: 'absolute', top: 10, right: 10 }} />
+                )}
+                {/* STAFF's dot — opposite corner, see tile 1. */}
+                {staffPendingHouse && (
+                  <ActionRequiredDot
+                    label="הלקוח סיים את בונה הבית"
+                    style={{ position: 'absolute', top: 10, left: 10 }}
+                  />
                 )}
                 <span style={hubTileIconWrap}>
                   <IconHouse size={28} />

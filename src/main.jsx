@@ -28,6 +28,7 @@ import ContractorPortal from './pages/ContractorPortal'
 import ContractorRoute from './components/ContractorRoute'
 import StaffViewPicker from './pages/staffview/StaffViewPicker'
 import StaffClientViewMount from './components/StaffClientViewMount'
+import StaffQuestionnaireView from './pages/StaffQuestionnaireView'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import ChildInquiryForm from './pages/ChildInquiryForm'
@@ -81,6 +82,12 @@ createRoot(document.getElementById('root')).render(
             /client itself — full phone screen, no manager Header/sidebar. */}
         <Route path="/staff-view" element={<StaffViewPicker />} />
         <Route path="/staff-view/:projectId" element={<StaffClientViewMount />} />
+        {/* Staff full page for a project's questionnaire + house builder.
+            Outside <Layout /> deliberately — it owns its whole viewport
+            and carries its own back control to the project's meetings
+            tab. Gates itself on a profiles row, like every other staff
+            route here. */}
+        <Route path="/staff-questionnaire/:projectId" element={<StaffQuestionnaireView />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />

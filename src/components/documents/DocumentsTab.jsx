@@ -17,6 +17,12 @@ import { resolveUserNames } from '../../lib/resolveUserNames'
    the module that owns client-completion semantics. */
 import { CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
 import { CONTRACTOR_COMPLETION_RESET } from '../../lib/contractorActionRequired'
+import ActionRequiredBadge, { ActionRequiredDot, ACTION_REQUIRED_RED } from '../ActionRequiredBadge'
+import {
+  groupByDocument,
+  summariseActions,
+  clearDocumentNotifications,
+} from '../../lib/staffNotifications'
 import '../../DocumentsTab.css'
 
 const ACCENT   = '#7bc1b5'
@@ -35,6 +41,9 @@ const STAGES = [
 ]
 
 const STATUS_OPTIONS = ['חסר', 'התקבל']
+
+/* Staff wording for the shared badge (its default is the client's). */
+const NOTIF_LABEL = (n) => `${n} עדכונים חדשים`
 
 /* ── Utilities ──
    The pure file helpers now live in ./filePreview (shared with the
@@ -469,7 +478,7 @@ function StatusIcon({ status }) {
    Now supports MULTIPLE attached files per row (each surfaced from a
    document_versions row; a legacy row with only project_documents
    .file_url is shown as a synthetic pseudo-version — see loadDocs). */
-function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName, isVersioned, nameById, showContractorColumn = false, onContractorAccessChange }) {
+function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, onPreview, onClientAccessChange, isParentProject, onOpenPropagate, doneByName, isVersioned, nameById, showContractorColumn = false, onContractorAccessChange, notifications = [], onClearNotifications }) {
   const fileRef                       = useRef(null)
   const [uploading, setUploading]     = useState(false)
   const [confirming, setConfirming]   = useState(false)
@@ -539,12 +548,62 @@ function DocRow({ doc, index, onPatch, onUpload, onVersionDelete, onDocDelete, o
     e.target.value = ''
   }
 
+  /* Level 4 — one line per DISTINCT action, each with its own count.
+     Three uploads = one line plus 3; an upload AND an approve = two
+     lines, never merged into a generic sentence. */
+  const notifLines = summariseActions(notifications)
+  const notifCount = notifications.length
+
+  /* CLICKING THE ROW CLEARS IT — anywhere in the row, controls included.
+     That is deliberate and it is safe here, because every control in
+     this row acts on THIS document and nothing else: the preview eye,
+     the download, the attach button, the per-file trash, the date, the
+     notes, both permission cells. Touching any of them IS attending to
+     the document, which is exactly what the notification was asking
+     for. There is no click in this row a user could make for an
+     unrelated reason and be surprised to find it cleared.
+
+     Only a real click. No hover, no focus, no scroll-into-view.
+
+     The handler is attached ONLY when something is pending, so an
+     ordinary click on an ordinary row fires no DELETE at all. */
+  const handleRowClick = notifCount > 0
+    ? () => { onClearNotifications && onClearNotifications(doc.id) }
+    : undefined
+
   return (
-    <div className={'dt-doc-row' + (index % 2 === 1 ? ' dt-doc-row--even' : '')}>
+    <div
+      className={'dt-doc-row' + (index % 2 === 1 ? ' dt-doc-row--even' : '')}
+      onClick={handleRowClick}
+    >
 
       {/* שם המסמך */}
       <div className="dt-col-name">
         <span className="dt-doc-name">{doc.name || '—'}</span>
+        {notifLines.length > 0 && (
+          <div
+            className="dt-doc-notifs"
+            style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 3, direction: 'rtl' }}
+          >
+            {notifLines.map(line => (
+              <div
+                key={line.key}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  fontSize: 11, fontWeight: 500, color: ACTION_REQUIRED_RED,
+                }}
+              >
+                <ActionRequiredDot size={7} label="עדכון חדש" />
+                <span>{line.text}</span>
+                {/* The count only appears when it says something a
+                    single line does not — "3" beside one sentence. */}
+                {line.count > 1 && (
+                  <span style={{ fontWeight: 700 }}>{line.count}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* סטטוס */}
@@ -826,7 +885,16 @@ function AddDocRow({ stage, stageId, subStageId, onAdd }) {
 }
 
 /* ── Main component ── */
-export default function DocumentsTab({ projectId, isParentProject }) {
+export default function DocumentsTab({
+  projectId,
+  isParentProject,
+  /* Owned by ProjectDetail, which loaded them in ONE query and already
+     used the same array for the tab badge. Levels 3 and 4 below derive
+     from it in memory — no query per group, no query per row, and no
+     second fetch that could disagree with the badge above the tab. */
+  notifications = [],
+  onNotificationsChanged,
+}) {
   const [docs,        setDocs]        = useState([])
   /* { docId, templateId, docName, accessValue } | null — controls
      PropagateAccessModal. Only ever opened via the dt-propagate-btn,
@@ -1329,6 +1397,23 @@ export default function DocumentsTab({ projectId, isParentProject }) {
     else byStage[d.stage] = [d]
   })
 
+  /* ── Notifications, grouped once per render ──────────────────────────
+     { [document_id]: rows[] }. The group badge sums over the stage's own
+     docs and the row lines read the same map, so a group badge showing N
+     always equals the number of marked rows inside it once expanded. */
+  const notifsByDoc = groupByDocument(notifications)
+  const countForDocs = (list) =>
+    (list || []).reduce((sum, d) => sum + (notifsByDoc[d.id]?.length || 0), 0)
+
+  /* Clearing removes every notification on that document, for everyone.
+     The refetch afterwards is what updates all four levels at once — the
+     row line, this stage's badge, the tab badge (ProjectDetail owns the
+     array) and, on the next board load, the kanban card. */
+  const clearNotificationsForDoc = async (docId) => {
+    const ok = await clearDocumentNotifications(docId)
+    if (ok && onNotificationsChanged) await onNotificationsChanged()
+  }
+
   /* ── Lookups derived from LUTs ── */
   const stageIdByName = {}
   stagesLut.forEach(s => { stageIdByName[s.name] = s.id })
@@ -1392,7 +1477,21 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                   onClick={() => toggleStage(stage)}
                 >
                   <span className="dt-accordion-arrow">{isOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
-                  <span className="dt-accordion-title">{stage}</span>
+                  {/* Level 3 — unread notifications on this stage's own
+                      documents. Derived from the same notifsByDoc map the
+                      rows below read, so expanding the group always
+                      reveals exactly this many marked rows.
+
+                      It lives INSIDE the title rather than beside it
+                      because .dt-accordion-title carries flex:1 — it
+                      stretches, so any later sibling is pushed to the far
+                      end of the row. Nested here, the badge travels with
+                      the stage name and sits immediately beside it. The
+                      X/Y chip is untouched and stays at the far end. */}
+                  <span className="dt-accordion-title">
+                    {stage}
+                    <ActionRequiredBadge count={countForDocs(stageDocs)} label={NOTIF_LABEL} />
+                  </span>
                   <span className="dt-accordion-count" style={{
                     background: 'rgba(255,255,255,0.3)',
                     color: text,
@@ -1450,6 +1549,8 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                                 nameById={doneByName}
                                 showContractorColumn={showContractorColumn}
                                 onContractorAccessChange={patchContractorAccess}
+                                notifications={notifsByDoc[doc.id] || []}
+                                onClearNotifications={clearNotificationsForDoc}
                               />
                             ))}
                             <AddDocRow
@@ -1482,6 +1583,8 @@ export default function DocumentsTab({ projectId, isParentProject }) {
                             nameById={doneByName}
                             showContractorColumn={showContractorColumn}
                             onContractorAccessChange={patchContractorAccess}
+                            notifications={notifsByDoc[doc.id] || []}
+                            onClearNotifications={clearNotificationsForDoc}
                           />
                         ))}
                         <AddDocRow

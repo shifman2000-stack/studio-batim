@@ -27,6 +27,7 @@ import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { useClient } from '../../components/ClientRoute'
 import { computeDocumentActionRequired, isDocumentActionRequired, CLIENT_COMPLETION_RESET } from '../../lib/actionRequired'
 import ActionRequiredBadge, { ACTION_REQUIRED_RED } from '../../components/ActionRequiredBadge'
+import { notifyClientUpload, notifyClientSign, notifyClientApprove } from '../../lib/staffNotify'
 import { logError } from '../../lib/clientActivityLog'
 
 const BUCKET = 'project-files'
@@ -440,6 +441,14 @@ export default function ClientDocuments() {
         return
       }
 
+      /* The approval is recorded — tell the studio. Reached only on a
+         REAL client approval: this handler already returns early on
+         isStaffView (an admin in the mobile client view) and on
+         previewMode, so neither can raise a client notification.
+         Fire-and-forget: notifyClientApprove never rejects, and a
+         failure must not undo an approval the client already made. */
+      void notifyClientApprove({ projectId: project_id, documentId: docId, actorId: userId })
+
       await loadData()
       if (!isMounted.current) return
       setSavedFlash(true)
@@ -590,6 +599,26 @@ export default function ClientDocuments() {
          silently. */
       if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
         throw new Error('project_documents update affected 0 rows')
+      }
+
+      /* Tell the studio — gated on `completes`, THE SAME FLAG that decided
+         whether this upload recorded client completion above. That flag is
+         `!isStaffView && UPLOADABLE_STATES.includes(doc?.client_access)`, so
+         a manager uploading through StaffClientViewMount notifies nobody:
+         it isn't a client act, and the insert would fail
+         client_can_create_own_notification anyway (she has no client_users
+         row), turning a legitimate upload into a 42501.
+
+         UPLOAD vs SIGN is decided HERE, from client_access at the moment of
+         the act. That is the only moment it is knowable: the two write
+         byte-identical columns, and client_access is mutable afterwards —
+         which is precisely why the action is recorded rather than derived.
+
+         Fire-and-forget: the notify functions never reject, and a failed
+         notification must not undo a file the client already uploaded. */
+      if (completes) {
+        const notify = doc.client_access === 'sign' ? notifyClientSign : notifyClientUpload
+        void notify({ projectId: project_id, documentId: docId, actorId: userId })
       }
 
       /* 5. Refetch + show success flash. */

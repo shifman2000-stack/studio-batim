@@ -188,26 +188,25 @@
   flex-wrap: wrap;
 }
 
-.kanban-card-tasks {
+/* ── Notification dots ────────────────────────────────────────────────
+   Up to two: one for the document stream, one for the questionnaire
+   stream. Presence only — the counts live on the tab badges, the stage
+   groups, the document rows and the שאלון פרוגרמה link.
+
+   Geometry is deliberately IDENTICAL to the .kanban-card-tasks block
+   this replaces (gap 3px, margin-top 5px, justify-content flex-end),
+   and the dots themselves are 6px like the old .kanban-task-dot, so the
+   board reads exactly as it always did. RTL: flex-end is the visual
+   LEFT, and margin-top after the meta row puts them at the bottom —
+   hence bottom-left. The dot's own colour and shape come from
+   ActionRequiredDot, so the red matches every other notification mark
+   in the app. */
+.kanban-card-notifs {
   display: flex;
   align-items: center;
   gap: 3px;
   margin-top: 5px;
   justify-content: flex-end;
-}
-
-.kanban-task-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.kanban-task-overflow {
-  font-size: 10px;
-  color: #999;
-  line-height: 1;
 }
 
 .kanban-card-responsible {

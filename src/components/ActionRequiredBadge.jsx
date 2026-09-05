@@ -42,13 +42,18 @@ export function ActionRequiredDot({ size = 8, style, label = 'דרוש טיפו�
   )
 }
 
-export default function ActionRequiredBadge({ count, size = 'sm', style }) {
+/* `label` exists so the STAFF side can say "3 עדכונים חדשים" instead of
+   the client's "3 פריטים הדורשים טיפול" — same shape, same red, same
+   component. Added as a prop rather than forking the component, and it
+   defaults to the client wording, so every existing call site is
+   unchanged. Takes the count so a caller can phrase it however it needs. */
+export default function ActionRequiredBadge({ count, size = 'sm', style, label }) {
   if (!count || count <= 0) return null
   const dim = size === 'lg' ? 22 : 18
   const fs  = size === 'lg' ? 13 : 11
   return (
     <span
-      aria-label={`${count} פריטים הדורשים טיפול`}
+      aria-label={label ? label(count) : `${count} פריטים הדורשים טיפול`}
       style={{
         display:         'inline-flex',
         alignItems:      'center',

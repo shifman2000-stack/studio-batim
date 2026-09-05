@@ -188,27 +188,10 @@
   flex-wrap: wrap;
 }
 
-.kanban-card-tasks {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  margin-top: 5px;
-  justify-content: flex-end;
-}
-
-.kanban-task-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.kanban-task-overflow {
-  font-size: 10px;
-  color: #999;
-  line-height: 1;
-}
+/* .kanban-card-tasks / .kanban-task-dot / .kanban-task-overflow were
+   removed with the task-status dots they styled. Nothing else referenced
+   them. The per-project count on a card is now the staff-notification
+   badge, which brings its own inline styles. */
 
 .kanban-card-responsible {
   font-family: 'Heebo', sans-serif;

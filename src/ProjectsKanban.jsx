@@ -1371,23 +1371,11 @@ ${authCode || '—'}
                           </span>
                         )}
                       </div>
-                      {tasksByProject[project.id]?.length > 0 && (() => {
-                        const statuses = tasksByProject[project.id]
-                        const dots = statuses.slice(0, 5)
-                        const overflow = statuses.length > 5
-                        return (
-                          <div className="kanban-card-tasks">
-                            {dots.map((s, i) => (
-                              <span
-                                key={i}
-                                className="kanban-task-dot"
-                                style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
-                              />
-                            ))}
-                            {overflow && <span className="kanban-task-overflow">5+</span>}
-                          </div>
-                        )
-                      })()}
+                      {/* The task-status dots were removed here. tasksByProject
+                          is deliberately NOT removed with them: it still backs
+                          the two board filters (יש משימות דחופות / יש משימות
+                          פעילות) in isVisible() above, which would silently
+                          match nothing without it. */}
                     </div>
                   ))}
                 </div>
@@ -1534,28 +1522,9 @@ ${authCode || '—'}
                                 </span>
                               )}
                             </div>
-                            {/* Task-status dots — archived projects have
-                                their tasks deleted at archive time, so
-                                this normally shows nothing, but keeping
-                                the exact same conditional preserves
-                                markup parity with regular cards. */}
-                            {tasksByProject[project.id]?.length > 0 && (() => {
-                              const statuses = tasksByProject[project.id]
-                              const dots = statuses.slice(0, 5)
-                              const overflow = statuses.length > 5
-                              return (
-                                <div className="kanban-card-tasks">
-                                  {dots.map((s, i) => (
-                                    <span
-                                      key={i}
-                                      className="kanban-task-dot"
-                                      style={{ background: s === 2 ? '#E24B4A' : '#2D3748' }}
-                                    />
-                                  ))}
-                                  {overflow && <span className="kanban-task-overflow">5+</span>}
-                                </div>
-                              )
-                            })()}
+                            {/* Task-status dots removed here too — this was
+                                the archive board's duplicate of the active
+                                card's block. */}
                           </div>
                         ))
                       )}

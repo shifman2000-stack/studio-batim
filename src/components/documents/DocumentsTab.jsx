@@ -1477,22 +1477,27 @@ export default function DocumentsTab({
                   onClick={() => toggleStage(stage)}
                 >
                   <span className="dt-accordion-arrow">{isOpen ? <IconChevronUp /> : <IconChevronDown />}</span>
-                  <span className="dt-accordion-title">{stage}</span>
+                  {/* Level 3 — unread notifications on this stage's own
+                      documents. Derived from the same notifsByDoc map the
+                      rows below read, so expanding the group always
+                      reveals exactly this many marked rows.
+
+                      It lives INSIDE the title rather than beside it
+                      because .dt-accordion-title carries flex:1 — it
+                      stretches, so any later sibling is pushed to the far
+                      end of the row. Nested here, the badge travels with
+                      the stage name and sits immediately beside it. The
+                      X/Y chip is untouched and stays at the far end. */}
+                  <span className="dt-accordion-title">
+                    {stage}
+                    <ActionRequiredBadge count={countForDocs(stageDocs)} label={NOTIF_LABEL} />
+                  </span>
                   <span className="dt-accordion-count" style={{
                     background: 'rgba(255,255,255,0.3)',
                     color: text,
                   }}>
                     {stageReceived.length}/{stageDocs.length}
                   </span>
-                  {/* Level 3 — unread notifications on this stage's own
-                      documents. Derived from the same notifsByDoc map the
-                      rows below read, so expanding the group always
-                      reveals exactly this many marked rows. */}
-                  <ActionRequiredBadge
-                    count={countForDocs(stageDocs)}
-                    label={NOTIF_LABEL}
-                    style={{ marginInlineStart: 6 }}
-                  />
                 </button>
 
                 {isOpen && (

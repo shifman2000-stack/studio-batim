@@ -225,6 +225,28 @@ function PdEditCell({ task, field, className, children,
 const CHILD_INQUIRIES_TAB_ID = 12
 const MODELS_TAB_ID = 13
 
+/* ── מפרטי בניה — parent of three sub-tabs ────────────────────────────
+   The three specs used to be top-level tabs. They are now nested under
+   one parent, but their TAB IDS ARE UNCHANGED (6, 7, 9) and that is
+   load-bearing: CONTROLLABLE_TABS in lib/clientTabVisibility.js maps
+   managerTabId → clientKey, and projects.client_visible_tabs is keyed by
+   that clientKey ('quantities' / 'finishing' / 'contractor'). Keeping the
+   ids means every existing share record still resolves, with no data
+   migration and no change to the client side at all.
+
+   The parent's own id is 14 — deliberately NOT in CONTROLLABLE_TABS, so
+   CONTROLLABLE_BY_MANAGER_ID[14] is undefined and the tabs bar gives it
+   no context menu and no "shown to client" icon, without a special case. */
+const SPEC_PARENT_TAB_ID = 14
+const SPEC_SUB_TABS = [
+  { id: 6, label: 'כתב כמויות' },
+  { id: 7, label: 'חומרי גמר' },
+  { id: 9, label: 'מפרט לקבלן' },
+]
+const SPEC_SUB_TAB_IDS = SPEC_SUB_TABS.map(t => t.id)
+/* Clicking the parent lands here — the first sub-tab, per spec. */
+const SPEC_DEFAULT_SUB_TAB_ID = SPEC_SUB_TABS[0].id
+
 const TABS = [
   { id: 5, label: 'משימות' },
   { id: 1, label: 'פרטי תיק' },
@@ -233,9 +255,7 @@ const TABS = [
      (?tab=…) can never drift from the tab they're meant to open. */
   { id: MEETINGS_TAB_ID, label: 'סיכומי פגישות' },
   { id: 2, label: 'מעקב מסמכים' },
-  { id: 6, label: 'כתב כמויות' },
-  { id: 7, label: 'חומרי גמר' },
-  { id: 9, label: 'מפרט לקבלן' },
+  { id: SPEC_PARENT_TAB_ID, label: 'מפרטי בניה' },
   { id: 10, label: 'מרחב משותף' },
   { id: 8, label: 'שלבי התקדמות' },
 ]
@@ -243,8 +263,9 @@ const TABS = [
 /* Tabs hidden entirely for parent projects — construction-detail tabs
    that don't apply to a project whose only "content" is its models and
    child inquiries. Gated on is_parent_project alone (never on
-   parent_project_id — a project can in theory be both). */
-const PARENT_HIDDEN_TAB_IDS = [10, 8, 6, 9, 7] // מרחב משותף, שלבי התקדמות, כתב כמויות, מפרט לקבלן, חומרי גמר
+   parent_project_id — a project can in theory be both).
+   All three specs hid here before; hiding their parent hides the set. */
+const PARENT_HIDDEN_TAB_IDS = [10, 8, SPEC_PARENT_TAB_ID] // מרחב משותף, שלבי התקדמות, מפרטי בניה
 
 /* ── Professional roles (card 3) ── */
 const PROF_ROLES = [
@@ -282,8 +303,17 @@ function ProjectDetail() {
   const deepLink = (() => {
     const params  = new URLSearchParams(location.search)
     const rawTab  = Number(params.get('tab'))
-    const validTab = TABS.some(t => t.id === rawTab) ? rawTab : null
-    return { tab: validTab, summaryId: params.get('summary') || null }
+    /* Sub-tab ids count as valid targets too: ?tab=6 predates the
+       מפרטי בניה nesting and still opens כתב כמויות, now with its parent
+       highlighted and the sub-tab strip showing. */
+    const validTab = (TABS.some(t => t.id === rawTab) || SPEC_SUB_TAB_IDS.includes(rawTab))
+      ? rawTab
+      : null
+    /* The parent id is never a content target — nothing renders for 14.
+       ?tab=14 resolves to the first sub-tab, the same place clicking the
+       parent goes. */
+    const resolvedTab = validTab === SPEC_PARENT_TAB_ID ? SPEC_DEFAULT_SUB_TAB_ID : validTab
+    return { tab: resolvedTab, summaryId: params.get('summary') || null }
   })()
 
   const [project, setProject]       = useState(null)
@@ -396,11 +426,16 @@ function ProjectDetail() {
     const nextObj = { ...merged, [clientKey]: nextValue }
     setClientVisibleTabs(nextObj)
     try {
-      const { error } = await supabase
+      /* Row-count checked, not just `.error`: an RLS refusal returns 204
+         with no error and no rows, which would leave the icon flipped in
+         the UI while the client's drawer never changed. */
+      const { data: updated, error } = await supabase
         .from('projects')
         .update({ client_visible_tabs: nextObj })
         .eq('id', id)
+        .select('id')
       if (error) throw error
+      if (!updated || updated.length === 0) throw new Error('client_visible_tabs update affected 0 rows')
     } catch (err) {
       console.error('ProjectDetail — client_visible_tabs save failed:', err)
       setClientVisibleTabs(prev)   /* revert on failure */
@@ -958,17 +993,28 @@ function ProjectDetail() {
       {/* ── Tabs bar ── */}
       <div className="pd-tabs-bar">
         {visibleTabs.map(tab => {
+          /* The מפרטי בניה parent is not in CONTROLLABLE_TABS, so ctrl is
+             undefined for it — no context menu and no client icon fall out
+             of the existing lookup with no special case. It reads as active
+             whenever any of its three children is. */
+          const isSpecParent = tab.id === SPEC_PARENT_TAB_ID
           const ctrl    = CONTROLLABLE_BY_MANAGER_ID[tab.id]
           const visible = ctrl ? isClientTabVisible(ctrl.clientKey, clientVisibleTabs) : null
+          const isActive = isSpecParent
+            ? SPEC_SUB_TAB_IDS.includes(activeTab)
+            : activeTab === tab.id
           return (
             <button
               key={tab.id}
               className={
                 'pd-tab' +
-                (activeTab === tab.id ? ' pd-tab--active' : '') +
+                (isActive ? ' pd-tab--active' : '') +
                 (tab.disabled ? ' pd-tab--disabled' : '')
               }
-              onClick={() => { if (!tab.disabled) setActiveTab(tab.id) }}
+              onClick={() => {
+                if (tab.disabled) return
+                setActiveTab(isSpecParent ? SPEC_DEFAULT_SUB_TAB_ID : tab.id)
+              }}
               onContextMenu={ctrl ? (e) => handleTabContextMenu(e, ctrl.clientKey) : undefined}
               disabled={tab.disabled}
             >
@@ -1011,6 +1057,44 @@ function ProjectDetail() {
           </div>
         )
       })()}
+
+      {/* ── מפרטי בניה sub-tab strip ──────────────────────────────────
+          Only while one of the three specs is open. Follows the existing
+          sub-tab strip in Hours.jsx (hours-admin-tabs-bar / .active) —
+          an underlined strip inside the panel, visually subordinate to
+          the top-level bar rather than a second copy of it.
+
+          The right-click share menu lives HERE now, on the three sub-tabs
+          that own a clientKey, and nowhere else: the parent tab above has
+          no ctrl entry, so it gets no handler and the browser's own menu
+          opens on it. The handler and its clientKey are unchanged — this
+          is purely a move of where the affordance is rendered. */}
+      {SPEC_SUB_TAB_IDS.includes(activeTab) && (
+        <div className="pd-subtabs-bar">
+          {SPEC_SUB_TABS.map(sub => {
+            const ctrl    = CONTROLLABLE_BY_MANAGER_ID[sub.id]
+            const visible = ctrl ? isClientTabVisible(ctrl.clientKey, clientVisibleTabs) : null
+            return (
+              <button
+                key={sub.id}
+                className={'pd-subtab' + (activeTab === sub.id ? ' pd-subtab--active' : '')}
+                onClick={() => setActiveTab(sub.id)}
+                onContextMenu={ctrl ? (e) => handleTabContextMenu(e, ctrl.clientKey) : undefined}
+              >
+                {sub.label}
+                {ctrl && visible && (
+                  <span
+                    className="pd-subtab-vis-icon"
+                    title="מוצג ללקוח (קליק-ימני לשינוי)"
+                  >
+                    <IconUser size={12} />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Tab content ── */}
       <div className={`pd-tab-content${activeTab === 5 ? ' pd-tab-content--tasks' : ''}`}>

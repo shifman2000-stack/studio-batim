@@ -169,6 +169,62 @@
   cursor: not-allowed;
 }
 
+/* ── מפרטי בניה sub-tab strip ────────────────────────────────────────
+   Matches the existing sub-tab strip in Hours.css (.hours-admin-tabs-bar
+   / .hours-admin-tab) rather than introducing a second visual language
+   for the same idea: underline-on-active, muted when inactive, and
+   clearly subordinate to .pd-tabs-bar above it.
+
+   RTL: the row is laid out in document order, and the page is already
+   direction: rtl, so the first sub-tab (כתב כמויות) sits FURTHEST RIGHT
+   — the same order as the three top-level tabs it replaced. */
+.pd-subtabs-bar {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  direction: rtl;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 0 12px;
+  margin-top: 14px;
+  flex-shrink: 0;
+}
+
+.pd-subtab {
+  height: 34px;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pd-subtab:hover {
+  color: #333;
+}
+
+.pd-subtab--active {
+  color: #111;
+  border-bottom-color: #111;
+}
+
+/* Same affordance as .pd-tab-vis-icon on the top-level bar — the tab is
+   shared with the client. Right-click toggles it. */
+.pd-subtab-vis-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #7a8b99;
+}
+
 .pd-tab-soon {
   font-size: 10px;
   font-weight: 600;

@@ -40,6 +40,14 @@ export const HOUSE_GENERAL_QUESTION_LABELS = {
   gasWaterHeating: 'האם מעוניינים בחימום מים בגז',
 }
 export const HOUSE_GENERAL_QUESTION_KEYS = ['floorHeating', 'elevator', 'fireplace', 'gasWaterHeating']
+/* The same four as short nouns, for places that list all four on one line
+   (the programming summary). Kept beside the questions they abbreviate. */
+export const HOUSE_GENERAL_SHORT_LABELS = {
+  floorHeating:    'חימום רצפתי',
+  elevator:        'מעלית',
+  fireplace:       'קמין',
+  gasWaterHeating: 'חימום מים בגז',
+}
 
 export const YES_LABEL = 'כן'
 export const NO_LABEL  = 'לא'

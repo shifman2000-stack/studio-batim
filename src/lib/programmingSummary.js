@@ -8,6 +8,12 @@
 // ProgrammingSummaryDocument, which only draws it. Keeping every decision
 // here is what lets the mapping be checked against real stored rows.
 //
+// ── THE SHAPE IS DENSE ────────────────────────────────────────────────────
+// The document is built from LINES, never from a label on one line and its
+// value on the next. Each chapter is a list of one-line blocks, then one
+// muted line naming whatever in that chapter was left unanswered. A chapter
+// with nothing answered at all collapses to a single line.
+//
 // ── WHAT DECIDES WHAT APPEARS ─────────────────────────────────────────────
 // QUESTIONNAIRE_STEPS in programmingConfig.js, walked the same way the
 // questionnaire walks it. Nothing here restates the chapter list, so a
@@ -19,6 +25,8 @@
 //   · house_general → four yes/no answers under answers.house.general
 //   · inspiration   → its textarea blocks plus answers.inspirationImages,
 //                     placed LAST, after the house-builder section
+// A chapter made only of per-person blocks (תעסוקה ותחביבים) has no chapter
+// of its own: each person's answers join that person's line in chapter 1.
 //
 // ── THE HOUSE BUILDER ─────────────────────────────────────────────────────
 // Display names, floor names and fixed-area types come from the adapted
@@ -28,7 +36,7 @@
 // The builder's own step-3 summary filters them and silently loses data;
 // this document must not.
 
-import { QUESTIONNAIRE_STEPS } from './programmingConfig'
+import { QUESTIONNAIRE_STEPS, SEX_OPTIONS } from './programmingConfig'
 import { SIZE_LABELS } from './houseSizeConfig'
 /* The area order the BUILDER numbers rooms in. HouseBuilderV2 walks a fixed
    first → ground → basement → yard list (not the config's floor order) when
@@ -39,38 +47,59 @@ import {
   QUESTIONNAIRE_TILE_TITLE,
   HOUSE_BUILDER_TITLE,
   FILLING_DONE_LABEL,
-  PERSON_NAME_LABEL,
   PERSON_AGE_LABEL,
-  PERSON_SEX_LABEL,
-  HOUSE_GENERAL_QUESTION_LABELS,
   HOUSE_GENERAL_QUESTION_KEYS,
+  HOUSE_GENERAL_SHORT_LABELS,
   YES_LABEL,
   NO_LABEL,
-  REQUESTED_AREA_LABEL,
   AREA_UNIT,
-  FLOORS_SECTION_TITLE,
   ROOF_SECTION_TITLE,
-  ROOM_CHARACTERISTICS_LABEL,
-  ROOM_NOTE_LABEL,
 } from './programmingLabels'
 
 /* ── Labels owned by this document alone ─────────────────────────────────
    None of these exists anywhere else in the app, so they are defined here
    once rather than extracted. */
 export const SUMMARY_TITLE          = 'סיכום פרוגרמה'
-export const UNANSWERED_LABEL       = 'לא נענה'
 export const CLIENTS_LABEL          = 'לקוחות'
 export const UPDATED_LABEL          = 'עודכן לאחרונה'
 export const NOT_DONE_LABEL         = 'טרם הסתיים המילוי'
-export const ORPHANS_HEADING        = 'תשובות ללא בן בית מתאים'
+export const UNANSWERED_LIST_LABEL  = 'לא נענו'
+export const NOTHING_ANSWERED_LABEL = 'לא נענה דבר בפרק זה'
+export const PERSON_EMPTY_LABEL     = 'לא מולא'
+export const ORPHANS_LABEL          = 'תשובות ללא בן בית מתאים'
 export const HOUSE_EMPTY_LABEL      = 'בונה הבית טרם מולא'
-export const FREE_PROPS_LABEL       = 'מאפיינים נוספים'
+export const IMAGES_LABEL           = 'תמונות'
+export const TARGET_AREA_SHORT_LABEL = 'שטח מבוקש'
+export const FLOORS_SHORT_LABEL     = 'קומות'
 export const LOAD_ERROR_LABEL       = 'שגיאה בטעינת סיכום הפרוגרמה'
-/* Chapter 5's answers are held in answers.house.general, which the house
-   builder rewrites without these three keys — so a blank here is not proof
-   the client never answered. */
+/* Chapter 5's unanswered mark — a dash, since the four answers sit together
+   on one line rather than being moved to the unanswered list. */
+export const UNANSWERED_MARK        = '—'
+
+/* Chapter 5's answers live in answers.house.general, which the house
+   builder rewrites without these three keys — so a blank there is not proof
+   the client never answered. Built from the same short labels the chapter
+   line uses, so the two can never disagree. */
+const S = HOUSE_GENERAL_SHORT_LABELS
 export const HOUSE_GENERAL_FOOTNOTE =
-  'שים לב: התשובות "חימום רצפתי", "קמין" ו"חימום מים בגז" נמחקות כאשר הלקוח עורך את בונה הבית. "לא נענה" כאן אינו בהכרח אומר שהלקוח לא ענה.'
+  `שים לב: התשובות "${S.floorHeating}", "${S.fireplace}" ו"${S.gasWaterHeating}" נמחקות כאשר הלקוח עורך את בונה הבית. "לא נענה" כאן אינו בהכרח אומר שהלקוח לא ענה.`
+
+/* Short display forms for config fields whose full label is a whole
+   question. Keyed by the config's own key/store, so a field not listed here
+   simply keeps its config label. */
+const SHORT_FIELD_LABELS = {
+  composition: 'הרכב הבית',
+  pets:        'בעלי חיים',
+  arch:        'אלמנטים אדריכליים',
+}
+
+/* "בן 31-45" / "בת 31-45". The stored sex values are programmingConfig's
+   SEX_OPTIONS: [0] male, [1] female. A person with any other value (none,
+   or the legacy "לא לציין") gets the neutral "גיל 31-45" instead. */
+const MALE_SEX = SEX_OPTIONS[0]
+const FEMALE_SEX = SEX_OPTIONS[1]
+const AGE_WORD_MALE = 'בן'
+const AGE_WORD_FEMALE = 'בת'
 
 /* The two step keys the questionnaire renders as special cases. */
 const HOUSE_GENERAL_STEP_KEY = 'house_general'
@@ -79,6 +108,9 @@ const INSPIRATION_STEP_KEY   = 'inspiration'
 /* V1's per-option checkbox props shape: props['c<group>_<option>'] = true.
    Documented in houseBuilderConfig.js; the option name is in the key. */
 const LEGACY_CHECKBOX_PROP_KEY = /^c\d+_(.+)$/
+
+/* A line ending in sentence punctuation. */
+const SENTENCE_END = /[.!?…]$/
 
 /* ── Small helpers ───────────────────────────────────────────────────────── */
 
@@ -93,11 +125,22 @@ function isBlank(v) {
   return false
 }
 
-/* A displayable answer, or null for unanswered. Line breaks inside the
-   answer are kept; only the outer whitespace is trimmed. */
-function answerText(v) {
+const lines = (s) => String(s).split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+
+/* Collapse any stored text onto one line, joining its lines with ", ". */
+const oneLine = (s) => lines(s).join(', ')
+
+/* A free-text answer for an inline "label: value" line. Line breaks are
+   kept only when the text is genuinely several sentences — two or more of
+   its lines end in sentence punctuation. Anything else (a trailing newline,
+   a short list typed one item per line) flows as one line. */
+function flowText(v) {
   if (isBlank(v)) return null
-  return typeof v === 'string' ? v.trim() : String(v)
+  if (typeof v !== 'string') return { text: String(v), multiline: false }
+  const ls = lines(v)
+  const sentences = ls.filter(l => SENTENCE_END.test(l)).length
+  if (ls.length > 1 && sentences >= 2) return { text: ls.join('\n'), multiline: true }
+  return { text: ls.join(', '), multiline: false }
 }
 
 /* DD/MM/YYYY, matching the date format used elsewhere in the app. */
@@ -118,15 +161,22 @@ function isSafeHttpUrl(url) {
   try { new URL(url); return true } catch { return false }
 }
 
-const field = (label, value) => ({ kind: 'field', label, value })
+/* A fresh chapter: blocks in order, the unanswered labels, and whether it
+   ended up with nothing answered at all. */
+const chapter = (key, title) => ({ key, title, blocks: [], unanswered: [], nothingAnswered: false })
 
-/* ── Questionnaire blocks (everything except the people block) ──────────── */
+/* ── Questionnaire blocks → inline lines ─────────────────────────────────── */
 
-function blockItems(block, q) {
+/* Every non-people block becomes zero or more { label, value } entries,
+   value null when unanswered. */
+function blockEntries(block, q) {
   switch (block.type) {
     case 'textareas': {
       const bag = asObject(q[block.store])
-      return (block.items || []).map(item => field(item.label, answerText(bag[item.key])))
+      return (block.items || []).map(item => ({
+        label: SHORT_FIELD_LABELS[item.key] || item.label,
+        value: flowText(bag[item.key]),
+      }))
     }
     case 'options': {
       /* Deselected chips stay in the object as `false`, so selection is
@@ -136,48 +186,61 @@ function blockItems(block, q) {
       const selected = (block.options || [])
         .filter(([, optKey]) => bag[optKey] === true)
         .map(([label]) => label)
-      return [field(block.sectionLabel, selected.length ? selected.join(', ') : null)]
+      return [{
+        label: SHORT_FIELD_LABELS[block.store] || block.sectionLabel,
+        value: selected.length ? { text: selected.join(', '), multiline: false } : null,
+      }]
     }
     case 'textarea':
-      return [field(block.label, answerText(q[block.key]))]
+      return [{ label: SHORT_FIELD_LABELS[block.key] || block.label, value: flowText(q[block.key]) }]
     default:
       return []
   }
 }
 
-/* ── Chapter 1: people, with their per-person answers folded in ─────────── */
+/* Answered entries become inline lines; unanswered ones are named in the
+   chapter's closing line. */
+function addEntries(ch, entries) {
+  for (const e of entries) {
+    if (e.value === null) ch.unanswered.push(e.label)
+    else ch.blocks.push({ kind: 'inline', label: e.label, text: e.value.text, multiline: e.value.multiline })
+  }
+}
 
-function personItems(q, perPersonFields) {
-  const people = Array.isArray(q.people) ? q.people : []
-  return people.map(raw => {
-    const p = asObject(raw)
-    const name = typeof p.name === 'string' ? p.name : ''
-    const named = name.trim() !== ''
-    const fields = [
-      field(PERSON_AGE_LABEL, answerText(p.age)),
-      field(PERSON_SEX_LABEL, answerText(p.sex)),
-    ]
-    /* Per-person answers are stored keyed by the person's name exactly as
-       typed — the questionnaire reads bag[p.name] — and are only ever
-       collected for a person who has a name, so an unnamed person gets
-       none here either. */
-    if (named) {
-      for (const f of perPersonFields) {
-        fields.push(field(f.placeholder, answerText(asObject(q[f.key])[name])))
-      }
+/* ── Chapter 1: one line per person ─────────────────────────────────────── */
+
+function personLine(raw, q, perPersonFields) {
+  const p = asObject(raw)
+  const name = typeof p.name === 'string' ? p.name.trim() : ''
+  const sex  = isBlank(p.sex) ? '' : String(p.sex).trim()
+  const age  = isBlank(p.age) ? '' : String(p.age).trim()
+
+  const parts = []
+  if (name) parts.push(name)
+  if (sex) parts.push(sex)
+  if (age) {
+    const word = sex === MALE_SEX ? AGE_WORD_MALE : sex === FEMALE_SEX ? AGE_WORD_FEMALE : PERSON_AGE_LABEL
+    parts.push(`${word} ${age}`)
+  }
+  /* Per-person answers are stored keyed by the person's name exactly as
+     typed — the questionnaire reads bag[p.name] — and are only ever
+     collected for a person who has a name. */
+  if (name) {
+    for (const f of perPersonFields) {
+      const v = asObject(q[f.key])[p.name]
+      if (!isBlank(v)) parts.push(oneLine(v))
     }
-    return {
-      kind:      'person',
-      name:      named ? name.trim() : null,
-      nameLabel: PERSON_NAME_LABEL,
-      fields,
-    }
-  })
+  }
+
+  if (parts.length === 0) return null
+  /* named: parts[0] is the name (so the document can set it apart).
+     empty: a name and nothing else. */
+  return { kind: 'person', parts, named: !!name, empty: !!name && parts.length === 1 }
 }
 
 /* Per-person answers whose stored name matches nobody in people[] — left
    behind when a person is renamed. Listed, never dropped. */
-function orphanItem(q, perPersonFields) {
+function orphansBlock(q, perPersonFields) {
   const people = Array.isArray(q.people) ? q.people : []
   const knownNames = new Set(
     people
@@ -187,27 +250,41 @@ function orphanItem(q, perPersonFields) {
   const byName = new Map()
   for (const f of perPersonFields) {
     for (const [storedName, value] of Object.entries(asObject(q[f.key]))) {
-      if (knownNames.has(storedName)) continue
-      const text = answerText(value)
-      if (text === null) continue
+      if (knownNames.has(storedName) || isBlank(value)) continue
       if (!byName.has(storedName)) byName.set(storedName, [])
-      byName.get(storedName).push(field(f.placeholder, text))
+      byName.get(storedName).push(oneLine(value))
     }
   }
   if (byName.size === 0) return null
   return {
     kind:    'orphans',
-    heading: ORPHANS_HEADING,
-    entries: [...byName].map(([name, fields]) => ({
-      name: name.trim() !== '' ? name.trim() : null,
-      fields,
-    })),
+    label:   ORPHANS_LABEL,
+    entries: [...byName].map(([name, parts]) => ({ name: name.trim() || null, parts })),
   }
+}
+
+function peopleChapter(step, q, perPersonFields) {
+  const ch = chapter(step.key, step.title)
+  for (const block of step.blocks || []) {
+    if (block.type === 'people') {
+      const people = Array.isArray(q.people) ? q.people : []
+      const personBlocks = people.map(p => personLine(p, q, perPersonFields)).filter(Boolean)
+      if (personBlocks.length) ch.blocks.push(...personBlocks)
+      else ch.unanswered.push(block.sectionLabel)
+    } else if (block.type !== 'per_person') {
+      addEntries(ch, blockEntries(block, q))
+    }
+  }
+  const orphans = orphansBlock(q, perPersonFields)
+  if (orphans) ch.blocks.push(orphans)
+  ch.nothingAnswered = ch.blocks.length === 0
+  return ch
 }
 
 /* ── Chapter 5: החלטות כלליות לבית ─────────────────────────────────────── */
 
 function houseGeneralChapter(step, answers) {
+  const ch = chapter(step.key, step.title)
   const general = asObject(asObject(answers.house).general)
   const legacyHeatingFloors = Array.isArray(general.floorHeatingFloors) ? general.floorHeatingFloors : []
   const items = HOUSE_GENERAL_QUESTION_KEYS.map(key => {
@@ -215,19 +292,23 @@ function houseGeneralChapter(step, answers) {
     /* Mirrors HouseGeneralSection: floor heating with no boolean yet reads
        as "yes" when the legacy per-floor list is non-empty. */
     if (v === null && key === 'floorHeating' && legacyHeatingFloors.length > 0) v = true
-    return field(
-      HOUSE_GENERAL_QUESTION_LABELS[key],
-      v === true ? YES_LABEL : v === false ? NO_LABEL : null,
-    )
+    return { label: HOUSE_GENERAL_SHORT_LABELS[key], value: v === true ? YES_LABEL : v === false ? NO_LABEL : null }
   })
-  return { key: step.key, title: step.title, items, footnote: HOUSE_GENERAL_FOOTNOTE }
+  /* The four stay together on one line, a dash for each unanswered one,
+     rather than going to the unanswered list. */
+  if (items.some(i => i.value !== null)) ch.blocks.push({ kind: 'pairs', items })
+  ch.nothingAnswered = ch.blocks.length === 0
+  /* Kept even when nothing is answered: that is exactly the state the
+     footnote explains. */
+  ch.footnote = HOUSE_GENERAL_FOOTNOTE
+  return ch
 }
 
 /* ── Inspiration (rendered last) ───────────────────────────────────────── */
 
-function inspirationSection(step, answers, q) {
-  const items = []
-  for (const block of step.blocks || []) items.push(...blockItems(block, q))
+function inspirationChapter(step, answers, q) {
+  const ch = chapter(step.key, step.title)
+  for (const block of step.blocks || []) addEntries(ch, blockEntries(block, q))
   const images = (Array.isArray(answers.inspirationImages) ? answers.inspirationImages : [])
     .map(asObject)
     .filter(img => !isBlank(img.url) || !isBlank(img.fileName))
@@ -237,7 +318,10 @@ function inspirationSection(step, answers, q) {
       url:      isSafeHttpUrl(img.url) ? img.url : null,
       fileName: typeof img.fileName === 'string' && img.fileName.trim() !== '' ? img.fileName : null,
     }))
-  return { title: step.title, items, images }
+  if (images.length) ch.blocks.push({ kind: 'images', images })
+  else ch.unanswered.push(IMAGES_LABEL)
+  ch.nothingAnswered = ch.blocks.length === 0
+  return ch
 }
 
 /* ── House builder ─────────────────────────────────────────────────────── */
@@ -272,7 +356,8 @@ function collectCharacteristics(props) {
   return out
 }
 
-function houseSection(answers, config) {
+function houseChapter(answers, config) {
+  const ch = chapter('house', HOUSE_BUILDER_TITLE)
   const house = asObject(answers.house)
   const rooms = asObject(house.rooms)
   const general = asObject(house.general)
@@ -286,12 +371,14 @@ function houseSection(answers, config) {
   /* A house object carrying only `general` is chapter 5's answers, not
      house-builder data, so it counts as an empty builder. */
   if (!hasRooms && !hasFloors && !hasYardKey && !hasTarget && !hasRoof) {
-    return { title: HOUSE_BUILDER_TITLE, empty: true, emptyText: HOUSE_EMPTY_LABEL }
+    ch.nothingAnswered = true
+    ch.emptyText = HOUSE_EMPTY_LABEL
+    return ch
   }
 
-  const floorDefs   = Array.isArray(config && config.FLOOR_DEFS) ? config.FLOOR_DEFS : []
-  const areaKeys    = Array.isArray(config && config.AREA_KEYS) ? config.AREA_KEYS : []
-  const displayType = (config && typeof config.displayType === 'function') ? config.displayType : (t) => t
+  const floorDefs    = Array.isArray(config && config.FLOOR_DEFS) ? config.FLOOR_DEFS : []
+  const areaKeys     = Array.isArray(config && config.AREA_KEYS) ? config.AREA_KEYS : []
+  const displayType  = (config && typeof config.displayType === 'function') ? config.displayType : (t) => t
   const hasFixedArea = (config && typeof config.hasFixedArea === 'function') ? config.hasFixedArea : () => false
 
   /* The config's floors: interior floors are in FLOOR_DEFS; the yard is the
@@ -304,14 +391,14 @@ function houseSection(answers, config) {
     return k
   }
 
-  const lines = []
-
+  /* ── The one summary line ── */
+  const summary = []
   if (hasTarget) {
     /* The raw stored number, deliberately not turned back into the range
        the client may have picked. */
-    lines.push({ label: REQUESTED_AREA_LABEL, value: `${house.targetArea} ${AREA_UNIT}` })
+    summary.push({ label: TARGET_AREA_SHORT_LABEL, value: `${house.targetArea} ${AREA_UNIT}` })
   }
-
+  if (hasRoof) summary.push({ label: ROOF_SECTION_TITLE, value: oneLine(general.roof) })
   const floorsObj = asObject(house.floors)
   const chosen = []
   for (const k of areaKeys) {
@@ -322,9 +409,8 @@ function houseSection(answers, config) {
   for (const [k, v] of Object.entries(floorsObj)) {
     if (v === true && !areaKeys.includes(k)) chosen.push(k)
   }
-  lines.push({ label: FLOORS_SECTION_TITLE, value: chosen.length ? chosen.join(', ') : null })
-
-  if (hasRoof) lines.push({ label: ROOF_SECTION_TITLE, value: answerText(general.roof) })
+  summary.push({ label: FLOORS_SHORT_LABEL, value: chosen.length ? chosen.join(', ') : null })
+  ch.blocks.push({ kind: 'pairs', items: summary })
 
   /* Room numbering, exactly as HouseBuilderV2's roomLabelById: count each
      TYPE across the whole house — every area, nested rooms included,
@@ -346,43 +432,40 @@ function houseSection(answers, config) {
     else list.forEach((r, i) => labelByRoom.set(r, `${displayType(type)} ${i + 1}`))
   }
 
+  /* One line per room: name, (size), then characteristics, the client's
+     own characteristics and the note — all on that line. */
   const buildRoom = (raw) => {
     const r = asObject(raw)
     const valid = isValidRoom(r)
     const label = labelByRoom.get(raw) || (valid ? displayType(r.type) : null)
-
-    const details = []
-    if (!(valid && hasFixedArea(r.type)) && Object.prototype.hasOwnProperty.call(SIZE_LABELS, r.sizeKey)) {
-      details.push({ label: null, value: SIZE_LABELS[r.sizeKey] })
-    }
-    const chars = collectCharacteristics(r.props)
-    if (chars.length) details.push({ label: ROOM_CHARACTERISTICS_LABEL, value: chars.join(', ') })
-    const free = (Array.isArray(r.freeProps) ? r.freeProps : [])
-      .filter(x => typeof x === 'string' && x.trim() !== '')
-      .map(x => x.trim())
-    if (free.length) details.push({ label: FREE_PROPS_LABEL, value: free.join(', ') })
-    if (typeof r.note === 'string' && r.note.trim() !== '') {
-      details.push({ label: ROOM_NOTE_LABEL, value: r.note.trim(), multiline: true })
-    }
-
+    const size = (!(valid && hasFixedArea(r.type)) && Object.prototype.hasOwnProperty.call(SIZE_LABELS, r.sizeKey))
+      ? SIZE_LABELS[r.sizeKey]
+      : null
+    const extras = [
+      ...collectCharacteristics(r.props),
+      ...(Array.isArray(r.freeProps) ? r.freeProps : [])
+        .filter(x => typeof x === 'string' && x.trim() !== '')
+        .map(x => x.trim()),
+    ]
+    const note = (typeof r.note === 'string' && r.note.trim() !== '') ? oneLine(r.note) : null
     return {
       label,
-      details,
+      size,
+      extras,
+      note,
       children: (Array.isArray(r.children) ? r.children : []).map(buildRoom),
     }
   }
 
-  /* Areas in the config's floor order, then any stored area the config
-     does not list — shown, not dropped. */
+  /* Floors in the config's order, then any stored area the config does not
+     list — shown, not dropped. A floor with no rooms is left out. */
   const areaOrder = [...areaKeys, ...Object.keys(rooms).filter(k => !areaKeys.includes(k))]
-  const areas = []
   for (const k of areaOrder) {
     const list = Array.isArray(rooms[k]) ? rooms[k] : []
     if (list.length === 0) continue
-    areas.push({ key: k, label: areaLabel(k), rooms: list.map(buildRoom) })
+    ch.blocks.push({ kind: 'floor', key: k, label: areaLabel(k), rooms: list.map(buildRoom) })
   }
-
-  return { title: HOUSE_BUILDER_TITLE, empty: false, lines, areas }
+  return ch
 }
 
 /* ── Entry point ───────────────────────────────────────────────────────── */
@@ -416,48 +499,37 @@ export function buildProgrammingSummary({ projectName, contacts, row, config }) 
   const chapters = []
   let inspiration = null
   for (const step of QUESTIONNAIRE_STEPS) {
-    if (step.key === INSPIRATION_STEP_KEY) {
-      inspiration = inspirationSection(step, answers, q)
-      continue
-    }
-    if (step.key === HOUSE_GENERAL_STEP_KEY) {
-      chapters.push(houseGeneralChapter(step, answers))
-      continue
-    }
+    if (step.key === INSPIRATION_STEP_KEY) { inspiration = inspirationChapter(step, answers, q); continue }
+    if (step.key === HOUSE_GENERAL_STEP_KEY) { chapters.push(houseGeneralChapter(step, answers)); continue }
 
     const blocks = step.blocks || []
-    /* A chapter made only of per-person blocks is shown inside the people
-       chapter, under each person, so it gets no second, empty chapter. */
+    /* A chapter made only of per-person blocks is folded into the people
+       chapter's lines, so it gets no chapter of its own. */
     if (blocks.length > 0 && blocks.every(b => b.type === 'per_person')) continue
 
-    const items = []
-    let hasPeopleBlock = false
-    for (const block of blocks) {
-      if (block.type === 'people') {
-        hasPeopleBlock = true
-        items.push(...personItems(q, perPersonFields))
-      } else if (block.type !== 'per_person') {
-        items.push(...blockItems(block, q))
-      }
+    if (blocks.some(b => b.type === 'people')) {
+      chapters.push(peopleChapter(step, q, perPersonFields))
+      continue
     }
-    if (hasPeopleBlock) {
-      const orphans = orphanItem(q, perPersonFields)
-      if (orphans) items.push(orphans)
-    }
-    chapters.push({ key: step.key, title: step.title, items })
+    const ch = chapter(step.key, step.title)
+    for (const block of blocks) addEntries(ch, blockEntries(block, q))
+    ch.nothingAnswered = ch.blocks.length === 0
+    chapters.push(ch)
   }
+  chapters.push(houseChapter(answers, config))
+  if (inspiration) chapters.push(inspiration)
+
+  const meta_ = []
+  if (clientNames.length) meta_.push({ label: CLIENTS_LABEL, value: clientNames.join(', ') })
+  const updatedAt = formatDate(row && row.updated_at)
+  if (updatedAt) meta_.push({ label: UPDATED_LABEL, value: updatedAt })
+  meta_.push({ label: QUESTIONNAIRE_TILE_TITLE, value: meta.questionnaire_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
+  meta_.push({ label: HOUSE_BUILDER_TITLE,      value: meta.house_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
 
   return {
     title:       SUMMARY_TITLE,
     projectName: projectName || '',
-    clientNames,
-    updatedAt:   formatDate(row && row.updated_at),
-    completion: [
-      { label: QUESTIONNAIRE_TILE_TITLE, value: meta.questionnaire_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL },
-      { label: HOUSE_BUILDER_TITLE,      value: meta.house_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL },
-    ],
+    meta:        meta_,
     chapters,
-    house: houseSection(answers, config),
-    inspiration,
   }
 }

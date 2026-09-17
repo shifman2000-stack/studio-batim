@@ -4,23 +4,34 @@
 // built by lib/programmingSummary.js. It decides nothing — every label,
 // value and "unanswered" call is already made by the model.
 //
+// ── DENSE BY DESIGN ───────────────────────────────────────────────────────
+// Maximum information per screen. Every row is ONE line (.ps-line): a person,
+// a "label: value" answer, a group of short answers joined by " · ", a room.
+// A short value never gets a line of its own, and unanswered fields are named
+// once, in a single muted line at the end of their chapter. The only
+// headings are the page title and the chapter titles; chapters flow in two
+// columns on wide screens.
+//
 // ── IT IS A DOCUMENT ──────────────────────────────────────────────────────
 // No buttons, inputs, selects, textareas, contenteditable, canvas or house
 // drawing. The only interactive elements are the inspiration thumbnails,
-// which open the image in a new tab. Safe to hand to someone who will only
-// read it.
+// which open the image in a new tab.
 //
 // ── RTL ───────────────────────────────────────────────────────────────────
 // The page is right-to-left. Spacing uses logical properties throughout
-// (see ProgrammingSummary.css). Free-text answers use unicode-bidi:
-// plaintext so a line typed in Latin script — a link, an English word —
-// keeps its own direction instead of being reordered by the Hebrew around
-// it. File names follow the documents table: the extension is shown once as
-// a chip and stripped from the name, which stops "plan.pdf" rendering as
-// "pdf.plan".
+// (see ProgrammingSummary.css). Free text uses unicode-bidi: plaintext so a
+// run typed in Latin script keeps its own direction. File names follow the
+// documents table: the extension once as a chip, stripped from the name, so
+// "plan.pdf" does not render as "pdf.plan".
 
+import { Fragment } from 'react'
 import { getFileExtension } from '../components/documents/filePreview'
-import { UNANSWERED_LABEL, CLIENTS_LABEL, UPDATED_LABEL } from '../lib/programmingSummary'
+import {
+  UNANSWERED_LIST_LABEL,
+  NOTHING_ANSWERED_LABEL,
+  PERSON_EMPTY_LABEL,
+  UNANSWERED_MARK,
+} from '../lib/programmingSummary'
 import './ProgrammingSummary.css'
 
 /* Display-only: drop a trailing extension, because the chip beside the name
@@ -39,129 +50,96 @@ function stripExtension(name) {
   return name.slice(0, dot)
 }
 
-function Unanswered() {
-  return <span className="ps-unanswered">{UNANSWERED_LABEL}</span>
-}
+const Muted = ({ children }) => <span className="ps-muted">{children}</span>
 
-/* A labelled answer: the label on its own line, then the answer. */
-function Field({ label, value }) {
-  return (
-    <div className="ps-field">
-      <div className="ps-field-label">{label}</div>
-      <div className="ps-field-value">
-        {value === null ? <Unanswered /> : <span className="ps-text">{value}</span>}
-      </div>
-    </div>
-  )
-}
-
-function Person({ person }) {
-  return (
-    <div className="ps-person">
-      <h3 className="ps-person-name">
-        {person.name !== null
-          ? <span className="ps-text">{person.name}</span>
-          : <>{person.nameLabel}: <Unanswered /></>}
-      </h3>
-      {person.fields.map((f, i) => <Field key={i} label={f.label} value={f.value} />)}
-    </div>
-  )
-}
-
-function Orphans({ item }) {
-  return (
-    <div className="ps-orphans">
-      <h3 className="ps-subheading">{item.heading}</h3>
-      {item.entries.map((entry, i) => (
-        <div key={i} className="ps-person">
-          <h4 className="ps-person-name">
-            {entry.name !== null ? <span className="ps-text">{entry.name}</span> : <Unanswered />}
-          </h4>
-          {entry.fields.map((f, j) => <Field key={j} label={f.label} value={f.value} />)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ChapterItem({ item }) {
-  if (item.kind === 'person')  return <Person person={item} />
-  if (item.kind === 'orphans') return <Orphans item={item} />
-  return <Field label={item.label} value={item.value} />
-}
-
-/* One inline line in the house section: "label: value". */
-function Line({ label, value }) {
+/* "label: value · label: value" — a dash for an unanswered value. */
+function Pairs({ items }) {
   return (
     <p className="ps-line">
-      <span className="ps-line-label">{label}:</span>{' '}
-      {value === null ? <Unanswered /> : <span className="ps-text">{value}</span>}
+      {items.map((it, i) => (
+        <Fragment key={i}>
+          {i > 0 && <span className="ps-sep" aria-hidden="true"> · </span>}
+          <span className="ps-label">{it.label}:</span>{' '}
+          {it.value === null ? <Muted>{UNANSWERED_MARK}</Muted> : <span className="ps-text">{it.value}</span>}
+        </Fragment>
+      ))}
     </p>
   )
 }
 
-/* A room and, recursively, the rooms nested inside it. */
-function Room({ room }) {
+/* A room on one line, then its nested rooms indented one step each. */
+function RoomLines({ room, depth }) {
+  const hasTail = room.extras.length > 0 || room.note
   return (
-    <li className="ps-room">
-      <div className="ps-room-name">
-        {room.label !== null ? <span className="ps-text">{room.label}</span> : <Unanswered />}
-      </div>
-      {room.details.length > 0 && (
-        <ul className="ps-room-details">
-          {room.details.map((d, i) => (
-            <li key={i}>
-              {d.label && <span className="ps-detail-label">{d.label}:</span>}
-              {d.label && ' '}
-              <span className={d.multiline ? 'ps-text ps-text--multiline' : 'ps-text'}>{d.value}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {room.children.length > 0 && (
-        <ul className="ps-rooms ps-rooms--nested">
-          {room.children.map((child, i) => <Room key={i} room={child} />)}
-        </ul>
-      )}
-    </li>
+    <>
+      <p className="ps-line ps-room" style={{ '--ps-depth': depth }}>
+        {depth > 0 && <span className="ps-nest" aria-hidden="true">↳ </span>}
+        {room.label !== null
+          ? <span className="ps-room-name">{room.label}</span>
+          : <Muted>{UNANSWERED_MARK}</Muted>}
+        {room.size && <span className="ps-size"> ({room.size})</span>}
+        {hasTail && <span className="ps-sep"> — </span>}
+        {room.extras.length > 0 && <span className="ps-text">{room.extras.join(', ')}</span>}
+        {room.note && (
+          <span className="ps-muted ps-text">{room.extras.length > 0 ? ', ' : ''}{room.note}</span>
+        )}
+      </p>
+      {room.children.map((child, i) => <RoomLines key={i} room={child} depth={depth + 1} />)}
+    </>
   )
 }
 
-function HouseSection({ house }) {
-  return (
-    <section className="ps-chapter">
-      <h2 className="ps-chapter-title">{house.title}</h2>
-      {house.empty ? (
-        /* Nothing from the builder at all: the one line, and nothing else. */
-        <p className="ps-empty ps-unanswered">{house.emptyText}</p>
-      ) : (
-        <>
-          {house.lines.map((l, i) => <Line key={i} label={l.label} value={l.value} />)}
-          {house.areas.map(area => (
-            <div key={area.key} className="ps-area">
-              <h3 className="ps-area-title">{area.label}</h3>
-              <ul className="ps-rooms">
-                {area.rooms.map((room, i) => <Room key={i} room={room} />)}
-              </ul>
-            </div>
-          ))}
-        </>
-      )}
-    </section>
-  )
-}
+function Block({ block }) {
+  switch (block.kind) {
+    case 'person':
+      return (
+        <p className="ps-line">
+          {block.named
+            ? <>
+                <span className="ps-name">{block.parts[0]}</span>
+                {block.parts.length > 1 && <span className="ps-text">, {block.parts.slice(1).join(', ')}</span>}
+              </>
+            : <span className="ps-text">{block.parts.join(', ')}</span>}
+          {block.empty && <Muted> — {PERSON_EMPTY_LABEL}</Muted>}
+        </p>
+      )
 
-function InspirationSection({ inspiration }) {
-  return (
-    <section className="ps-chapter">
-      <h2 className="ps-chapter-title">{inspiration.title}</h2>
-      {inspiration.items.map((item, i) => <ChapterItem key={i} item={item} />)}
-      {inspiration.images.length === 0 ? (
-        <div className="ps-field-value"><Unanswered /></div>
-      ) : (
-        <ul className="ps-images">
-          {inspiration.images.map((img, i) => (
-            <li key={i} className="ps-image">
+    case 'inline':
+      return (
+        <p className="ps-line">
+          <span className="ps-label">{block.label}:</span>{' '}
+          <span className={block.multiline ? 'ps-text ps-multiline' : 'ps-text'}>{block.text}</span>
+        </p>
+      )
+
+    case 'orphans':
+      return (
+        <p className="ps-line ps-muted">
+          {block.label}:{' '}
+          <span className="ps-text">
+            {block.entries.map(e => `${e.name ?? UNANSWERED_MARK} — ${e.parts.join(', ')}`).join('; ')}
+          </span>
+        </p>
+      )
+
+    case 'pairs':
+      return <Pairs items={block.items} />
+
+    case 'floor':
+      return (
+        <div className="ps-floor">
+          {/* The floor's name starts its block as an inline label, not a
+              heading. */}
+          <p className="ps-line"><span className="ps-floor-label">{block.label}</span></p>
+          {block.rooms.map((room, i) => <RoomLines key={i} room={room} depth={0} />)}
+        </div>
+      )
+
+    case 'images':
+      return (
+        <div className="ps-images">
+          {block.images.map((img, i) => (
+            <div key={i} className="ps-image">
               {img.url && (
                 <a
                   className="ps-thumb"
@@ -174,15 +152,38 @@ function InspirationSection({ inspiration }) {
                 </a>
               )}
               {img.fileName && (
-                <div className="ps-file">
+                <div className="ps-file" title={img.fileName}>
                   <span className="ps-file-ext">{getFileExtension({ file_name: img.fileName, file_url: img.url })}</span>
-                  <span className="ps-file-name" title={img.fileName}>{stripExtension(img.fileName)}</span>
+                  <span className="ps-file-name">{stripExtension(img.fileName)}</span>
                 </div>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
+      )
+
+    default:
+      return null
+  }
+}
+
+function Chapter({ chapter }) {
+  return (
+    <section className="ps-chapter">
+      <h2 className="ps-chapter-title">{chapter.title}</h2>
+      {chapter.nothingAnswered ? (
+        <p className="ps-line ps-muted">{chapter.emptyText || NOTHING_ANSWERED_LABEL}</p>
+      ) : (
+        <>
+          {chapter.blocks.map((block, i) => <Block key={i} block={block} />)}
+          {chapter.unanswered.length > 0 && (
+            <p className="ps-line ps-muted ps-unanswered">
+              {UNANSWERED_LIST_LABEL}: {chapter.unanswered.join(', ')}
+            </p>
+          )}
+        </>
       )}
+      {chapter.footnote && <p className="ps-line ps-muted ps-footnote">{chapter.footnote}</p>}
     </section>
   )
 }
@@ -193,38 +194,13 @@ export default function ProgrammingSummaryDocument({ model }) {
       <article className="ps-doc" dir="rtl" lang="he">
         <header className="ps-header">
           <p className="ps-eyebrow">{model.title}</p>
-          <h1 className="ps-project">{model.projectName}</h1>
-          {model.clientNames.length > 0 && (
-            <p className="ps-meta">
-              <span className="ps-meta-label">{CLIENTS_LABEL}:</span>{' '}
-              <span className="ps-text">{model.clientNames.join(', ')}</span>
-            </p>
-          )}
-          {model.updatedAt && (
-            <p className="ps-meta">
-              <span className="ps-meta-label">{UPDATED_LABEL}:</span> {model.updatedAt}
-            </p>
-          )}
-          <p className="ps-completion">
-            {model.completion.map((c, i) => (
-              <span key={i} className="ps-completion-item">
-                <span className="ps-meta-label">{c.label}:</span> {c.value}
-              </span>
-            ))}
-          </p>
+          <h1 className="ps-title">{model.projectName}</h1>
+          <Pairs items={model.meta} />
         </header>
 
-        {model.chapters.map(chapter => (
-          <section key={chapter.key} className="ps-chapter">
-            <h2 className="ps-chapter-title">{chapter.title}</h2>
-            {chapter.items.map((item, i) => <ChapterItem key={i} item={item} />)}
-            {chapter.footnote && <p className="ps-footnote">{chapter.footnote}</p>}
-          </section>
-        ))}
-
-        <HouseSection house={model.house} />
-
-        {model.inspiration && <InspirationSection inspiration={model.inspiration} />}
+        <div className="ps-chapters">
+          {model.chapters.map(chapter => <Chapter key={chapter.key} chapter={chapter} />)}
+        </div>
       </article>
     </div>
   )

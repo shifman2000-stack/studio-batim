@@ -8,6 +8,7 @@ import ClientPreviewOverlay from './components/ClientPreviewOverlay'
 import InlineField from './components/InlineField'
 import { ActionRequiredDot } from './components/ActionRequiredBadge'
 import { loadAllProjectStreams } from './lib/staffNotifications'
+import { PROGRAMMING_SUMMARY_LINK_LABEL, programmingSummaryPath } from './lib/programmingLabels'
 import './ProjectsKanban.css'
 
 /* ── The card's notification dots ──────────────────────────────────────
@@ -2165,6 +2166,21 @@ ${authCode || '—'}
                       />
                       <span>חשוף שאלון פרוגרמה ללקוח</span>
                     </label>
+                  </div>
+
+                  {/* Read-only programming summary, in a new browser tab.
+                      A plain link rather than a button: it only opens a
+                      page, and never touches the draft above. Its text is
+                      indented to line up under the checkbox's label. */}
+                  <div className="pdset-row">
+                    <a
+                      className="pdset-check pdset-summary-link"
+                      href={programmingSummaryPath(settingsTarget.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {PROGRAMMING_SUMMARY_LINK_LABEL}
+                    </a>
                   </div>
 
                   {/* Opens ON TOP of this modal; the draft stays as-is so

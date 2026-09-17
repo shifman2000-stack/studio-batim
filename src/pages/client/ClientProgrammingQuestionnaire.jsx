@@ -56,6 +56,21 @@ import {
   KNOWN_PEOPLE_FALLBACK,
 } from '../../lib/programmingConfig'
 import { estimateArea } from '../../lib/houseSizeConfig'
+/* Labels that used to be JSX literals here, now shared with the read-only
+   programming summary document — one definition, both screens import it. */
+import {
+  QUESTIONNAIRE_TILE_TITLE,
+  HOUSE_BUILDER_TITLE,
+  FILLING_DONE_LABEL,
+  PERSON_NAME_LABEL,
+  PERSON_AGE_LABEL,
+  PERSON_SEX_LABEL,
+  HOUSE_GENERAL_QUESTION_LABELS,
+  YES_LABEL,
+  NO_LABEL,
+  REQUESTED_AREA_LABEL,
+  AREA_UNIT,
+} from '../../lib/programmingLabels'
 import { getFallbackConfig, loadHouseBuilderConfig } from '../../lib/houseBuilderConfigSource'
 
 /* ── Hub-tile icons (Feather-style, stroke="currentColor") ─────────
@@ -165,10 +180,10 @@ function houseAreaMessage(comparison, requestedM2, computedM2) {
      body colour. Without this the tile would render a title and nothing
      else, which reads as broken. */
   if (!comparison) {
-    return { color: HOUSE_AREA_BODY, text: `שטח הבית המחושב: ${computedM2} מ״ר` }
+    return { color: HOUSE_AREA_BODY, text: `שטח הבית המחושב: ${computedM2} ${AREA_UNIT}` }
   }
-  const requested = `שטח הבית המבוקש (${requestedM2} מ״ר)`
-  const computed  = `שטח הבית המחושב (${computedM2} מ״ר)`
+  const requested = `${REQUESTED_AREA_LABEL} (${requestedM2} ${AREA_UNIT})`
+  const computed  = `שטח הבית המחושב (${computedM2} ${AREA_UNIT})`
   if (comparison === 'smaller') {
     return { color: HOUSE_AREA_RED,  text: `${requested} קטן מ${computed}` }
   }
@@ -278,19 +293,19 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
                 natural-width fixed pair; name flexes into the rest. */}
             <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>שם</label>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_NAME_LABEL}</label>
                 <input
                   type="text"
                   value={p.name || ''}
                   onChange={e => updatePersonAt(i, { name: e.target.value })}
                   readOnly={isLocked}
-                  placeholder="שם"
+                  placeholder={PERSON_NAME_LABEL}
                   style={{ ...STYLE_INPUT, ...(isLocked ? STYLE_LOCKED_BG : {}) }}
                 />
               </div>
 
               <div style={{ flex: '0 0 88px', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>גיל</label>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_AGE_LABEL}</label>
                 <select
                   value={p.age || ''}
                   onChange={e => updatePersonAt(i, { age: e.target.value })}
@@ -303,8 +318,8 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
               </div>
 
               <div style={{ flex: '0 0 auto', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>מין</label>
-                <div role="radiogroup" aria-label="מין" style={{ display: 'flex', gap: 4 }}>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_SEX_LABEL}</label>
+                <div role="radiogroup" aria-label={PERSON_SEX_LABEL} style={{ display: 'flex', gap: 4 }}>
                   <button
                     type="button"
                     role="radio"
@@ -564,7 +579,7 @@ function YesNoRow({ label, value, onChange, isLocked }) {
         borderRadius: 20,
         overflow:     'hidden',
       }}>
-        {[{ value: true, label: 'כן' }, { value: false, label: 'לא' }].map((opt, i) => {
+        {[{ value: true, label: YES_LABEL }, { value: false, label: NO_LABEL }].map((opt, i) => {
           const sel = selected === opt.value
           return (
             <button
@@ -648,25 +663,25 @@ function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <YesNoRow
-        label="האם מעוניינים בחימום רצפתי"
+        label={HOUSE_GENERAL_QUESTION_LABELS.floorHeating}
         value={heatingValue}
         onChange={setHeating}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים במעלית"
+        label={HOUSE_GENERAL_QUESTION_LABELS.elevator}
         value={elevatorValue}
         onChange={setElevator}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים בקמין"
+        label={HOUSE_GENERAL_QUESTION_LABELS.fireplace}
         value={fireplaceValue}
         onChange={setFireplace}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים בחימום מים בגז"
+        label={HOUSE_GENERAL_QUESTION_LABELS.gasWaterHeating}
         value={gasWaterHeatingValue}
         onChange={setGasWaterHeating}
         isLocked={isLocked}
@@ -1665,7 +1680,7 @@ export default function ClientProgrammingQuestionnaire({
 
   const questionnaireStatusLine =
       isLocked          ? { text: 'הושלם ✓',           color: '#4a7f4a' }
-    : questionnaireDone ? { text: 'הסתיים המילוי ✓',   color: '#7a9478' }
+    : questionnaireDone ? { text: `${FILLING_DONE_LABEL} ✓`, color: '#7a9478' }
     : hasDraft          ? { text: 'יש טיוטה שמורה',    color: '#8a8680' }
     : null
 
@@ -1685,7 +1700,7 @@ export default function ClientProgrammingQuestionnaire({
 
   const houseStatusLine =
       isLocked      ? { text: 'הושלם ✓',           color: '#4a7f4a' }
-    : houseDone     ? { text: 'הסתיים המילוי ✓',   color: '#7a9478' }
+    : houseDone     ? { text: `${FILLING_DONE_LABEL} ✓`, color: '#7a9478' }
     : hasHouseDraft ? { text: 'יש טיוטה שמורה',    color: '#8a8680' }
     : null
 
@@ -1984,7 +1999,7 @@ export default function ClientProgrammingQuestionnaire({
                 <span style={hubTileIconWrap}>
                   <IconDocument size={28} />
                 </span>
-                <span style={hubTileTitle}>מילוי השאלון</span>
+                <span style={hubTileTitle}>{QUESTIONNAIRE_TILE_TITLE}</span>
                 <span style={hubTileDesc}>אורח חיים, רצונות, אווירה וסגנון</span>
                 {questionnaireStatusLine && (
                   <span style={{
@@ -2021,7 +2036,7 @@ export default function ClientProgrammingQuestionnaire({
                 <span style={hubTileIconWrap}>
                   <IconHouse size={28} />
                 </span>
-                <span style={hubTileTitle}>בונה הבית</span>
+                <span style={hubTileTitle}>{HOUSE_BUILDER_TITLE}</span>
                 {houseDone ? (
                   /* ONE sentence. The old introductory line ("בחישוב
                      החללים... יוצא כ-N מ״ר") is gone: both numbers now

@@ -49,6 +49,14 @@ import { ROOF_OPTIONS } from '../../lib/houseBuilderConfig'
    screens' back controls are pixel-identical (shared .cp-screen-back
    class + shared icon). */
 import { IconBack } from '../icons/PortalIcons'
+/* Labels that used to be JSX literals here, now shared with the read-only
+   programming summary document — one definition, both screens import it. */
+import {
+  FLOORS_SECTION_TITLE,
+  ROOF_SECTION_TITLE,
+  ROOM_CHARACTERISTICS_LABEL,
+  ROOM_NOTE_LABEL,
+} from '../../lib/programmingLabels'
 
 /* Size labels match V1's houseSizeConfig verbatim. DOM order
    [L, M, S] paints as visual [גדול | בינוני | קטן] under RTL — same
@@ -1543,7 +1551,7 @@ export default function HouseBuilderV2({
             </Section>
 
             {/* ── Block B — קומות וחצר ── */}
-            <Section title="קומות וחצר" subtitle="סמנו אילו מפלסים יהיו בבית (קומת קרקע קבועה תמיד)">
+            <Section title={FLOORS_SECTION_TITLE} subtitle="סמנו אילו מפלסים יהיו בבית (קומת קרקע קבועה תמיד)">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {FLOOR_DEFS.map(floor => {
                   /* Ground is permanent-on (matches V1). Render as a
@@ -1576,13 +1584,13 @@ export default function HouseBuilderV2({
                 builder. Heating + elevator moved out to their own
                 questionnaire chapter — they're project-level toggles
                 that don't drive the house drawing. */}
-            <Section title="סוג גג" subtitle="בחרו את סוג הגג של הבית">
+            <Section title={ROOF_SECTION_TITLE} subtitle="בחרו את סוג הגג של הבית">
               <Segmented
                 options={ROOF_OPTIONS.map(opt => ({ value: opt, label: opt }))}
                 selected={general.roof || null}
                 onSelect={setRoof}
                 disabled={readOnly}
-                ariaLabel="סוג גג"
+                ariaLabel={ROOF_SECTION_TITLE}
               />
             </Section>
 
@@ -3910,7 +3918,7 @@ function RoomCharacterizationFields({
             color: CHARCOAL, cursor: 'pointer', direction: 'rtl', textAlign: 'right',
           }}
         >
-          <span>הערה</span>
+          <span>{ROOM_NOTE_LABEL}</span>
           <span style={{
             display: 'inline-flex',
             transform: noteOpen ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -4525,7 +4533,7 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
           color:      INPUT_TEXT,
           lineHeight: 1.6,
         }}>
-          {`מאפיינים: ${chars.join(', ')}`}
+          {`${ROOM_CHARACTERISTICS_LABEL}: ${chars.join(', ')}`}
         </div>
       )}
       {note && note.trim() && (
@@ -4535,7 +4543,7 @@ function SummaryPanel({ floorItems, config, roomLabel }) {
           color:      INPUT_TEXT,
           lineHeight: 1.6,
         }}>
-          {`הערה: ${note.trim()}`}
+          {`${ROOM_NOTE_LABEL}: ${note.trim()}`}
         </div>
       )}
     </>

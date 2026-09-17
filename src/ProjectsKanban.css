@@ -739,6 +739,19 @@
 }
 .pdset-check input { cursor: pointer; accent-color: #7a9478; }
 
+/* "הצג סיכום פרוגרמה" — a link sitting under the "חשוף שאלון פרוגרמה ללקוח"
+   checkbox. Inline-start padding = the checkbox's 16px + the row's 8px gap,
+   so the link's text lines up under the checkbox's label rather than under
+   the box itself. */
+.pdset-summary-link {
+  padding-inline-start: 24px;
+  color: #7a9478;
+  text-decoration: none;
+}
+.pdset-summary-link:hover {
+  text-decoration: underline;
+}
+
 /* A button wearing the checkbox row's geometry, so "תצוגת לקוח" lines
    up under "חשוף שאלון פרוגרמה ללקוח" — control first (visual right),
    text to its left. */

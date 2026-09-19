@@ -6,10 +6,17 @@
 //
 // The stored shape is physical / hierarchical:
 //   {
-//     floors: { first: bool, ground: bool, basement: bool },
-//     yard:   bool,
-//     rooms:  { [areaKey]: [ { type, props, freeProps, note } ] }
+//     floors:     { first: bool, ground: bool, basement: bool },
+//     yard:       bool,
+//     rooms:      { [areaKey]: [ Room ] },
+//     targetArea: number        — OMITTED when the client has none,
+//     general:    { roof, roofNotes, floorHeatingFloors,
+//                   floorHeatingNotes, elevator, …foreign keys }
 //   }
+//   Room = { type, sizeKey, props, freeProps, note, children? }
+// HOUSE_JSON_KEYS below is the authoritative list of the five.
+// `general` also carries keys this builder does not own — see the
+// preservation note further down.
 //
 // Transient runtime fields (mode, selection, id, roomSeq, done) are
 // NOT serialised — they exist only while the builder is mounted.
@@ -143,7 +150,7 @@ function splitGeneral(raw) {
  * stays small. Transient fields (id, selection, mode, seq, done) are
  * dropped.
  * @param {object} state
- * @returns {object} { floors, yard, rooms }
+ * @returns {object} { floors, yard, rooms, general, targetArea? }
  */
 export function houseToJSON(state) {
   const s = (state && typeof state === 'object') ? state : {}
@@ -158,9 +165,10 @@ export function houseToJSON(state) {
   /* rooms — omit empty areas so the payload is compact. Each room
      carries `sizeKey` for the estimate calculator alongside its
      props / freeProps. Container rooms additionally serialize their
-     `children` array (one nesting level; the serializer is recursive
-     but the palette + config disallow nesting a container inside
-     another container). */
+     `children` array. The serializer is recursive and the palette
+     allows exactly one container-inside-container case (יחידת סוויטה
+     inside יחידת דיור), so a tree can reach two levels of nesting:
+     floor → יחידת דיור → יחידת סוויטה → rooms. */
   const serializeRoom = (r) => {
     const out = {
       type:      r.type,
@@ -267,9 +275,10 @@ export function houseFromJSON(data) {
      "מטבח 1" after hydration. sizeKey defaults to DEFAULT_SIZE_KEY
      when missing (so pre-calculator saves don't break).
 
-     Container rooms hydrate their `children` recursively (one level).
-     A room without a `children` key loads exactly as before — no
-     migration for old rows. */
+     Container rooms hydrate their `children` recursively, to whatever
+     depth the data holds (the palette allows two levels — see
+     serializeRoom). A room without a `children` key loads exactly as
+     before — no migration for old rows. */
   let seq = 1
   const isValidRoom = (r) =>
     r && typeof r === 'object' && typeof r.type === 'string' && r.type

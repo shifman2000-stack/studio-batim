@@ -1,31 +1,29 @@
 // src/components/questionnaire/HouseBuilderV2.jsx
 //
-// PARALLEL, PHASE-1 rewrite of the house builder. Runs SIDE-BY-SIDE
-// with the existing src/components/questionnaire/HouseBuilder.jsx —
-// nothing about V1 is touched. A dev-only toggle in
-// ClientProgrammingQuestionnaire.jsx picks which one to render for a
-// given session; V1 is the default and is the only one exposed in
-// production builds.
+// THE house builder — the only one. It began as a parallel rewrite
+// running beside a V1 (src/components/questionnaire/HouseBuilder.jsx)
+// behind a dev-only toggle in ClientProgrammingQuestionnaire.jsx;
+// both that file and that toggle are gone, and this component is
+// rendered unconditionally. References to "V1" further down are
+// provenance notes explaining where a rule or token came from, not a
+// component you can still open.
 //
-// Contract — DROP-IN with V1:
-//   Same props (initialData, onChange, onBack, onDone, readOnly,
-//   onManualSave, savingDraft, savedFlash, doneChecked, onDoneChange)
-//   so the parent can swap the component with no other changes and
-//   the SAME `answers.house` jsonb round-trips through either builder.
+// Contract with the parent:
+//   Props: initialData, onChange, onBack, onDone, readOnly,
+//   onManualSave, savingDraft, savedFlash, doneChecked, onDoneChange.
+//   Reads and writes the `answers.house` jsonb through ONE codec,
+//   src/lib/houseBuilderState.js (houseFromJSON / houseToJSON).
 //
-// Same config source: src/lib/houseBuilderConfigSource.js — every
-// accessor V1 reads (floors, palette, room props, sizes, fixedArea,
-// containers, defaultSize) is available here too. No parallel config.
+// Config source: src/lib/houseBuilderConfigSource.js — floors,
+// palette, room props, sizes, fixedArea, containers, defaultSize.
 //
-// Phase 1 SCOPE:
-//   * 3-step wizard shell: "הבית בגדול" → "החללים" → "אפיון".
-//   * Dismissible guide bubble per step with the approved copy.
+// SHAPE OF THE SCREEN:
+//   * 3-step wizard: "הבית בגדול" → "החללים" → "אפיון".
+//   * Dismissible guide bubble per step.
 //   * Progress bar (3 dots/pills) at the top.
 //   * Bottom nav with per-step primary CTA + "הקודם".
-//   * Step bodies are minimal placeholders ("שלב N — בקרוב").
-//   * No mutation of answers.house yet — Phase 1 is shell only.
-//     The config load + prop hydration are wired so Phase 2 can plug
-//     the real editors into each step without further plumbing.
+//   * All three steps are fully implemented and every edit is
+//     emitted to the parent via onChange(houseToJSON(next)).
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -106,20 +104,6 @@ function orderSuiteRooms(kids) {
   return [...kids].sort((a, b) => rank(a.type) - rank(b.type))
 }
 
-/* Preset segments for the "target size" selector. Each option stores
-   a single number into answers.house.targetArea (same field V1
-   writes) so data round-trips cleanly between builders. Values were
-   picked so each label maps to a distinct, unambiguous number. The
-   accompanying "אחר" text input takes any other positive number and
-   writes to the same field. */
-const TARGET_AREA_SEGMENTS = [
-  { value: 160, label: 'עד 160 מ״ר' },
-  { value: 180, label: '160-180'    },
-  { value: 200, label: '180-200'    },
-  { value: 250, label: 'מעל 200'    },
-]
-const TARGET_AREA_SEGMENT_VALUES = new Set(TARGET_AREA_SEGMENTS.map(o => o.value))
-
 /* Border/color tokens re-used across V2 primitives, so segmented
    controls, chips, toggle rows and text inputs all read as ONE
    design system. These are V2's own tokens — the builder has no CSS
@@ -129,7 +113,6 @@ const INPUT_BORDER  = '#d9d6cd'   /* soft warm-grey — input / chip /
 const INPUT_TEXT    = '#4a4a48'   /* segment + chip label color. */
 const INPUT_BG_SEL  = '#7a9478'   /* selected sage (identical to SAGE). */
 const INPUT_BD_SEL  = '#5d7259'   /* selected border (identical to SAGE_DARK). */
-const INPUT_HOVER   = 'rgba(122, 148, 120, 0.10)'  /* V1's segment hover tint. */
 
 /* ── Design tokens (mirror theme.css + V1) ─────────────────────── */
 const CREAM      = '#f7f5f2'
@@ -318,29 +301,16 @@ export default function HouseBuilderV2({
 
   /* ── Block A — targetArea ────────────────────────────────────── */
   const currentTargetArea = houseState.targetArea
-  const isPresetTarget = typeof currentTargetArea === 'number'
-                         && TARGET_AREA_SEGMENT_VALUES.has(currentTargetArea)
-  const isCustomTarget = typeof currentTargetArea === 'number' && !isPresetTarget
-  /* Displayed in the size text input. Now that the preset segments
-     are gone, EVERY saved number (including old values that were
-     previously "preset" like 160/180/200/250) shows up in the
-     freeform input so no data is hidden after the UI change. */
+  /* Displayed in the size text input. EVERY saved number shows up
+     here, including values like 160/180/200/250 that an earlier
+     preset picker once wrote, so no stored data is hidden. */
   const customTargetText = typeof currentTargetArea === 'number' ? String(currentTargetArea) : ''
 
-  const pickTargetPreset = (v) => {
-    if (readOnly) return
-    /* Picking a preset ALWAYS wins — clears any custom text since a
-       preset value can't also be "custom". Also supports toggle-off
-       on re-click for consistency with the roof/elevator controls. */
-    patchState({ targetArea: currentTargetArea === v ? null : v })
-  }
   const setTargetCustom = (raw) => {
     if (readOnly) return
     /* Native number input — empty / non-numeric → clear the field.
-       This automatically deselects the segmented control
-       (isPresetTarget goes false because targetArea is null or a
-       non-preset number). Whole numbers only, matching the existing
-       persisted data (see houseFromJSON's targetArea guard). */
+       Whole numbers only, matching the existing persisted data (see
+       houseFromJSON's targetArea guard). */
     if (raw === '') { patchState({ targetArea: null }); return }
     const n = Number(raw)
     if (Number.isFinite(n) && n > 0) patchState({ targetArea: Math.round(n) })
@@ -389,10 +359,11 @@ export default function HouseBuilderV2({
   /* Rooms are stored per area under state.rooms — exact V1 shape.
      Every room is { id, type, props: {}, freeProps: [], sizeKey? }.
      `id` comes from state.roomSeq (int); we bump it on add. Fixed-
-     area types skip sizeKey entirely (V1 rule). Container types are
-     NOT offered by this phase — houseFromJSON preserves them
-     on the round-trip so any pre-existing container from V1 renders
-     through untouched. */
+     area types skip sizeKey entirely (V1 rule). Container types ARE
+     offered: a container holds its own `children`, and one container
+     may sit inside another in the single allowed case (יחידת סוויטה
+     inside יחידת דיור) — see allowedChildTypes and addRoomToContainer
+     below. */
   const DEFAULT_SIZE_KEY = 'M'
   const resolveInitialSizeKey = (t) => {
     if (config.hasFixedArea && config.hasFixedArea(t)) return null

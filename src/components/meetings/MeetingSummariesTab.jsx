@@ -23,7 +23,22 @@ import { resolveUserNames } from '../../lib/resolveUserNames'
 import { clientDoneHint, DONE_STATUS } from './meetingTasksStatus'
 import TaskStatusControl from '../tasks/TaskStatusControl'
 import ClientProgrammingQuestionnaire from '../../pages/client/ClientProgrammingQuestionnaire'
+import ProgrammingSummaryDocument from '../../pages/ProgrammingSummaryDocument'
+import { buildProgrammingSummary, LOAD_ERROR_LABEL } from '../../lib/programmingSummary'
+import { loadHouseBuilderConfig } from '../../lib/houseBuilderConfigSource'
 import './MeetingSummariesTab.css'
+
+/* The two views of the programming screen's LEFT pane. The summary is
+   first and is the default on every open — the meeting usually starts by
+   reading what the client said, and editing is the exception. The choice
+   is deliberately NOT persisted: reopening the screen starts on the
+   summary again. */
+const PROG_VIEW_SUMMARY = 'summary'
+const PROG_VIEW_QUEST   = 'quest'
+const PROG_VIEWS = [
+  { key: PROG_VIEW_SUMMARY, label: 'תצוגת סיכום' },
+  { key: PROG_VIEW_QUEST,   label: 'שאלון ובונה הבית' },
+]
 
 /* ── Inline icons (Feather-style, stroke="currentColor") ────────── */
 const IconPencil = ({ size = 16 }) => (
@@ -380,6 +395,66 @@ export default function MeetingSummariesTab({
      through every existing path (client view, list, edit, delete)
      unchanged, no schema/type column added. */
   const [programMode,    setProgramMode]    = useState(null)
+  /* Which view the programming screen's left pane shows. Reset to the
+     summary every time that screen opens — see the effect below. */
+  const [progLeftView,   setProgLeftView]   = useState(PROG_VIEW_SUMMARY)
+  /* The read-only document's model, built here rather than by the
+     standalone page because this pane has no route of its own.
+     { status: 'idle'|'loading'|'ready'|'error', model } */
+  const [progSummary,    setProgSummary]    = useState({ status: 'idle', model: null })
+
+  /* ── The programming screen's left pane ──────────────────────────────
+     Keyed on "is the screen open", not on programMode itself, so the
+     view resets exactly once per open rather than on every re-render
+     that hands back a new object. */
+  const programOpen = !!programMode
+  useEffect(() => {
+    if (programOpen) setProgLeftView(PROG_VIEW_SUMMARY)
+  }, [programOpen])
+
+  /* Build the document's model whenever the summary view is showing.
+     Re-running on a switch BACK to the summary is deliberate: the user
+     may have just edited the questionnaire in the other view, and a
+     document showing the pre-edit answers would be quietly wrong. The
+     previous model stays on screen while the new one loads, so the
+     switch never flashes empty.
+
+     This reads the row itself; it does NOT touch the questionnaire
+     component, which stays mounted and untouched across switches. */
+  useEffect(() => {
+    if (!programOpen || progLeftView !== PROG_VIEW_SUMMARY || !projectId) return
+    let cancelled = false
+    const load = async () => {
+      setProgSummary(prev => ({ status: prev.model ? 'ready' : 'loading', model: prev.model }))
+      const [rowRes, config] = await Promise.all([
+        supabase
+          .from('programming_questionnaires')
+          .select('answers, updated_at')
+          .eq('project_id', projectId)
+          .maybeSingle(),
+        loadHouseBuilderConfig(),
+      ])
+      if (cancelled) return
+      if (rowRes.error) {
+        console.error('programming summary (embedded): load failed', rowRes.error)
+        setProgSummary({ status: 'error', model: null })
+        return
+      }
+      setProgSummary({
+        status: 'ready',
+        /* projectName and contacts feed the page header only, which the
+           embedded view drops — the screen already names the project. */
+        model: buildProgrammingSummary({
+          projectName: '',
+          contacts:    [],
+          row:         rowRes.data || null,
+          config,
+        }),
+      })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [programOpen, progLeftView, projectId])
 
   const toggleOpen = (id) => {
     setOpenSet(prev => {
@@ -922,13 +997,51 @@ export default function MeetingSummariesTab({
               context. Save path lives INSIDE the questionnaire —
               writes to programming_questionnaires by project_id. */}
           <section className="ms-program-pane ms-program-pane--quest">
-            <div className="ms-program-pane-header">שאלון פרוגרמה + בונה הבית</div>
+            {/* The pane's header IS the switch — the two labels say what
+                the static title used to, and a fixed title would
+                contradict whichever view is showing. */}
+            <div className="ms-program-pane-header ms-program-pane-header--tabs">
+              <div className="ms-program-viewtabs" role="tablist" aria-label="תצוגת פרוגרמה">
+                {PROG_VIEWS.map(v => (
+                  <button
+                    key={v.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={progLeftView === v.key}
+                    className={`ms-program-viewtab${progLeftView === v.key ? ' ms-program-viewtab--active' : ''}`}
+                    onClick={() => setProgLeftView(v.key)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="ms-program-pane-body ms-program-pane-body--flush">
-              <ClientProgrammingQuestionnaire
-                embeddedProjectId={projectId}
-                forceAdminEdit
-                embedded
-              />
+              {/* READ-ONLY document. Mounted only while it is showing —
+                  it holds no user input, so there is nothing to lose. */}
+              {progLeftView === PROG_VIEW_SUMMARY && (
+                progSummary.status === 'error'
+                  ? <div className="ms-program-view-note">{LOAD_ERROR_LABEL}</div>
+                  : progSummary.model
+                    ? <ProgrammingSummaryDocument model={progSummary.model} embedded />
+                    : <div className="ms-program-view-note">טוען...</div>
+              )}
+
+              {/* The questionnaire stays MOUNTED across switches — hidden,
+                  never unmounted. Remounting it would re-fetch the row and
+                  throw away anything typed but not yet auto-saved. The
+                  wrapper uses display:contents when visible, so the pane's
+                  layout is exactly what it was before this switch existed. */}
+              <div
+                className="ms-program-view-host"
+                style={{ display: progLeftView === PROG_VIEW_QUEST ? 'contents' : 'none' }}
+              >
+                <ClientProgrammingQuestionnaire
+                  embeddedProjectId={projectId}
+                  forceAdminEdit
+                  embedded
+                />
+              </div>
             </div>
           </section>
       </FocusedEditorScreen>

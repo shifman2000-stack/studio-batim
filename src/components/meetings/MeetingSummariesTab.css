@@ -730,6 +730,56 @@
   flex: 1 1 100%;
 }
 
+/* ── Left-pane view switch ─────────────────────────────────────────────
+   Same visual language as the app's other sub-tab strips
+   (.hours-admin-tabs-bar / .pd-subtabs-bar): underline on active, muted
+   when not, no new control style invented for the same idea. */
+.ms-program-pane-header--tabs {
+  padding: 0 14px;
+}
+
+.ms-program-viewtabs {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  direction: rtl;
+}
+
+.ms-program-viewtab {
+  height: 34px;
+  padding: 0 14px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.ms-program-viewtab:hover {
+  color: #333;
+}
+
+.ms-program-viewtab--active {
+  color: #111;
+  border-bottom-color: #111;
+}
+
+/* Loading / error stand-in, sized like the document's own padding. */
+.ms-program-view-note {
+  padding: 16px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  color: #8a8680;
+}
+
 .ms-program-pane-header {
   padding: 10px 14px;
   border-bottom: 1px solid #ece8df;

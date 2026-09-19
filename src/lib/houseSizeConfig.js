@@ -63,13 +63,23 @@ export const DEFAULT_ROOM_SIZE = { S: 8, M: 12, L: 18 };
 /* פרמטרי מחשבון — ברירות מחדל (fallback כשאין קונפיג פעיל ב-DB, וגם
    הערכים המשמשים חלל שאין לו ערך מוגדר בקונפיג). corridorsPct = "מעברים",
    wallsPct = "עובי קירות" — שני אחוזים שמתווספים על סכום שטחי החללים.
-   10 כברירת מחדל ל-corridorsPct משמר את ההתנהגות הישנה (היה
-   CIRCULATION_FACTOR קבוע = 1.10). toleranceDeviationPct = אחוז הסטייה
-   המותר בין השטח המחושב ליעד הלקוח בשאלון (ClientProgrammingQuestionnaire). */
+   toleranceDeviationPct = אחוז הסטייה המותר בין השטח המחושב ליעד הלקוח
+   בשאלון (ClientProgrammingQuestionnaire).
+
+   שלושת הפרמטרים מכאן ואילך משקפים את הקונפיג הפעיל בשתי הסביבות,
+   Dev ו-Prod כאחד, נכון ל-19.09.2026: corridorsPct 7 + wallsPct 10
+   (מכפיל 1.17) ו-toleranceDeviationPct 5. קודם לכן היו 10 + 0
+   (מכפיל 1.10) ו-10 — ערכי מורשת מימי CIRCULATION_FACTOR הקבוע,
+   שכבר לא תאמו אף סביבה.
+
+   ⚠️ שוויון המכפיל אינו מספיק כדי ששני המסלולים יחזירו אותו מספר:
+   ROOM_SIZES הסטטי כאן ורשימת החללים המוחרגים מהחישוב עדיין שונים
+   מאלה שבקונפיג ב-DB, ולכן מסלול ה-fallback עדיין נותן תוצאה אחרת.
+   ראו את הדוח שנלווה לשינוי הזה. */
 export const DEFAULT_CALC_PARAMS = {
-  corridorsPct: 10,
-  wallsPct: 0,
-  toleranceDeviationPct: 10,
+  corridorsPct: 7,
+  wallsPct: 10,
+  toleranceDeviationPct: 5,
 };
 
 /* תצורת ברירת מחדל לחלל חדש */
@@ -126,4 +136,76 @@ export function estimateArea(roomsFlat, opts = {}) {
     sum += sizes[key] != null ? sizes[key] : sizes.M;
   }
   return Math.round(sum * (1 + (corridorsPct + wallsPct) / 100));
+}
+
+/* Is this area key a yard? The builder config decides, from its own
+   isYard flag (see houseBuilderConfigSource). The derivation below is
+   only the fallback for a config object that predates isYardArea: an
+   area key that is not one of the interior FLOOR_DEFS, which is how
+   the summary page has always told them apart. A config carrying
+   neither excludes nothing by area, exactly as before this rule. */
+function isYardAreaKey(cfg, key) {
+  if (typeof cfg.isYardArea === 'function') return cfg.isYardArea(key);
+  const areaKeys  = Array.isArray(cfg.AREA_KEYS)  ? cfg.AREA_KEYS  : null;
+  const floorDefs = Array.isArray(cfg.FLOOR_DEFS) ? cfg.FLOOR_DEFS : null;
+  if (!areaKeys || !floorDefs) return false;
+  return areaKeys.includes(key) && !floorDefs.some(f => f && f.key === key);
+}
+
+/**
+ * שטח משוער עבור קבוצת אזורים מתוך עץ ה-rooms השמור.
+ *
+ * ONE formula, two uses: the hub's whole-house total passes every area
+ * key, the summary's per-floor breakdown passes one key at a time.
+ * Both land in estimateArea above, so corridorsPct + wallsPct are
+ * applied by the SAME line — per floor when called per floor.
+ *
+ * estimateArea itself takes a FLAT list and does not recurse, and
+ * fixedArea / excludeFromAreaCalc are TYPE-level flags that live in the
+ * builder config rather than on the stored room, so the tree is
+ * flattened (children included) and each room annotated from the config
+ * before the call. That walk used to live inline in
+ * ClientProgrammingQuestionnaire; it is here so there is one copy.
+ *
+ * ⚠️ Rounding happens ONCE per call, at the end of estimateArea. Calling
+ * this per floor therefore rounds per floor, and the per-floor figures
+ * need not sum to the whole-house figure. Neither number is wrong; they
+ * round at different points. Do not "fix" that by reconciling them.
+ *
+ * Areas the config flags as a yard contribute ZERO whatever is in
+ * them — see isYardAreaKey above.
+ *
+ * @param roomsByArea עץ החדרים: { [areaKey]: [room] }
+ * @param areaKeys מפתחות האזורים לחישוב (למשל ['ground'] או כולם)
+ * @param config קונפיג בונה הבית הפעיל (isYardArea / getFixedArea / isExcludedFromAreaCalc / ROOM_SIZES / calcParams)
+ * @returns מ"ר מעוגל
+ */
+export function estimateAreaForAreaKeys(roomsByArea, areaKeys, config) {
+  if (!roomsByArea || typeof roomsByArea !== 'object') return 0;
+  const cfg = config || {};
+  const flat = [];
+  const visit = (list) => {
+    for (const r of (Array.isArray(list) ? list : [])) {
+      flat.push(r);
+      if (Array.isArray(r.children)) visit(r.children);
+    }
+  };
+  for (const areaKey of (Array.isArray(areaKeys) ? areaKeys : [])) {
+    /* A YARD HAS NO BUILT AREA. Skip the whole area, with its nested
+       children, before any room is even looked at — so a free-text
+       room the client typed there, whose type the config has never
+       seen and therefore cannot flag, counts for nothing too. This is
+       ADDITIONAL to the per-type excludeFromAreaCalc check below,
+       which is unchanged and still applies everywhere. */
+    if (isYardAreaKey(cfg, areaKey)) continue;
+    visit(roomsByArea[areaKey]);
+  }
+
+  const annotated = flat.map(r => ({
+    type:                r.type,
+    sizeKey:             r.sizeKey,
+    fixedArea:           cfg.getFixedArea ? cfg.getFixedArea(r.type) : null,
+    excludeFromAreaCalc: cfg.isExcludedFromAreaCalc ? cfg.isExcludedFromAreaCalc(r.type) : false,
+  }));
+  return estimateArea(annotated, { sizesMap: cfg.ROOM_SIZES, calcParams: cfg.calcParams });
 }

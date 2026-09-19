@@ -34,6 +34,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import '../styles/appScroll.css'
 import ClientProgrammingQuestionnaire from './client/ClientProgrammingQuestionnaire'
 import { MEETINGS_TAB_ID } from '../components/meetings/MeetingSummariesTab'
 import {
@@ -132,7 +133,14 @@ export default function StaffQuestionnaireView() {
   if (status !== 'ready') return <Pane text="טוען..." />
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F7F5F2', direction: 'rtl' }}>
+    /* THE SCROLL CONTAINER — .app-scroll-page (src/styles/appScroll.css).
+       index.css locks the app shell, so this page has to be its own
+       scroller or it is clipped and unscrollable. Only the look stays
+       inline. */
+    <div className="app-scroll-page" style={{
+      background: '#F7F5F2',
+      direction: 'rtl',
+    }}>
       {/* Header — project name plus the ONE back control. RTL: the title
           leads at the right, the button sits after it. */}
       <header style={{

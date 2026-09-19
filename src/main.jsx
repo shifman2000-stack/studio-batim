@@ -29,6 +29,7 @@ import ContractorRoute from './components/ContractorRoute'
 import StaffViewPicker from './pages/staffview/StaffViewPicker'
 import StaffClientViewMount from './components/StaffClientViewMount'
 import StaffQuestionnaireView from './pages/StaffQuestionnaireView'
+import ProgrammingSummaryPage from './pages/ProgrammingSummaryPage'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import ChildInquiryForm from './pages/ChildInquiryForm'
@@ -88,6 +89,9 @@ createRoot(document.getElementById('root')).render(
             tab. Gates itself on a profiles row, like every other staff
             route here. */}
         <Route path="/staff-questionnaire/:projectId" element={<StaffQuestionnaireView />} />
+        {/* Read-only programming summary document. Outside <Layout /> for
+            the same reason as the route above, and gated the same way. */}
+        <Route path="/programming-summary/:projectId" element={<ProgrammingSummaryPage />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />

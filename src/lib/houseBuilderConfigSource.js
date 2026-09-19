@@ -28,6 +28,14 @@ import { ROOM_SIZES as STATIC_ROOM_SIZES, DEFAULT_CALC_PARAMS } from './houseSiz
    HouseBuilder. */
 const CUSTOM_MARKER = 'חלל אחר'
 
+/* The static config's yard areas, derived rather than named: an area
+   key that is not one of the interior FLOOR_DEFS. houseBuilderConfig.js
+   documents exactly that ("מפתחות המפלסים כולל חצר"), and the summary
+   page has always identified the yard the same way. The DB config uses
+   its own isYard flag instead — see adaptDbConfig. */
+const STATIC_YARD_AREA_KEYS = staticCfg.AREA_KEYS
+  .filter(k => !staticCfg.FLOOR_DEFS.some(f => f.key === k))
+
 /**
  * Build the same Config shape from the current in-code static modules.
  * This is what the fallback path returns, and it's also what the DB
@@ -54,6 +62,15 @@ export function getFallbackConfig() {
     hasFixedArea:                staticCfg.hasFixedArea,
     EXCLUDE_FROM_AREA_CALC_TYPES: staticCfg.EXCLUDE_FROM_AREA_CALC_TYPES,
     isExcludedFromAreaCalc:      staticCfg.isExcludedFromAreaCalc,
+    /* The in-code config carries no showSize key, so every type shows
+       its picker unless it has a fixed area — precisely today's rule. */
+    showsSize:                   (t) => !staticCfg.hasFixedArea(t),
+    HIDE_SIZE_TYPES:             [],
+    /* The static config has no isYard flag; its yard is the one area
+       key that is not an interior floor — the same derivation the
+       summary page has always used. */
+    YARD_AREA_KEYS:              STATIC_YARD_AREA_KEYS,
+    isYardArea:                  (k) => STATIC_YARD_AREA_KEYS.includes(k),
     /* No per-type defaultSize in the static in-code config — every
        type falls through to the caller's own DEFAULT_SIZE_KEY. */
     getDefaultSize:              () => null,
@@ -82,6 +99,14 @@ function adaptDbConfig(dbConfig) {
   const yardEntry = floors.find(f => f && f.isYard && typeof f.name === 'string')
   const yardLabel = yardEntry ? yardEntry.name : fallback.YARD_LABEL
   const areaKeys  = floors.map(f => f && f.key).filter(k => typeof k === 'string')
+  /* EVERY yard-flagged area, not just the first: a yard has no built
+     area, so nothing placed in one counts toward the house size. Same
+     truthiness test floorDefs uses to exclude them, so the two can
+     never disagree about what a yard is. Add a second yard-like area
+     to the config and it is excluded automatically. */
+  const yardAreaKeys = floors
+    .filter(f => f && f.isYard && typeof f.key === 'string')
+    .map(f => f.key)
 
   /* Palette — strip the 'חלל אחר' marker (rendered separately by the app). */
   const strippedPalette = {}
@@ -99,6 +124,7 @@ function adaptDbConfig(dbConfig) {
   const excludeFromAreaCalcTypes = []
   const displayMap        = {}
   const defaultSizes      = {}
+  const hideSizeTypes     = []
   const containerTypes    = []
   const containerAllowed  = {}
   const containerAuto     = {}
@@ -130,6 +156,16 @@ function adaptDbConfig(dbConfig) {
        is strictly true (mirrors the isContainer flag below). */
     if (def.excludeFromAreaCalc === true) {
       excludeFromAreaCalcTypes.push(type)
+    }
+
+    /* showSize — the admin's "הצג בורר גודל ללקוח". Recorded only when
+       strictly false, so an ABSENT key means "show it", which is what
+       every type did before this was read and what the in-code static
+       config (which has no such key) still relies on. Hiding the
+       picker is purely a UI decision: the stored sizeKey is left alone
+       and still feeds estimateArea exactly as before. */
+    if (def.showSize === false) {
+      hideSizeTypes.push(type)
     }
 
     /* Per-type defaultSize (S/M/L). Only recorded when the DB row
@@ -220,6 +256,24 @@ function adaptDbConfig(dbConfig) {
     },
     EXCLUDE_FROM_AREA_CALC_TYPES: excludeFromAreaCalcTypes,
     isExcludedFromAreaCalc: (t) => excludeFromAreaCalcTypes.includes(t),
+    /* Area-level exclusion from the house size, from the config's own
+       isYard flag. Independent of, and additional to, the type-level
+       isExcludedFromAreaCalc above: a yard excludes whatever is in it,
+       including a free-text room whose type the config has never seen. */
+    YARD_AREA_KEYS: yardAreaKeys,
+    isYardArea: (k) => yardAreaKeys.includes(k),
+    /* THE one decision about whether a size is visible for a type —
+       read by the builder's picker, by roomSizeLabel and by the
+       programming summary, so all three can never disagree. Two ways
+       to be hidden: a fixed area (there is no size to choose) or the
+       admin's showSize toggle. Nothing here touches the calculation:
+       estimateArea never asks this question. */
+    showsSize: (t) => {
+      const v = fixedAreas[t]
+      const isFixed = typeof v === 'number' && Number.isFinite(v) && v > 0
+      return !isFixed && !hideSizeTypes.includes(t)
+    },
+    HIDE_SIZE_TYPES: hideSizeTypes,
     /* Per-type default size — returns 'S'|'M'|'L' when the DB row
        carries a valid key, else null so callers fall through to
        their own default. */

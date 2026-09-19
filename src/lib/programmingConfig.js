@@ -126,9 +126,12 @@ export const QUESTIONNAIRE_STEPS = [
 
 /* מבנה answers.questionnaire הצפוי (לתיעוד):
    {
-     people: [ { name, sex, age, known } ],
+     people: [ { id, name, sex, age, known } ],
      composition: '', pets: '',
-     occ: { [name]: '' }, hob: { [name]: '' },
+     occ: { [personId]: '' }, hob: { [personId]: '' },
+       ↑ keyed by people[].id, NOT by the name — a rename must not
+         orphan the answers. Rows written before ids are keyed by name
+         and are migrated lazily on load (migratePeopleIdentity).
      ls: { shop, host, activity, eat, tv, hours, work },   // + legacy `sport` on pre-removal rows
      feel: {...}, style: {...}, arch: {...}, style_notes: '',
      inspiration_notes: ''

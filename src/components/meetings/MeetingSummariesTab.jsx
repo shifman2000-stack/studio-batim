@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import ActionRequiredBadge from '../ActionRequiredBadge'
+import { PROGRAMMING_SUMMARY_LINK_LABEL, programmingSummaryPath } from '../../lib/programmingLabels'
 import RichTextEditor, { hasRichText } from './RichTextEditor'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { clientDoneHint, DONE_STATUS } from './meetingTasksStatus'
@@ -1039,6 +1040,22 @@ export default function MeetingSummariesTab({
             label={(n) => `${n} עדכונים חדשים`}
           />
         </button>
+
+        {/* ── הצג סיכום פרוגרמה — the read-only summary, in a new tab ──
+            Same size and styling as the link beside it, but deliberately
+            WITHOUT its notification badge: the red dot belongs to the
+            questionnaire link only. A plain <a>, since it only opens a
+            page. The --summary modifier drops the auto margin, so this
+            sits directly beside that link instead of splitting the free
+            space with it. */}
+        <a
+          className="ms-questionnaire-link ms-questionnaire-link--summary"
+          href={programmingSummaryPath(projectId)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span className="ms-questionnaire-link-label">{PROGRAMMING_SUMMARY_LINK_LABEL}</span>
+        </a>
       </div>
 
       {errorMsg && (

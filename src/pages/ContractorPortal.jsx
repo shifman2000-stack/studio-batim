@@ -31,6 +31,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { useContractor } from '../components/ContractorRoute'
 import ContractorDocuments from './contractor/ContractorDocuments'
+import '../styles/appScroll.css'
 import './ClientPortal.css'
 
 /* Feather-style chevron pointing the way "onward" reads in RTL — the
@@ -120,7 +121,11 @@ export default function ContractorPortal() {
   const heading = (displayName || '').trim() || email || ''
 
   return (
-    <div className="cp-page">
+    /* .app-scroll-page at the CALL SITE, not on .cp-page: this is the
+       outermost element of the contractor portal, which has no scroller
+       above it, whereas the ~20 client-portal screens that share
+       .cp-page already sit inside .cp-content's. */
+    <div className="cp-page app-scroll-page">
       <div className="cp-container">
 
         {/* ── Greeting — unchanged ── */}

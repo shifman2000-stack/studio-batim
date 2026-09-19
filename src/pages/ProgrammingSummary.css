@@ -1,0 +1,223 @@
+/* ── סיכום פרוגרמה — dense read-only document ──────────────────────────
+   Every colour, font and radius comes from src/styles/theme.css (loaded
+   globally through index.css). No new colours.
+
+   RTL: the page is right-to-left, where physical `left` paints on the
+   visual RIGHT. Spacing is written with logical properties
+   (margin-inline-*, padding-inline-*, text-align: start) so it follows
+   the reading direction instead of fighting it. */
+
+/* ── The scroll container ──────────────────────────────────────────────
+   The four properties that make this page its own scroller now live in
+   src/styles/appScroll.css as .app-scroll-page, which the document
+   composes with this class. Only the look stays here. */
+.ps-page {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.ps-doc {
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-block: 22px 40px;
+  padding-inline: 28px;
+  direction: rtl;
+  text-align: start;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.55;
+}
+
+/* ── Header ── */
+.ps-header {
+  padding-block-end: 10px;
+  margin-block-end: 16px;
+  border-block-end: 1px solid var(--border-default);
+}
+
+.ps-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--sage-dark);
+}
+
+.ps-title {
+  margin-block: 0 4px;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+/* ── Two columns on wide screens ──────────────────────────────────────
+   Multi-column layout follows the container's direction, so under
+   direction:rtl the first column is the RIGHT one and chapters flow
+   right-to-left. A chapter never breaks across the two columns. */
+.ps-chapters {
+  column-gap: 40px;
+}
+
+@media (min-width: 900px) {
+  .ps-chapters {
+    column-count: 2;
+    column-rule: 1px solid var(--border-subtle);
+  }
+}
+
+.ps-chapter {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  display: block;
+  margin-block: 0 18px;
+}
+
+.ps-chapter-title {
+  margin-block: 0 6px;
+  padding-block-end: 3px;
+  border-block-end: 1px solid var(--border-default);
+  font-size: 15.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--sage-dark);
+}
+
+/* ── Lines ── */
+.ps-line {
+  margin: 0 0 2px;
+}
+
+.ps-label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.ps-name {
+  font-weight: 500;
+}
+
+.ps-muted {
+  color: var(--text-secondary);
+}
+
+.ps-sep {
+  color: var(--text-secondary);
+}
+
+/* Free text keeps its own direction, so a run typed in Latin script is not
+   reordered by the Hebrew around it. */
+.ps-text {
+  unicode-bidi: plaintext;
+  overflow-wrap: anywhere;
+}
+
+/* Kept only for text that is genuinely several sentences. */
+.ps-multiline {
+  white-space: pre-line;
+}
+
+.ps-unanswered,
+.ps-footnote {
+  margin-block-start: 3px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* ── House builder ── */
+.ps-floor {
+  margin-block-start: 6px;
+}
+
+.ps-floor-label {
+  font-weight: 500;
+  color: var(--sage-dark);
+}
+
+/* One step per nesting level; --ps-depth is set per line. */
+.ps-room {
+  padding-inline-start: calc(var(--ps-depth, 0) * 18px);
+}
+
+.ps-room-name {
+  font-weight: 400;
+}
+
+.ps-size,
+.ps-nest {
+  color: var(--text-secondary);
+}
+
+/* ── Inspiration: a compact row of small thumbnails ── */
+.ps-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+
+.ps-image {
+  width: 88px;
+  min-width: 0;
+}
+
+.ps-thumb {
+  display: block;
+  width: 88px;
+  height: 66px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-deep);
+}
+
+.ps-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* File name under a thumbnail — the documents table's pattern: the
+   extension once, as a chip, and the name with it stripped. */
+.ps-file {
+  margin-block-start: 2px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ps-file-ext {
+  flex-shrink: 0;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-surface-deep);
+  border-radius: var(--radius-sm);
+}
+
+.ps-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+/* ── Phones ── */
+@media (max-width: 560px) {
+  .ps-doc {
+    padding-block: 16px 32px;
+    padding-inline: 14px;
+  }
+  .ps-title {
+    font-size: 20px;
+  }
+}

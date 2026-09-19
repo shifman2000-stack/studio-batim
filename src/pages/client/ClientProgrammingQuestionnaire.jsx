@@ -55,7 +55,23 @@ import {
   AGE_RANGES,
   KNOWN_PEOPLE_FALLBACK,
 } from '../../lib/programmingConfig'
-import { estimateArea } from '../../lib/houseSizeConfig'
+import { estimateAreaForAreaKeys } from '../../lib/houseSizeConfig'
+import { HOUSE_JSON_KEYS } from '../../lib/houseBuilderState'
+/* Labels that used to be JSX literals here, now shared with the read-only
+   programming summary document — one definition, both screens import it. */
+import {
+  QUESTIONNAIRE_TILE_TITLE,
+  HOUSE_BUILDER_TITLE,
+  FILLING_DONE_LABEL,
+  PERSON_NAME_LABEL,
+  PERSON_AGE_LABEL,
+  PERSON_SEX_LABEL,
+  HOUSE_GENERAL_QUESTION_LABELS,
+  YES_LABEL,
+  NO_LABEL,
+  REQUESTED_AREA_LABEL,
+  AREA_UNIT,
+} from '../../lib/programmingLabels'
 import { getFallbackConfig, loadHouseBuilderConfig } from '../../lib/houseBuilderConfigSource'
 
 /* ── Hub-tile icons (Feather-style, stroke="currentColor") ─────────
@@ -116,7 +132,127 @@ function normalizeQData(raw) {
   if (!out.feel    || typeof out.feel    !== 'object')     out.feel = {}
   if (!out.style   || typeof out.style   !== 'object')     out.style = {}
   if (!out.arch    || typeof out.arch    !== 'object')     out.arch = {}
-  return out
+  return migratePeopleIdentity(out)
+}
+
+/* ── A person's identity is their id, not their name ──────────────────
+   PER_PERSON_STORES are objects keyed per household member. They used
+   to be keyed by the NAME the client typed, so renaming someone — an
+   ordinary edit — left their occupation and hobbies stranded under the
+   old name while their card rendered empty. The name is data; it is
+   not an identity.
+
+   Every person now carries a short opaque `id`, generated once when
+   they are created and never touched by a rename. The array index
+   cannot serve: removing someone shifts every later person.
+
+   MIGRATION IS LAZY AND IN MEMORY. This runs on load, moves each
+   name-keyed entry onto the person's new id, and persists through the
+   ordinary save path — no migration script, no backfill, no UPDATE.
+   It is idempotent: a row whose people all carry ids is returned
+   untouched, by reference. */
+const PER_PERSON_STORES = ['occ', 'hob']
+
+/* Short, opaque, and collision-safe enough for a handful of people in
+   one questionnaire row. Never derived from the name or the index. */
+function makePersonId() {
+  return 'p' + Math.random().toString(36).slice(2, 10)
+}
+
+const asObj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+
+export function migratePeopleIdentity(q) {
+  const people = Array.isArray(q.people) ? q.people : []
+  if (people.length === 0) return q
+  if (people.every(p => asObj(p).id)) return q
+
+  /* How many of the people being migrated claim each name. Two people
+     sharing a name is not a real case (the client confirms household
+     members never do), but it must still resolve the same way every
+     time: the FIRST in people[] order takes the stored answer, later
+     ones start empty, and the name-keyed entry is left in place
+     rather than deleted. */
+  const claimCount = new Map()
+  for (const raw of people) {
+    const p = asObj(raw)
+    if (p.id) continue
+    const name = typeof p.name === 'string' ? p.name.trim() : ''
+    if (name) claimCount.set(name, (claimCount.get(name) || 0) + 1)
+  }
+
+  const taken = new Set()
+  const moves = []          // { id, name, soleClaimant }
+  const nextPeople = people.map(raw => {
+    const p = asObj(raw)
+    if (p.id) return raw
+    const id = makePersonId()
+    const name = typeof p.name === 'string' ? p.name.trim() : ''
+    if (name && !taken.has(name)) {
+      taken.add(name)
+      moves.push({ id, name, soleClaimant: claimCount.get(name) === 1 })
+    }
+    return { ...p, id }
+  })
+
+  const next = { ...q, people: nextPeople }
+  for (const store of PER_PERSON_STORES) {
+    const bag = asObj(q[store])
+    /* Spread first: every key we do not recognise — including answers
+       belonging to nobody — survives exactly as it was. */
+    const nextBag = { ...bag }
+    let touched = false
+    for (const { id, name, soleClaimant } of moves) {
+      if (!Object.prototype.hasOwnProperty.call(bag, name)) continue
+      nextBag[id] = bag[name]
+      if (soleClaimant) delete nextBag[name]
+      touched = true
+    }
+    if (touched) next[store] = nextBag
+  }
+  return next
+}
+
+/* ── Merging answers.house instead of replacing it ───────────────────
+   The house builder is not the only writer of answers.house: chapter 5
+   of this questionnaire writes its own booleans into
+   answers.house.general. Every path below used to assign the builder's
+   payload straight over the previous object, so anything the builder
+   didn't emit was erased.
+
+   houseBuilderState now preserves foreign keys through its own round
+   trip; this is the second, independent layer — even if that codec
+   ever regresses, a key that exists in the stored object survives the
+   write. Two levels, both shallow and explicit, no deep-merge library:
+
+     top level  — keys the serializer owns (HOUSE_JSON_KEYS) come from
+                  the fresh payload ALONE, so an owned key the builder
+                  omits still means "unset" (targetArea). Every other
+                  key is carried over from the previous object.
+     general    — a plain shallow merge: the serializer always emits
+                  all five of its keys, so nothing stale can survive
+                  there, and foreign keys are carried.
+
+   Anything that isn't a plain object passes through untouched, so the
+   callers' existing guards keep their exact meaning. */
+const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+
+export function mergeHouse(prevHouse, nextHouse) {
+  if (!isPlainObject(nextHouse)) return nextHouse
+  if (!isPlainObject(prevHouse)) return nextHouse
+
+  const carried = {}
+  for (const [k, v] of Object.entries(prevHouse)) {
+    if (!HOUSE_JSON_KEYS.includes(k)) carried[k] = v
+  }
+  const merged = { ...carried, ...nextHouse }
+
+  if (isPlainObject(prevHouse.general) || isPlainObject(nextHouse.general)) {
+    merged.general = {
+      ...(isPlainObject(prevHouse.general) ? prevHouse.general : {}),
+      ...(isPlainObject(nextHouse.general) ? nextHouse.general : {}),
+    }
+  }
+  return merged
 }
 
 /* Pull known people from project_contacts. If the fetch fails or
@@ -165,10 +301,10 @@ function houseAreaMessage(comparison, requestedM2, computedM2) {
      body colour. Without this the tile would render a title and nothing
      else, which reads as broken. */
   if (!comparison) {
-    return { color: HOUSE_AREA_BODY, text: `שטח הבית המחושב: ${computedM2} מ״ר` }
+    return { color: HOUSE_AREA_BODY, text: `שטח הבית המחושב: ${computedM2} ${AREA_UNIT}` }
   }
-  const requested = `שטח הבית המבוקש (${requestedM2} מ״ר)`
-  const computed  = `שטח הבית המחושב (${computedM2} מ״ר)`
+  const requested = `${REQUESTED_AREA_LABEL} (${requestedM2} ${AREA_UNIT})`
+  const computed  = `שטח הבית המחושב (${computedM2} ${AREA_UNIT})`
   if (comparison === 'smaller') {
     return { color: HOUSE_AREA_RED,  text: `${requested} קטן מ${computed}` }
   }
@@ -208,22 +344,34 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
        next step's iteration doesn't render orphan blocks with stale
        occ/hob values. */
     updateQ(prev => {
-      const removed = prev.people[i]
-      const name = removed?.name || ''
-      const nextOcc = { ...(prev.occ || {}) }; delete nextOcc[name]
-      const nextHob = { ...(prev.hob || {}) }; delete nextHob[name]
+      const removed = prev.people[i] || {}
+      const id   = removed.id
+      const name = removed.name || ''
+      const stays = prev.people.filter((_, idx) => idx !== i)
+      /* Drop the answers under their id. The old name key goes too, so
+         a row saved before ids does not leave a stray behind — but only
+         when nobody left shares that name, so removing one of two
+         same-named people cannot take the other's answers with it. */
+      const nameStillUsed = stays.some(p => (p?.name || '') === name)
+      const purge = (bag) => {
+        const next = { ...(bag || {}) }
+        if (id) delete next[id]
+        if (name && !nameStillUsed) delete next[name]
+        return next
+      }
       return {
         ...prev,
-        people: prev.people.filter((_, idx) => idx !== i),
-        occ:    nextOcc,
-        hob:    nextHob,
+        people: stays,
+        occ:    purge(prev.occ),
+        hob:    purge(prev.hob),
       }
     })
   }
   const addPerson = () => {
     updateQ(prev => ({
       ...prev,
-      people: [...(prev.people || []), { name: '', sex: '', age: '', known: false }],
+      /* id from birth — see migratePeopleIdentity. */
+      people: [...(prev.people || []), { id: makePersonId(), name: '', sex: '', age: '', known: false }],
     }))
   }
 
@@ -278,19 +426,19 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
                 natural-width fixed pair; name flexes into the rest. */}
             <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 6, alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>שם</label>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_NAME_LABEL}</label>
                 <input
                   type="text"
                   value={p.name || ''}
                   onChange={e => updatePersonAt(i, { name: e.target.value })}
                   readOnly={isLocked}
-                  placeholder="שם"
+                  placeholder={PERSON_NAME_LABEL}
                   style={{ ...STYLE_INPUT, ...(isLocked ? STYLE_LOCKED_BG : {}) }}
                 />
               </div>
 
               <div style={{ flex: '0 0 88px', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>גיל</label>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_AGE_LABEL}</label>
                 <select
                   value={p.age || ''}
                   onChange={e => updatePersonAt(i, { age: e.target.value })}
@@ -303,8 +451,8 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
               </div>
 
               <div style={{ flex: '0 0 auto', minWidth: 0 }}>
-                <label style={STYLE_FIELD_LABEL}>מין</label>
-                <div role="radiogroup" aria-label="מין" style={{ display: 'flex', gap: 4 }}>
+                <label style={STYLE_FIELD_LABEL}>{PERSON_SEX_LABEL}</label>
+                <div role="radiogroup" aria-label={PERSON_SEX_LABEL} style={{ display: 'flex', gap: 4 }}>
                   <button
                     type="button"
                     role="radio"
@@ -382,12 +530,17 @@ function BlockPerPerson({ block, qData, updateQ, isLocked }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {block.fields.map(field => {
               const bag = qData[field.key] || {}
-              const val = bag[p.name] || ''
+              /* Keyed by the person's stable id. The name fallback is
+                 for the single render that could precede migration;
+                 every loaded or newly added person already has an id,
+                 so writes go to the id and survive a rename. */
+              const bagKey = p.id || p.name
+              const val = (p.id && bag[p.id] !== undefined ? bag[p.id] : bag[p.name]) || ''
               const onChange = e => {
                 const nextVal = e.target.value
                 updateQ(prev => ({
                   ...prev,
-                  [field.key]: { ...(prev[field.key] || {}), [p.name]: nextVal },
+                  [field.key]: { ...(prev[field.key] || {}), [bagKey]: nextVal },
                 }))
               }
               const commonProps = {
@@ -564,7 +717,7 @@ function YesNoRow({ label, value, onChange, isLocked }) {
         borderRadius: 20,
         overflow:     'hidden',
       }}>
-        {[{ value: true, label: 'כן' }, { value: false, label: 'לא' }].map((opt, i) => {
+        {[{ value: true, label: YES_LABEL }, { value: false, label: NO_LABEL }].map((opt, i) => {
           const sel = selected === opt.value
           return (
             <button
@@ -648,25 +801,25 @@ function HouseGeneralSection({ answers, onHouseChange, isLocked }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <YesNoRow
-        label="האם מעוניינים בחימום רצפתי"
+        label={HOUSE_GENERAL_QUESTION_LABELS.floorHeating}
         value={heatingValue}
         onChange={setHeating}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים במעלית"
+        label={HOUSE_GENERAL_QUESTION_LABELS.elevator}
         value={elevatorValue}
         onChange={setElevator}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים בקמין"
+        label={HOUSE_GENERAL_QUESTION_LABELS.fireplace}
         value={fireplaceValue}
         onChange={setFireplace}
         isLocked={isLocked}
       />
       <YesNoRow
-        label="האם מעוניינים בחימום מים בגז"
+        label={HOUSE_GENERAL_QUESTION_LABELS.gasWaterHeating}
         value={gasWaterHeatingValue}
         onChange={setGasWaterHeating}
         isLocked={isLocked}
@@ -1213,7 +1366,10 @@ export default function ClientProgrammingQuestionnaire({
       if (!hasSavedQ) {
         const seeded = await seedPeopleFromContacts(project_id)
         if (!isMounted.current) return
-        normalizedQ = { ...normalizedQ, people: seeded }
+        /* Seeding is unchanged — the same contacts, the same fields.
+           The people it returns simply pass through the same id
+           assignment every other person gets. */
+        normalizedQ = migratePeopleIdentity({ ...normalizedQ, people: seeded })
       }
 
       setRowId(row.id)
@@ -1273,7 +1429,10 @@ export default function ClientProgrammingQuestionnaire({
         questionnaire: qData,
       }
       if (houseOverride !== undefined) {
-        nextAnswers.house = houseOverride
+        /* Merged onto whatever is already stored, never assigned over
+           it — see mergeHouse. Same trigger, same timing, same value
+           for every key the builder emits. */
+        nextAnswers.house = mergeHouse((answers && answers.house), houseOverride)
       }
       /* Symmetric to houseOverride — dodges the setAnswers-is-async
          race when the caller wants to flip meta flags and immediately
@@ -1377,7 +1536,7 @@ export default function ClientProgrammingQuestionnaire({
      right after setAnswers). */
 
   const handleHouseChange = (json) => {
-    setAnswers(prev => ({ ...(prev || {}), house: json }))
+    setAnswers(prev => ({ ...(prev || {}), house: mergeHouse(prev && prev.house, json) }))
   }
 
   /* Inspiration-images setter — mirrors handleHouseChange: writes
@@ -1393,7 +1552,7 @@ export default function ClientProgrammingQuestionnaire({
     if (jsonFromBuilder !== undefined && jsonFromBuilder !== null) {
       /* setAnswers is async — pass the fresh JSON to saveDraftNow so
          the write uses the LATEST house value, not a stale closure. */
-      setAnswers(prev => ({ ...(prev || {}), house: jsonFromBuilder }))
+      setAnswers(prev => ({ ...(prev || {}), house: mergeHouse(prev && prev.house, jsonFromBuilder) }))
       await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
     }
     setView('hub')
@@ -1417,7 +1576,7 @@ export default function ClientProgrammingQuestionnaire({
       : undefined
     setAnswers(prev => ({
       ...(prev || {}),
-      ...(nextHouse !== undefined ? { house: nextHouse } : {}),
+      ...(nextHouse !== undefined ? { house: mergeHouse(prev && prev.house, nextHouse) } : {}),
       meta: { ...((prev && prev.meta) || {}), house_done: true },
     }))
     /* metaOverride/houseOverride sidestep the setAnswers stale-closure
@@ -1665,7 +1824,7 @@ export default function ClientProgrammingQuestionnaire({
 
   const questionnaireStatusLine =
       isLocked          ? { text: 'הושלם ✓',           color: '#4a7f4a' }
-    : questionnaireDone ? { text: 'הסתיים המילוי ✓',   color: '#7a9478' }
+    : questionnaireDone ? { text: `${FILLING_DONE_LABEL} ✓`, color: '#7a9478' }
     : hasDraft          ? { text: 'יש טיוטה שמורה',    color: '#8a8680' }
     : null
 
@@ -1685,7 +1844,7 @@ export default function ClientProgrammingQuestionnaire({
 
   const houseStatusLine =
       isLocked      ? { text: 'הושלם ✓',           color: '#4a7f4a' }
-    : houseDone     ? { text: 'הסתיים המילוי ✓',   color: '#7a9478' }
+    : houseDone     ? { text: `${FILLING_DONE_LABEL} ✓`, color: '#7a9478' }
     : hasHouseDraft ? { text: 'יש טיוטה שמורה',    color: '#8a8680' }
     : null
 
@@ -1701,22 +1860,11 @@ export default function ClientProgrammingQuestionnaire({
   const computedHouseArea = useMemo(() => {
     const roomsByArea = answers && answers.house && answers.house.rooms
     if (!roomsByArea || typeof roomsByArea !== 'object') return 0
-    const flat = []
-    const visit = (list) => {
-      for (const r of (Array.isArray(list) ? list : [])) {
-        flat.push(r)
-        if (Array.isArray(r.children)) visit(r.children)
-      }
-    }
-    for (const areaKey of Object.keys(roomsByArea)) visit(roomsByArea[areaKey])
-
-    const annotated = flat.map(r => ({
-      type:                r.type,
-      sizeKey:              r.sizeKey,
-      fixedArea:            houseConfig.getFixedArea ? houseConfig.getFixedArea(r.type) : null,
-      excludeFromAreaCalc:  houseConfig.isExcludedFromAreaCalc ? houseConfig.isExcludedFromAreaCalc(r.type) : false,
-    }))
-    return estimateArea(annotated, { sizesMap: houseConfig.ROOM_SIZES, calcParams: houseConfig.calcParams })
+    /* EVERY area key present on the row, exactly as before — including
+       `yard`, and including a key the active config does not know. The
+       walk itself now lives in houseSizeConfig so the summary's
+       per-floor breakdown runs the identical formula. */
+    return estimateAreaForAreaKeys(roomsByArea, Object.keys(roomsByArea), houseConfig)
   }, [answers, houseConfig])
 
   const targetAreaY = (
@@ -1984,7 +2132,7 @@ export default function ClientProgrammingQuestionnaire({
                 <span style={hubTileIconWrap}>
                   <IconDocument size={28} />
                 </span>
-                <span style={hubTileTitle}>מילוי השאלון</span>
+                <span style={hubTileTitle}>{QUESTIONNAIRE_TILE_TITLE}</span>
                 <span style={hubTileDesc}>אורח חיים, רצונות, אווירה וסגנון</span>
                 {questionnaireStatusLine && (
                   <span style={{
@@ -2021,7 +2169,7 @@ export default function ClientProgrammingQuestionnaire({
                 <span style={hubTileIconWrap}>
                   <IconHouse size={28} />
                 </span>
-                <span style={hubTileTitle}>בונה הבית</span>
+                <span style={hubTileTitle}>{HOUSE_BUILDER_TITLE}</span>
                 {houseDone ? (
                   /* ONE sentence. The old introductory line ("בחישוב
                      החללים... יוצא כ-N מ״ר") is gone: both numbers now

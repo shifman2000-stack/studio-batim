@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
+import '../../styles/appScroll.css'
 import '../ClientPortal.css'
 import './StaffViewPicker.css'
 
@@ -83,7 +84,7 @@ export default function StaffViewPicker() {
   }
 
   return (
-    <div className="cp-page sv-picker-page">
+    <div className="cp-page sv-picker-page app-scroll-page">
       <div className="cp-container">
         <h1 className="cp-screen-title">בחירת פרויקט</h1>
         <p className="sv-picker-subtitle">

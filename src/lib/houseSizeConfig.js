@@ -127,3 +127,49 @@ export function estimateArea(roomsFlat, opts = {}) {
   }
   return Math.round(sum * (1 + (corridorsPct + wallsPct) / 100));
 }
+
+/**
+ * שטח משוער עבור קבוצת אזורים מתוך עץ ה-rooms השמור.
+ *
+ * ONE formula, two uses: the hub's whole-house total passes every area
+ * key, the summary's per-floor breakdown passes one key at a time.
+ * Both land in estimateArea above, so corridorsPct + wallsPct are
+ * applied by the SAME line — per floor when called per floor.
+ *
+ * estimateArea itself takes a FLAT list and does not recurse, and
+ * fixedArea / excludeFromAreaCalc are TYPE-level flags that live in the
+ * builder config rather than on the stored room, so the tree is
+ * flattened (children included) and each room annotated from the config
+ * before the call. That walk used to live inline in
+ * ClientProgrammingQuestionnaire; it is here so there is one copy.
+ *
+ * ⚠️ Rounding happens ONCE per call, at the end of estimateArea. Calling
+ * this per floor therefore rounds per floor, and the per-floor figures
+ * need not sum to the whole-house figure. Neither number is wrong; they
+ * round at different points. Do not "fix" that by reconciling them.
+ *
+ * @param roomsByArea עץ החדרים: { [areaKey]: [room] }
+ * @param areaKeys מפתחות האזורים לחישוב (למשל ['ground'] או כולם)
+ * @param config קונפיג בונה הבית הפעיל (getFixedArea / isExcludedFromAreaCalc / ROOM_SIZES / calcParams)
+ * @returns מ"ר מעוגל
+ */
+export function estimateAreaForAreaKeys(roomsByArea, areaKeys, config) {
+  if (!roomsByArea || typeof roomsByArea !== 'object') return 0;
+  const cfg = config || {};
+  const flat = [];
+  const visit = (list) => {
+    for (const r of (Array.isArray(list) ? list : [])) {
+      flat.push(r);
+      if (Array.isArray(r.children)) visit(r.children);
+    }
+  };
+  for (const areaKey of (Array.isArray(areaKeys) ? areaKeys : [])) visit(roomsByArea[areaKey]);
+
+  const annotated = flat.map(r => ({
+    type:                r.type,
+    sizeKey:             r.sizeKey,
+    fixedArea:           cfg.getFixedArea ? cfg.getFixedArea(r.type) : null,
+    excludeFromAreaCalc: cfg.isExcludedFromAreaCalc ? cfg.isExcludedFromAreaCalc(r.type) : false,
+  }));
+  return estimateArea(annotated, { sizesMap: cfg.ROOM_SIZES, calcParams: cfg.calcParams });
+}

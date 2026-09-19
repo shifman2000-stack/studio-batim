@@ -37,7 +37,7 @@
 // this document must not.
 
 import { QUESTIONNAIRE_STEPS, SEX_OPTIONS } from './programmingConfig'
-import { SIZE_LABELS } from './houseSizeConfig'
+import { SIZE_LABELS, estimateAreaForAreaKeys } from './houseSizeConfig'
 /* The area order the BUILDER numbers rooms in. HouseBuilderV2 walks a fixed
    first → ground → basement → yard list (not the config's floor order) when
    it assigns "מטבח 1" / "מטבח 2"; houseBuilderConfig.js exports that same
@@ -71,6 +71,9 @@ export const HOUSE_EMPTY_LABEL      = 'בונה הבית טרם מולא'
 export const IMAGES_LABEL           = 'תמונות'
 export const TARGET_AREA_SHORT_LABEL = 'שטח מבוקש'
 export const FLOORS_SHORT_LABEL     = 'קומות'
+/* The calculated figure, beside the requested one. Same number the
+   house-builder hub shows the client; only the wording is shorter. */
+export const COMPUTED_AREA_SHORT_LABEL = 'שטח מחושב'
 export const LOAD_ERROR_LABEL       = 'שגיאה בטעינת סיכום הפרוגרמה'
 /* Chapter 5's unanswered mark — a dash, since the four answers sit together
    on one line rather than being moved to the unanswered list. */
@@ -410,18 +413,33 @@ function houseChapter(answers, config) {
        the client may have picked. */
     summary.push({ label: TARGET_AREA_SHORT_LABEL, value: `${house.targetArea} ${AREA_UNIT}` })
   }
+  /* The calculated area — the SAME number the house-builder hub shows,
+     from the same function over the same area keys. Omitted entirely
+     when the house has no rooms, rather than claiming 0 מ״ר. */
+  if (hasRooms) {
+    const total = estimateAreaForAreaKeys(rooms, Object.keys(rooms), config)
+    summary.push({ label: COMPUTED_AREA_SHORT_LABEL, value: `${total} ${AREA_UNIT}` })
+  }
   if (hasRoof) summary.push({ label: ROOF_SECTION_TITLE, value: oneLine(general.roof) })
   const floorsObj = asObject(house.floors)
+  /* Each selected FLOOR carries its own figure, the percentages applied
+     to that floor alone. A selected floor with no rooms says 0 מ״ר
+     rather than going silent. The yard keeps its bare name: it has no
+     built area, and the types its palette offers are excluded from the
+     calculation anyway. */
+  const withArea = (k, label) =>
+    isYardArea(k) ? label : `${label} (${estimateAreaForAreaKeys(rooms, [k], config)} ${AREA_UNIT})`
   const chosen = []
   for (const k of areaKeys) {
     const on = isYardArea(k) ? house.yard === true : floorsObj[k] === true
-    if (on) chosen.push(areaLabel(k))
+    if (on) chosen.push(withArea(k, areaLabel(k)))
   }
-  /* A floor key the active config does not know is still shown. */
+  /* A floor key the active config does not know is still shown — and is
+     a floor, not the yard, so it is measured like one. */
   for (const [k, v] of Object.entries(floorsObj)) {
-    if (v === true && !areaKeys.includes(k)) chosen.push(k)
+    if (v === true && !areaKeys.includes(k)) chosen.push(withArea(k, k))
   }
-  summary.push({ label: FLOORS_SHORT_LABEL, value: chosen.length ? chosen.join(', ') : null })
+  summary.push({ label: FLOORS_SHORT_LABEL, value: chosen.length ? chosen.join(' · ') : null })
   ch.blocks.push({ kind: 'pairs', items: summary })
 
   /* Room numbering, exactly as HouseBuilderV2's roomLabelById: count each

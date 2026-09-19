@@ -55,7 +55,7 @@ import {
   AGE_RANGES,
   KNOWN_PEOPLE_FALLBACK,
 } from '../../lib/programmingConfig'
-import { estimateArea } from '../../lib/houseSizeConfig'
+import { estimateAreaForAreaKeys } from '../../lib/houseSizeConfig'
 import { HOUSE_JSON_KEYS } from '../../lib/houseBuilderState'
 /* Labels that used to be JSX literals here, now shared with the read-only
    programming summary document — one definition, both screens import it. */
@@ -1860,22 +1860,11 @@ export default function ClientProgrammingQuestionnaire({
   const computedHouseArea = useMemo(() => {
     const roomsByArea = answers && answers.house && answers.house.rooms
     if (!roomsByArea || typeof roomsByArea !== 'object') return 0
-    const flat = []
-    const visit = (list) => {
-      for (const r of (Array.isArray(list) ? list : [])) {
-        flat.push(r)
-        if (Array.isArray(r.children)) visit(r.children)
-      }
-    }
-    for (const areaKey of Object.keys(roomsByArea)) visit(roomsByArea[areaKey])
-
-    const annotated = flat.map(r => ({
-      type:                r.type,
-      sizeKey:              r.sizeKey,
-      fixedArea:            houseConfig.getFixedArea ? houseConfig.getFixedArea(r.type) : null,
-      excludeFromAreaCalc:  houseConfig.isExcludedFromAreaCalc ? houseConfig.isExcludedFromAreaCalc(r.type) : false,
-    }))
-    return estimateArea(annotated, { sizesMap: houseConfig.ROOM_SIZES, calcParams: houseConfig.calcParams })
+    /* EVERY area key present on the row, exactly as before — including
+       `yard`, and including a key the active config does not know. The
+       walk itself now lives in houseSizeConfig so the summary's
+       per-floor breakdown runs the identical formula. */
+    return estimateAreaForAreaKeys(roomsByArea, Object.keys(roomsByArea), houseConfig)
   }, [answers, houseConfig])
 
   const targetAreaY = (

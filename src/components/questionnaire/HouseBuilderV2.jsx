@@ -3633,13 +3633,21 @@ function roomDisplayName(room, container, roomLabel) {
 }
 
 /* roomSizeLabel — the room's size as the size selector displays it
-   (קטן / בינוני / גדול), or null when there is none to show. A
-   fixed-area type has no size selector, so it has no size label —
-   the summary renders such a room without parentheses. */
+   (קטן / בינוני / גדול), or null when there is none to show. A type
+   whose size the client never chose has no size to report: either it
+   has a fixed area, or the admin turned its picker off. Both cases are
+   the SAME question, asked once in config.showsSize, so the label and
+   the picker cannot drift apart.
+
+   A room of such a type may still carry a sizeKey stored before the
+   setting changed. It stays in the data untouched — it simply stops
+   being displayed. */
 function roomSizeLabel(room, config) {
   if (!room) return null
-  const isFixed = !!(config && config.hasFixedArea && config.hasFixedArea(room.type))
-  if (isFixed) return null
+  const shows = (config && typeof config.showsSize === 'function')
+    ? config.showsSize(room.type)
+    : !(config && config.hasFixedArea && config.hasFixedArea(room.type))
+  if (!shows) return null
   return SIZE_LABELS_MAP[room.sizeKey] || null
 }
 
@@ -3715,7 +3723,12 @@ function RoomCharacterizationFields({
   const [freePropOpen, setFreePropOpen] = useState(false)
   const [noteOpen,     setNoteOpen]     = useState(false)
 
-  const isFixed  = !!(config && config.hasFixedArea && config.hasFixedArea(room.type))
+  /* Same question roomSizeLabel asks, from the same place: a fixed
+     area or the admin's showSize toggle means this type is not asked
+     about its size at all. */
+  const showsSizePicker = (config && typeof config.showsSize === 'function')
+    ? config.showsSize(room.type)
+    : !(config && config.hasFixedArea && config.hasFixedArea(room.type))
   const propsDef = (config && config.ROOM_PROPS && config.ROOM_PROPS[room.type]) || []
   const freeProps = Array.isArray(room.freeProps) ? room.freeProps : []
   /* A type with no configured property groups asks nothing, so the
@@ -3747,7 +3760,7 @@ function RoomCharacterizationFields({
           about storage changes. A fixed-area room asks no size
           question at all — neither the control nor this heading
           renders for it. */}
-      {!isFixed && (
+      {showsSizePicker && (
         <div>
           <FieldLabel>גודל</FieldLabel>
           <div

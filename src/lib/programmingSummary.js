@@ -395,6 +395,12 @@ function houseChapter(answers, config) {
   const areaKeys     = Array.isArray(config && config.AREA_KEYS) ? config.AREA_KEYS : []
   const displayType  = (config && typeof config.displayType === 'function') ? config.displayType : (t) => t
   const hasFixedArea = (config && typeof config.hasFixedArea === 'function') ? config.hasFixedArea : () => false
+  /* Whether this type's size was ever offered to the client. Falls back
+     to the fixed-area rule alone for a config that predates the
+     predicate, which is exactly how this page behaved before. */
+  const showsSize = (config && typeof config.showsSize === 'function')
+    ? config.showsSize
+    : (t) => !hasFixedArea(t)
 
   /* The config's floors: interior floors are in FLOOR_DEFS; the yard is the
      one config area that is not. */
@@ -468,7 +474,11 @@ function houseChapter(answers, config) {
     const r = asObject(raw)
     const valid = isValidRoom(r)
     const label = labelByRoom.get(raw) || (valid ? displayType(r.type) : null)
-    const size = (!(valid && hasFixedArea(r.type)) && Object.prototype.hasOwnProperty.call(SIZE_LABELS, r.sizeKey))
+    /* The size is shown only for a type the client was actually asked
+       about — the builder's own rule, read from the same config
+       predicate rather than restated here. A stored sizeKey on a type
+       whose picker is off stays in the data and is simply not printed. */
+    const size = (!(valid && !showsSize(r.type)) && Object.prototype.hasOwnProperty.call(SIZE_LABELS, r.sizeKey))
       ? SIZE_LABELS[r.sizeKey]
       : null
     const extras = [

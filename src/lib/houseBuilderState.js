@@ -75,6 +75,10 @@ function makeEmptyState() {
        empty by default so a fresh row and a partially-filled row
        both hydrate to the same safe shape. */
     general:      makeEmptyGeneral(),
+    /* Foreign keys found in the saved `general`, held aside so the
+       builder can hand them back unchanged on save. Empty for a row
+       that has none. See splitGeneral. */
+    generalExtra: {},
   }
 }
 
@@ -89,6 +93,48 @@ function makeEmptyGeneral() {
     floorHeatingNotes:  '',
     elevator:           null,   // true | false | null (unset)
   }
+}
+
+/* The TOP-LEVEL keys of answers.house that houseToJSON owns — every
+   key it emits, including `targetArea`, which it deliberately OMITS
+   when the client has no target (see its guard below).
+   That omission is meaningful: "absent" is how the builder says
+   "unset". Anyone merging a fresh payload onto an older one must
+   therefore drop these keys from the older object first, or clearing
+   the target area would silently restore the old number. Exported so
+   the merge in ClientProgrammingQuestionnaire cannot drift from what
+   this file actually writes. */
+export const HOUSE_JSON_KEYS = ['floors', 'yard', 'rooms', 'targetArea', 'general']
+
+/* The ONLY keys of answers.house.general this builder owns. Anything
+   else found there belongs to a different screen and is none of our
+   business — see the preservation note below. Derived from the empty
+   shape so the two can never drift apart. */
+const MANAGED_GENERAL_KEYS = Object.keys(makeEmptyGeneral())
+
+/* ── Preserving foreign keys in `general` ────────────────────────────
+   answers.house.general is NOT exclusively ours. Questionnaire
+   chapter 5 writes its own booleans into the same object, and nothing
+   stops a future screen doing the same. Both halves of this codec used
+   to rebuild `general` as exactly the five keys above, so every save
+   from the builder silently erased whatever anyone else had put there.
+
+   The rule now: split on hydration, re-join on serialisation. Keys we
+   do not manage are lifted out into state.generalExtra and carried
+   through the builder untouched — not parsed, not validated, not shown
+   in the UI, and deliberately NOT inside state.general, so no panel can
+   read or overwrite one by accident. houseToJSON lays them back down
+   underneath the five managed keys, which win on conflict.
+
+   This is key-agnostic on purpose: it protects any key that exists
+   today and any key added later, with no list to keep in sync. */
+function splitGeneral(raw) {
+  const g = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {}
+  const extra = {}
+  for (const [k, v] of Object.entries(g)) {
+    if (!MANAGED_GENERAL_KEYS.includes(k)) extra[k] = v
+  }
+  return { g, extra }
 }
 
 /**
@@ -152,12 +198,23 @@ export function houseToJSON(state) {
   /* general — step-4 house-level answers. Always emit an object with
      a stable shape so the manager-side reader doesn't have to
      defensively check every field. Empty strings / null / [] all
-     round-trip cleanly. */
-  const g = (s.general && typeof s.general === 'object' && !Array.isArray(s.general))
-    ? s.general
-    : {}
+     round-trip cleanly.
+
+     Foreign keys kept aside at hydration go back FIRST, so the five
+     keys below overwrite them on any collision and the emitted shape
+     for a row that has no foreign keys is byte-for-byte what it was
+     before this preservation existed. Should a stray foreign key have
+     reached state.general anyway, splitGeneral catches it here too. */
+  const { g, extra: generalFromState } = splitGeneral(s.general)
+  const preserved = {
+    ...((s.generalExtra && typeof s.generalExtra === 'object' && !Array.isArray(s.generalExtra))
+          ? s.generalExtra
+          : {}),
+    ...generalFromState,
+  }
   const validRoof = ['שטוח', 'רעפים', 'משולב']
   out.general = {
+    ...preserved,
     roof:               validRoof.includes(g.roof) ? g.roof : null,
     roofNotes:          typeof g.roofNotes === 'string' ? g.roofNotes : '',
     floorHeatingFloors: Array.isArray(g.floorHeatingFloors)
@@ -252,9 +309,12 @@ export function houseFromJSON(data) {
      cleanly. Filter floorHeatingFloors against FLOOR_DEFS so a
      dropped floor never resurfaces here. */
   const validRoof = ['שטוח', 'רעפים', 'משולב']
-  const g = (data.general && typeof data.general === 'object' && !Array.isArray(data.general))
-    ? data.general
-    : {}
+  const { g, extra } = splitGeneral(data.general)
+  /* Everything in `general` we don't own, lifted out verbatim and
+     parked outside state.general — the builder never touches it, and
+     houseToJSON puts it back. Values are carried by reference: no
+     copying, no coercion, nothing to get wrong. */
+  out.generalExtra = extra
   out.general = {
     roof:               validRoof.includes(g.roof) ? g.roof : null,
     roofNotes:          typeof g.roofNotes === 'string' ? g.roofNotes : '',

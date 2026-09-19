@@ -56,6 +56,7 @@ import {
   KNOWN_PEOPLE_FALLBACK,
 } from '../../lib/programmingConfig'
 import { estimateArea } from '../../lib/houseSizeConfig'
+import { HOUSE_JSON_KEYS } from '../../lib/houseBuilderState'
 /* Labels that used to be JSX literals here, now shared with the read-only
    programming summary document — one definition, both screens import it. */
 import {
@@ -132,6 +133,49 @@ function normalizeQData(raw) {
   if (!out.style   || typeof out.style   !== 'object')     out.style = {}
   if (!out.arch    || typeof out.arch    !== 'object')     out.arch = {}
   return out
+}
+
+/* ── Merging answers.house instead of replacing it ───────────────────
+   The house builder is not the only writer of answers.house: chapter 5
+   of this questionnaire writes its own booleans into
+   answers.house.general. Every path below used to assign the builder's
+   payload straight over the previous object, so anything the builder
+   didn't emit was erased.
+
+   houseBuilderState now preserves foreign keys through its own round
+   trip; this is the second, independent layer — even if that codec
+   ever regresses, a key that exists in the stored object survives the
+   write. Two levels, both shallow and explicit, no deep-merge library:
+
+     top level  — keys the serializer owns (HOUSE_JSON_KEYS) come from
+                  the fresh payload ALONE, so an owned key the builder
+                  omits still means "unset" (targetArea). Every other
+                  key is carried over from the previous object.
+     general    — a plain shallow merge: the serializer always emits
+                  all five of its keys, so nothing stale can survive
+                  there, and foreign keys are carried.
+
+   Anything that isn't a plain object passes through untouched, so the
+   callers' existing guards keep their exact meaning. */
+const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+
+export function mergeHouse(prevHouse, nextHouse) {
+  if (!isPlainObject(nextHouse)) return nextHouse
+  if (!isPlainObject(prevHouse)) return nextHouse
+
+  const carried = {}
+  for (const [k, v] of Object.entries(prevHouse)) {
+    if (!HOUSE_JSON_KEYS.includes(k)) carried[k] = v
+  }
+  const merged = { ...carried, ...nextHouse }
+
+  if (isPlainObject(prevHouse.general) || isPlainObject(nextHouse.general)) {
+    merged.general = {
+      ...(isPlainObject(prevHouse.general) ? prevHouse.general : {}),
+      ...(isPlainObject(nextHouse.general) ? nextHouse.general : {}),
+    }
+  }
+  return merged
 }
 
 /* Pull known people from project_contacts. If the fetch fails or
@@ -1288,7 +1332,10 @@ export default function ClientProgrammingQuestionnaire({
         questionnaire: qData,
       }
       if (houseOverride !== undefined) {
-        nextAnswers.house = houseOverride
+        /* Merged onto whatever is already stored, never assigned over
+           it — see mergeHouse. Same trigger, same timing, same value
+           for every key the builder emits. */
+        nextAnswers.house = mergeHouse((answers && answers.house), houseOverride)
       }
       /* Symmetric to houseOverride — dodges the setAnswers-is-async
          race when the caller wants to flip meta flags and immediately
@@ -1392,7 +1439,7 @@ export default function ClientProgrammingQuestionnaire({
      right after setAnswers). */
 
   const handleHouseChange = (json) => {
-    setAnswers(prev => ({ ...(prev || {}), house: json }))
+    setAnswers(prev => ({ ...(prev || {}), house: mergeHouse(prev && prev.house, json) }))
   }
 
   /* Inspiration-images setter — mirrors handleHouseChange: writes
@@ -1408,7 +1455,7 @@ export default function ClientProgrammingQuestionnaire({
     if (jsonFromBuilder !== undefined && jsonFromBuilder !== null) {
       /* setAnswers is async — pass the fresh JSON to saveDraftNow so
          the write uses the LATEST house value, not a stale closure. */
-      setAnswers(prev => ({ ...(prev || {}), house: jsonFromBuilder }))
+      setAnswers(prev => ({ ...(prev || {}), house: mergeHouse(prev && prev.house, jsonFromBuilder) }))
       await saveDraftNow({ silent: true, houseOverride: jsonFromBuilder })
     }
     setView('hub')
@@ -1432,7 +1479,7 @@ export default function ClientProgrammingQuestionnaire({
       : undefined
     setAnswers(prev => ({
       ...(prev || {}),
-      ...(nextHouse !== undefined ? { house: nextHouse } : {}),
+      ...(nextHouse !== undefined ? { house: mergeHouse(prev && prev.house, nextHouse) } : {}),
       meta: { ...((prev && prev.meta) || {}), house_done: true },
     }))
     /* metaOverride/houseOverride sidestep the setAnswers stale-closure

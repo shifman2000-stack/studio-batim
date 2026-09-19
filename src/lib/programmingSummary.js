@@ -222,12 +222,17 @@ function personLine(raw, q, perPersonFields) {
     const word = sex === MALE_SEX ? AGE_WORD_MALE : sex === FEMALE_SEX ? AGE_WORD_FEMALE : PERSON_AGE_LABEL
     parts.push(`${word} ${age}`)
   }
-  /* Per-person answers are stored keyed by the person's name exactly as
-     typed — the questionnaire reads bag[p.name] — and are only ever
-     collected for a person who has a name. */
+  /* Per-person answers are keyed by the person's stable id. Rows saved
+     before ids existed are still keyed by the name as typed, and this
+     page reads the STORED row — the questionnaire's lazy migration has
+     not necessarily run against it yet — so both are looked up, id
+     first. Nothing is written back from here. */
   if (name) {
     for (const f of perPersonFields) {
-      const v = asObject(q[f.key])[p.name]
+      const bag = asObject(q[f.key])
+      const v = (p.id !== undefined && p.id !== null && bag[p.id] !== undefined)
+        ? bag[p.id]
+        : bag[p.name]
       if (!isBlank(v)) parts.push(oneLine(v))
     }
   }
@@ -238,19 +243,26 @@ function personLine(raw, q, perPersonFields) {
   return { kind: 'person', parts, named: !!name, empty: !!name && parts.length === 1 }
 }
 
-/* Per-person answers whose stored name matches nobody in people[] — left
-   behind when a person is renamed. Listed, never dropped. */
+/* Per-person answers belonging to nobody in people[] — left behind by a
+   rename on a row saved before people had stable ids. Listed, never
+   dropped.
+
+   A stored key is accounted for when it matches a person's id OR a
+   person's name: the first covers migrated and newly written rows, the
+   second covers legacy rows this page may still be reading. A person
+   whose answers migrated correctly is therefore never listed here. */
 function orphansBlock(q, perPersonFields) {
   const people = Array.isArray(q.people) ? q.people : []
-  const knownNames = new Set(
-    people
-      .map(p => asObject(p).name)
-      .filter(n => typeof n === 'string' && n.trim() !== '')
-  )
+  const claimed = new Set()
+  for (const raw of people) {
+    const p = asObject(raw)
+    if (typeof p.id === 'string' && p.id !== '') claimed.add(p.id)
+    if (typeof p.name === 'string' && p.name.trim() !== '') claimed.add(p.name)
+  }
   const byName = new Map()
   for (const f of perPersonFields) {
     for (const [storedName, value] of Object.entries(asObject(q[f.key]))) {
-      if (knownNames.has(storedName) || isBlank(value)) continue
+      if (claimed.has(storedName) || isBlank(value)) continue
       if (!byName.has(storedName)) byName.set(storedName, [])
       byName.get(storedName).push(oneLine(value))
     }

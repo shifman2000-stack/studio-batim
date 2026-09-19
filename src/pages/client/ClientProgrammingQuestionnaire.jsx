@@ -132,7 +132,84 @@ function normalizeQData(raw) {
   if (!out.feel    || typeof out.feel    !== 'object')     out.feel = {}
   if (!out.style   || typeof out.style   !== 'object')     out.style = {}
   if (!out.arch    || typeof out.arch    !== 'object')     out.arch = {}
-  return out
+  return migratePeopleIdentity(out)
+}
+
+/* ── A person's identity is their id, not their name ──────────────────
+   PER_PERSON_STORES are objects keyed per household member. They used
+   to be keyed by the NAME the client typed, so renaming someone — an
+   ordinary edit — left their occupation and hobbies stranded under the
+   old name while their card rendered empty. The name is data; it is
+   not an identity.
+
+   Every person now carries a short opaque `id`, generated once when
+   they are created and never touched by a rename. The array index
+   cannot serve: removing someone shifts every later person.
+
+   MIGRATION IS LAZY AND IN MEMORY. This runs on load, moves each
+   name-keyed entry onto the person's new id, and persists through the
+   ordinary save path — no migration script, no backfill, no UPDATE.
+   It is idempotent: a row whose people all carry ids is returned
+   untouched, by reference. */
+const PER_PERSON_STORES = ['occ', 'hob']
+
+/* Short, opaque, and collision-safe enough for a handful of people in
+   one questionnaire row. Never derived from the name or the index. */
+function makePersonId() {
+  return 'p' + Math.random().toString(36).slice(2, 10)
+}
+
+const asObj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+
+export function migratePeopleIdentity(q) {
+  const people = Array.isArray(q.people) ? q.people : []
+  if (people.length === 0) return q
+  if (people.every(p => asObj(p).id)) return q
+
+  /* How many of the people being migrated claim each name. Two people
+     sharing a name is not a real case (the client confirms household
+     members never do), but it must still resolve the same way every
+     time: the FIRST in people[] order takes the stored answer, later
+     ones start empty, and the name-keyed entry is left in place
+     rather than deleted. */
+  const claimCount = new Map()
+  for (const raw of people) {
+    const p = asObj(raw)
+    if (p.id) continue
+    const name = typeof p.name === 'string' ? p.name.trim() : ''
+    if (name) claimCount.set(name, (claimCount.get(name) || 0) + 1)
+  }
+
+  const taken = new Set()
+  const moves = []          // { id, name, soleClaimant }
+  const nextPeople = people.map(raw => {
+    const p = asObj(raw)
+    if (p.id) return raw
+    const id = makePersonId()
+    const name = typeof p.name === 'string' ? p.name.trim() : ''
+    if (name && !taken.has(name)) {
+      taken.add(name)
+      moves.push({ id, name, soleClaimant: claimCount.get(name) === 1 })
+    }
+    return { ...p, id }
+  })
+
+  const next = { ...q, people: nextPeople }
+  for (const store of PER_PERSON_STORES) {
+    const bag = asObj(q[store])
+    /* Spread first: every key we do not recognise — including answers
+       belonging to nobody — survives exactly as it was. */
+    const nextBag = { ...bag }
+    let touched = false
+    for (const { id, name, soleClaimant } of moves) {
+      if (!Object.prototype.hasOwnProperty.call(bag, name)) continue
+      nextBag[id] = bag[name]
+      if (soleClaimant) delete nextBag[name]
+      touched = true
+    }
+    if (touched) next[store] = nextBag
+  }
+  return next
 }
 
 /* ── Merging answers.house instead of replacing it ───────────────────
@@ -267,22 +344,34 @@ function BlockPeople({ block, qData, updateQ, isLocked }) {
        next step's iteration doesn't render orphan blocks with stale
        occ/hob values. */
     updateQ(prev => {
-      const removed = prev.people[i]
-      const name = removed?.name || ''
-      const nextOcc = { ...(prev.occ || {}) }; delete nextOcc[name]
-      const nextHob = { ...(prev.hob || {}) }; delete nextHob[name]
+      const removed = prev.people[i] || {}
+      const id   = removed.id
+      const name = removed.name || ''
+      const stays = prev.people.filter((_, idx) => idx !== i)
+      /* Drop the answers under their id. The old name key goes too, so
+         a row saved before ids does not leave a stray behind — but only
+         when nobody left shares that name, so removing one of two
+         same-named people cannot take the other's answers with it. */
+      const nameStillUsed = stays.some(p => (p?.name || '') === name)
+      const purge = (bag) => {
+        const next = { ...(bag || {}) }
+        if (id) delete next[id]
+        if (name && !nameStillUsed) delete next[name]
+        return next
+      }
       return {
         ...prev,
-        people: prev.people.filter((_, idx) => idx !== i),
-        occ:    nextOcc,
-        hob:    nextHob,
+        people: stays,
+        occ:    purge(prev.occ),
+        hob:    purge(prev.hob),
       }
     })
   }
   const addPerson = () => {
     updateQ(prev => ({
       ...prev,
-      people: [...(prev.people || []), { name: '', sex: '', age: '', known: false }],
+      /* id from birth — see migratePeopleIdentity. */
+      people: [...(prev.people || []), { id: makePersonId(), name: '', sex: '', age: '', known: false }],
     }))
   }
 
@@ -441,12 +530,17 @@ function BlockPerPerson({ block, qData, updateQ, isLocked }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {block.fields.map(field => {
               const bag = qData[field.key] || {}
-              const val = bag[p.name] || ''
+              /* Keyed by the person's stable id. The name fallback is
+                 for the single render that could precede migration;
+                 every loaded or newly added person already has an id,
+                 so writes go to the id and survive a rename. */
+              const bagKey = p.id || p.name
+              const val = (p.id && bag[p.id] !== undefined ? bag[p.id] : bag[p.name]) || ''
               const onChange = e => {
                 const nextVal = e.target.value
                 updateQ(prev => ({
                   ...prev,
-                  [field.key]: { ...(prev[field.key] || {}), [p.name]: nextVal },
+                  [field.key]: { ...(prev[field.key] || {}), [bagKey]: nextVal },
                 }))
               }
               const commonProps = {
@@ -1272,7 +1366,10 @@ export default function ClientProgrammingQuestionnaire({
       if (!hasSavedQ) {
         const seeded = await seedPeopleFromContacts(project_id)
         if (!isMounted.current) return
-        normalizedQ = { ...normalizedQ, people: seeded }
+        /* Seeding is unchanged — the same contacts, the same fields.
+           The people it returns simply pass through the same id
+           assignment every other person gets. */
+        normalizedQ = migratePeopleIdentity({ ...normalizedQ, people: seeded })
       }
 
       setRowId(row.id)

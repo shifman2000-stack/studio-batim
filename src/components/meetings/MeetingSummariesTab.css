@@ -749,19 +749,28 @@
   flex: 1 1 100%;
 }
 
-/* ── Left-pane view switch ─────────────────────────────────────────────
+/* ── The view switch, in the screen's TOP ROW ──────────────────────────
    Same visual language as the app's other sub-tab strips
    (.hours-admin-tabs-bar / .pd-subtabs-bar): underline on active, muted
-   when not, no new control style invented for the same idea. */
-.ms-program-pane-header--tabs {
-  padding: 0 14px;
-}
+   when not, no new control style invented for the same idea.
 
+   It used to sit in the left pane's header. That pane is the only
+   scroller on this screen, so a row spent on chrome was a row taken
+   from the document; here it costs nothing, because the top row exists
+   for סגור anyway.
+
+   RTL placement: the toolbar is `justify-content: space-between` with
+   the title first (visual RIGHT) and סגור last (visual LEFT). The auto
+   margin on this element's inline-END soaks up the free space on its
+   left, so the switch settles immediately beside the title and סגור
+   keeps the far end to itself. Logical property — no left/right. */
 .ms-program-viewtabs {
   display: flex;
   flex-direction: row;
   gap: 4px;
   direction: rtl;
+  margin-inline-start: 16px;
+  margin-inline-end: auto;
 }
 
 .ms-program-viewtab {
@@ -770,7 +779,9 @@
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
+  /* No -1px overlap any more: in the pane header the underline sat on
+     that header's 1px bottom border, and the toolbar has none. The
+     toolbar centres its children, so this now aligns on its own. */
   font-family: 'Heebo', sans-serif;
   font-size: 13px;
   font-weight: 600;

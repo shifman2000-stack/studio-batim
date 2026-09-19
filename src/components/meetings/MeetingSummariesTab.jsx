@@ -129,11 +129,19 @@ const PROGRAM_DEFAULT_STAGE_NAME = 'קליטת פרויקט'
    FIXED-HEIGHT column that fills the tab's content box exactly, rather
    than a content-sized block that pushes .pd-tab-content into scrolling.
    The split below it flexes into whatever is left. */
-function FocusedEditorScreen({ title, onClose, closeDisabled, error, children }) {
+function FocusedEditorScreen({ title, onClose, closeDisabled, error, toolbarExtra, children }) {
   return (
     <div className="ms-root ms-root--focused" dir="rtl">
       <div className="ms-program-toolbar">
         <h2 className="ms-program-title">{title}</h2>
+        {/* Optional slot, used only by the programming screen for its
+            view switch. Sits between the title and סגור: RTL puts it
+            immediately beside the title at the visual RIGHT, with the
+            auto margin on its inline-end absorbing the free space so
+            סגור keeps the visual LEFT end to itself. Rendered only when
+            passed, so the regular summary screen's row is byte-for-byte
+            what it was. */}
+        {toolbarExtra}
         <button
           type="button"
           className="ms-btn-secondary"
@@ -958,6 +966,25 @@ export default function MeetingSummariesTab({
         onClose={() => setProgramMode(null)}
         closeDisabled={savingRow}
         error={errorMsg}
+        /* The left pane's view switch lives in the screen's top row, not
+           in the pane — the pane is the only scroller on this screen and
+           its height is the scarce resource. */
+        toolbarExtra={
+          <div className="ms-program-viewtabs" role="tablist" aria-label="תצוגת פרוגרמה">
+            {PROG_VIEWS.map(v => (
+              <button
+                key={v.key}
+                type="button"
+                role="tab"
+                aria-selected={progLeftView === v.key}
+                className={`ms-program-viewtab${progLeftView === v.key ? ' ms-program-viewtab--active' : ''}`}
+                onClick={() => setProgLeftView(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        }
       >
         {/* Visual-RIGHT pane (first child in RTL): editor. */}
           <section className="ms-program-pane ms-program-pane--editor">
@@ -1005,26 +1032,11 @@ export default function MeetingSummariesTab({
               screen title so this pane's own header carries the
               context. Save path lives INSIDE the questionnaire —
               writes to programming_questionnaires by project_id. */}
+          {/* NO pane header: the switch that used to sit here moved to
+              the screen's top row, and the labels there already say what
+              this pane is showing. The pane is all body, which is the
+              whole point — it is the only scroller on the screen. */}
           <section className="ms-program-pane ms-program-pane--quest">
-            {/* The pane's header IS the switch — the two labels say what
-                the static title used to, and a fixed title would
-                contradict whichever view is showing. */}
-            <div className="ms-program-pane-header ms-program-pane-header--tabs">
-              <div className="ms-program-viewtabs" role="tablist" aria-label="תצוגת פרוגרמה">
-                {PROG_VIEWS.map(v => (
-                  <button
-                    key={v.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={progLeftView === v.key}
-                    className={`ms-program-viewtab${progLeftView === v.key ? ' ms-program-viewtab--active' : ''}`}
-                    onClick={() => setProgLeftView(v.key)}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="ms-program-pane-body ms-program-pane-body--flush">
               {/* READ-ONLY document. Mounted only while it is showing —
                   it holds no user input, so there is nothing to lose. */}

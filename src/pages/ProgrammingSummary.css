@@ -65,6 +65,43 @@
     column-count: 2;
     column-rule: 1px solid var(--border-subtle);
   }
+  /* Embedded, the document gets about half a screen, so two columns
+     would be two narrow ones. Higher specificity than the rule above,
+     which is why it can win without !important. */
+  .ps-doc--embedded .ps-chapters {
+    column-count: 1;
+    column-rule: none;
+  }
+}
+
+/* ── Embedded in the programming meeting screen ────────────────────────
+   Deliberately NOT a scroll container: the pane around it already
+   scrolls, and nesting a second scroller would trap the wheel and show
+   two scrollbars. No height, no overflow — the document is just as tall
+   as it is and lets the pane do the scrolling. */
+.ps-embedded {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.ps-doc--embedded {
+  max-width: none;
+  padding-block: 12px 24px;
+  padding-inline: 16px;
+}
+
+/* The completion line, standing in for the dropped page header. */
+.ps-embedded-status {
+  padding-block-end: 8px;
+  margin-block-end: 14px;
+  border-block-end: 1px solid var(--border-default);
+}
+
+/* Belt and braces: one column at EVERY width, not only above 900px. */
+.ps-chapters--single {
+  column-count: 1;
+  column-rule: none;
 }
 
 .ps-chapter {

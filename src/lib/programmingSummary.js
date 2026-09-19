@@ -115,6 +115,40 @@ const LEGACY_CHECKBOX_PROP_KEY = /^c\d+_(.+)$/
 /* A line ending in sentence punctuation. */
 const SENTENCE_END = /[.!?…]$/
 
+/* The house-builder chapter's key. Exported so the document can lift
+   that one chapter out of the column flow in embedded mode without
+   matching on a string literal of its own. */
+export const HOUSE_CHAPTER_KEY = 'house'
+
+/* ── Floor order for THIS DOCUMENT ────────────────────────────────────────
+   The house builder walks floors in the config's own order, which starts
+   at קומה א׳. A summary reads better from the ground up, so the document
+   orders them: קומת קרקע → קומה א׳ → מרתף → anything else → the yard.
+
+   Ordered by area KEY and the yard flag, never by the Hebrew label, so
+   renaming a floor in the admin config cannot move it. A key this list
+   does not know keeps its config position among its peers and is placed
+   AFTER the known floors but BEFORE the yard — appended rather than
+   dropped, because a floor nobody planned for still holds real rooms.
+   Array.prototype.sort is stable in every engine we target, so equal
+   ranks keep the order the config gave them.
+
+   This is the ONE place the order is decided: both the "קומות" summary
+   line (with its per-floor areas) and the per-floor room blocks below it
+   read it, so they cannot disagree. The builder is untouched. */
+const SUMMARY_FLOOR_ORDER = ['ground', 'first', 'basement']
+const UNKNOWN_FLOOR_RANK = SUMMARY_FLOOR_ORDER.length   // after the known floors
+const YARD_RANK          = UNKNOWN_FLOOR_RANK + 1       // always last
+
+function orderAreaKeys(keys, isYardArea) {
+  const rank = (k) => {
+    if (isYardArea(k)) return YARD_RANK
+    const i = SUMMARY_FLOOR_ORDER.indexOf(k)
+    return i === -1 ? UNKNOWN_FLOOR_RANK : i
+  }
+  return [...keys].sort((a, b) => rank(a) - rank(b))
+}
+
 /* ── Small helpers ───────────────────────────────────────────────────────── */
 
 const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
@@ -372,7 +406,7 @@ function collectCharacteristics(props) {
 }
 
 function houseChapter(answers, config) {
-  const ch = chapter('house', HOUSE_BUILDER_TITLE)
+  const ch = chapter(HOUSE_CHAPTER_KEY, HOUSE_BUILDER_TITLE)
   const house = asObject(answers.house)
   const rooms = asObject(house.rooms)
   const general = asObject(house.general)
@@ -403,8 +437,12 @@ function houseChapter(answers, config) {
     : (t) => !hasFixedArea(t)
 
   /* The config's floors: interior floors are in FLOOR_DEFS; the yard is the
-     one config area that is not. */
-  const isYardArea = (k) => areaKeys.includes(k) && !floorDefs.some(f => f.key === k)
+     one config area that is not. The adapted config now carries the isYard
+     flag directly, so ask it when it is there and keep the derivation for
+     a config that predates it. */
+  const isYardArea = (config && typeof config.isYardArea === 'function')
+    ? (k) => config.isYardArea(k)
+    : (k) => areaKeys.includes(k) && !floorDefs.some(f => f.key === k)
   const areaLabel = (k) => {
     const def = floorDefs.find(f => f.key === k)
     if (def) return def.label
@@ -436,14 +474,14 @@ function houseChapter(answers, config) {
   const withArea = (k, label) =>
     isYardArea(k) ? label : `${label} (${estimateAreaForAreaKeys(rooms, [k], config)} ${AREA_UNIT})`
   const chosen = []
-  for (const k of areaKeys) {
+  /* Document order — ground up, yard last. See orderAreaKeys. A floor
+     the config does not list joins the same ordering rather than being
+     tacked on after the yard. */
+  const unknownFloorKeys = Object.keys(floorsObj).filter(k => floorsObj[k] === true && !areaKeys.includes(k))
+  for (const k of orderAreaKeys([...areaKeys, ...unknownFloorKeys], isYardArea)) {
+    const known = areaKeys.includes(k)
     const on = isYardArea(k) ? house.yard === true : floorsObj[k] === true
-    if (on) chosen.push(withArea(k, areaLabel(k)))
-  }
-  /* A floor key the active config does not know is still shown — and is
-     a floor, not the yard, so it is measured like one. */
-  for (const [k, v] of Object.entries(floorsObj)) {
-    if (v === true && !areaKeys.includes(k)) chosen.push(withArea(k, k))
+    if (on) chosen.push(withArea(k, known ? areaLabel(k) : k))
   }
   summary.push({ label: FLOORS_SHORT_LABEL, value: chosen.length ? chosen.join(' · ') : null })
   ch.blocks.push({ kind: 'pairs', items: summary })
@@ -497,9 +535,14 @@ function houseChapter(answers, config) {
     }
   }
 
-  /* Floors in the config's order, then any stored area the config does not
-     list — shown, not dropped. A floor with no rooms is left out. */
-  const areaOrder = [...areaKeys, ...Object.keys(rooms).filter(k => !areaKeys.includes(k))]
+  /* Floors in the DOCUMENT's order (see orderAreaKeys), including any
+     stored area the config does not list — shown, not dropped. A floor
+     with no rooms is left out. Same ordering the summary line above
+     uses, so the two always agree. */
+  const areaOrder = orderAreaKeys(
+    [...areaKeys, ...Object.keys(rooms).filter(k => !areaKeys.includes(k))],
+    isYardArea,
+  )
   for (const k of areaOrder) {
     const list = Array.isArray(rooms[k]) ? rooms[k] : []
     if (list.length === 0) continue
@@ -563,8 +606,14 @@ export function buildProgrammingSummary({ projectName, contacts, row, config }) 
   if (clientNames.length) meta_.push({ label: CLIENTS_LABEL, value: clientNames.join(', ') })
   const updatedAt = formatDate(row && row.updated_at)
   if (updatedAt) meta_.push({ label: UPDATED_LABEL, value: updatedAt })
-  meta_.push({ label: QUESTIONNAIRE_TILE_TITLE, value: meta.questionnaire_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
-  meta_.push({ label: HOUSE_BUILDER_TITLE,      value: meta.house_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
+  /* `completion` marks the two "is this part finished" entries. The
+     embedded view drops the identifying header — project name, client
+     names, updated date — because the screen around it already says all
+     three, but keeps these. The flag is how it tells them apart without
+     matching on label text. Rendering ignores it, so the standalone
+     page is unaffected. */
+  meta_.push({ label: QUESTIONNAIRE_TILE_TITLE, completion: true, value: meta.questionnaire_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
+  meta_.push({ label: HOUSE_BUILDER_TITLE,      completion: true, value: meta.house_done === true ? FILLING_DONE_LABEL : NOT_DONE_LABEL })
 
   return {
     title:       SUMMARY_TITLE,

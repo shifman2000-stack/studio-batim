@@ -31,6 +31,7 @@ import {
   NOTHING_ANSWERED_LABEL,
   PERSON_EMPTY_LABEL,
   UNANSWERED_MARK,
+  HOUSE_CHAPTER_KEY,
 } from '../lib/programmingSummary'
 import '../styles/appScroll.css'
 import './ProgrammingSummary.css'
@@ -189,19 +190,65 @@ function Chapter({ chapter }) {
   )
 }
 
-export default function ProgrammingSummaryDocument({ model }) {
-  return (
-    <div className="app-scroll-page ps-page">
-      <article className="ps-doc" dir="rtl" lang="he">
-        <header className="ps-header">
-          <p className="ps-eyebrow">{model.title}</p>
-          <h1 className="ps-title">{model.projectName}</h1>
-          <Pairs items={model.meta} />
-        </header>
+/* ── Two homes, one document ──────────────────────────────────────────────
+   STANDALONE (/programming-summary/:projectId) — the default. Owns the
+   page: its own scroll container, its own header, two columns of chapters
+   on a wide screen.
 
-        <div className="ps-chapters">
-          {model.chapters.map(chapter => <Chapter key={chapter.key} chapter={chapter} />)}
+   EMBEDDED (the programming meeting screen's left pane) — half a screen
+   wide, inside a pane that already scrolls and a screen that already names
+   the project. So:
+     · NO scroll container. A second one nested inside the pane's would
+       trap the wheel and give the reader two scrollbars to choose from.
+     · NO identifying header — the project name, the client names and the
+       updated date are all on the screen already. The completion line
+       stays: "has the client finished this part" is not said elsewhere.
+     · ONE column at every width, never two. Two columns of ~45 characters
+       is not a layout, it is a puzzle.
+     · The house builder section goes BELOW the questionnaire chapters
+       rather than flowing among them, so the reader meets the answers in
+       the order the client gave them.
+   Everything else — every line, every value — is identical in both. */
+export default function ProgrammingSummaryDocument({ model, embedded = false }) {
+  if (!embedded) {
+    return (
+      <div className="app-scroll-page ps-page">
+        <article className="ps-doc" dir="rtl" lang="he">
+          <header className="ps-header">
+            <p className="ps-eyebrow">{model.title}</p>
+            <h1 className="ps-title">{model.projectName}</h1>
+            <Pairs items={model.meta} />
+          </header>
+
+          <div className="ps-chapters">
+            {model.chapters.map(chapter => <Chapter key={chapter.key} chapter={chapter} />)}
+          </div>
+        </article>
+      </div>
+    )
+  }
+
+  /* The house chapter is pulled out of the column flow and rendered after
+     it. Identified by its key, which the model owns — not by position, so
+     adding a chapter cannot silently reorder this. */
+  const houseChapters = model.chapters.filter(c => c.key === HOUSE_CHAPTER_KEY)
+  const restChapters  = model.chapters.filter(c => c.key !== HOUSE_CHAPTER_KEY)
+  const completion    = model.meta.filter(m => m.completion)
+
+  return (
+    <div className="ps-embedded">
+      <article className="ps-doc ps-doc--embedded" dir="rtl" lang="he">
+        {completion.length > 0 && (
+          <div className="ps-embedded-status">
+            <Pairs items={completion} />
+          </div>
+        )}
+
+        <div className="ps-chapters ps-chapters--single">
+          {restChapters.map(chapter => <Chapter key={chapter.key} chapter={chapter} />)}
         </div>
+
+        {houseChapters.map(chapter => <Chapter key={chapter.key} chapter={chapter} />)}
       </article>
     </div>
   )

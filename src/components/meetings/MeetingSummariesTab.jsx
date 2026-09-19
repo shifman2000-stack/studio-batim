@@ -23,7 +23,22 @@ import { resolveUserNames } from '../../lib/resolveUserNames'
 import { clientDoneHint, DONE_STATUS } from './meetingTasksStatus'
 import TaskStatusControl from '../tasks/TaskStatusControl'
 import ClientProgrammingQuestionnaire from '../../pages/client/ClientProgrammingQuestionnaire'
+import ProgrammingSummaryDocument from '../../pages/ProgrammingSummaryDocument'
+import { buildProgrammingSummary, LOAD_ERROR_LABEL } from '../../lib/programmingSummary'
+import { loadHouseBuilderConfig } from '../../lib/houseBuilderConfigSource'
 import './MeetingSummariesTab.css'
+
+/* The two views of the programming screen's LEFT pane. The summary is
+   first and is the default on every open — the meeting usually starts by
+   reading what the client said, and editing is the exception. The choice
+   is deliberately NOT persisted: reopening the screen starts on the
+   summary again. */
+const PROG_VIEW_SUMMARY = 'summary'
+const PROG_VIEW_QUEST   = 'quest'
+const PROG_VIEWS = [
+  { key: PROG_VIEW_SUMMARY, label: 'תצוגת סיכום' },
+  { key: PROG_VIEW_QUEST,   label: 'שאלון ובונה הבית' },
+]
 
 /* ── Inline icons (Feather-style, stroke="currentColor") ────────── */
 const IconPencil = ({ size = 16 }) => (
@@ -109,11 +124,24 @@ const PROGRAM_DEFAULT_STAGE_NAME = 'קליטת פרויקט'
    Deliberately keeps the .ms-program-* class names it was extracted
    from: they already carry the exact spacing and pane chrome, and
    renaming them would churn CSS that is working. */
-function FocusedEditorScreen({ title, onClose, closeDisabled, error, children }) {
+/* A takeover screen: the summary list is not rendered while it is open,
+   so it owns the tab's whole height. `ms-root--focused` makes it a
+   FIXED-HEIGHT column that fills the tab's content box exactly, rather
+   than a content-sized block that pushes .pd-tab-content into scrolling.
+   The split below it flexes into whatever is left. */
+function FocusedEditorScreen({ title, onClose, closeDisabled, error, toolbarExtra, children }) {
   return (
-    <div className="ms-root" dir="rtl">
+    <div className="ms-root ms-root--focused" dir="rtl">
       <div className="ms-program-toolbar">
         <h2 className="ms-program-title">{title}</h2>
+        {/* Optional slot, used only by the programming screen for its
+            view switch. Sits between the title and סגור: RTL puts it
+            immediately beside the title at the visual RIGHT, with the
+            auto margin on its inline-end absorbing the free space so
+            סגור keeps the visual LEFT end to itself. Rendered only when
+            passed, so the regular summary screen's row is byte-for-byte
+            what it was. */}
+        {toolbarExtra}
         <button
           type="button"
           className="ms-btn-secondary"
@@ -248,7 +276,11 @@ function MeetingEditForm({
         </select>
       </div>
 
-      <div className="ms-edit-row ms-edit-row--md">
+      {/* --grow marks the ONE row that absorbs the leftover height in the
+          fixed-height programming screen: the fields above and the
+          buttons below keep their natural size, this editor takes the
+          rest and scrolls internally when the text outgrows it. */}
+      <div className="ms-edit-row ms-edit-row--md ms-edit-row--grow">
         <RichTextEditor
           value={summaryHtml}
           onChange={setSummaryHtml}
@@ -380,6 +412,66 @@ export default function MeetingSummariesTab({
      through every existing path (client view, list, edit, delete)
      unchanged, no schema/type column added. */
   const [programMode,    setProgramMode]    = useState(null)
+  /* Which view the programming screen's left pane shows. Reset to the
+     summary every time that screen opens — see the effect below. */
+  const [progLeftView,   setProgLeftView]   = useState(PROG_VIEW_SUMMARY)
+  /* The read-only document's model, built here rather than by the
+     standalone page because this pane has no route of its own.
+     { status: 'idle'|'loading'|'ready'|'error', model } */
+  const [progSummary,    setProgSummary]    = useState({ status: 'idle', model: null })
+
+  /* ── The programming screen's left pane ──────────────────────────────
+     Keyed on "is the screen open", not on programMode itself, so the
+     view resets exactly once per open rather than on every re-render
+     that hands back a new object. */
+  const programOpen = !!programMode
+  useEffect(() => {
+    if (programOpen) setProgLeftView(PROG_VIEW_SUMMARY)
+  }, [programOpen])
+
+  /* Build the document's model whenever the summary view is showing.
+     Re-running on a switch BACK to the summary is deliberate: the user
+     may have just edited the questionnaire in the other view, and a
+     document showing the pre-edit answers would be quietly wrong. The
+     previous model stays on screen while the new one loads, so the
+     switch never flashes empty.
+
+     This reads the row itself; it does NOT touch the questionnaire
+     component, which stays mounted and untouched across switches. */
+  useEffect(() => {
+    if (!programOpen || progLeftView !== PROG_VIEW_SUMMARY || !projectId) return
+    let cancelled = false
+    const load = async () => {
+      setProgSummary(prev => ({ status: prev.model ? 'ready' : 'loading', model: prev.model }))
+      const [rowRes, config] = await Promise.all([
+        supabase
+          .from('programming_questionnaires')
+          .select('answers, updated_at')
+          .eq('project_id', projectId)
+          .maybeSingle(),
+        loadHouseBuilderConfig(),
+      ])
+      if (cancelled) return
+      if (rowRes.error) {
+        console.error('programming summary (embedded): load failed', rowRes.error)
+        setProgSummary({ status: 'error', model: null })
+        return
+      }
+      setProgSummary({
+        status: 'ready',
+        /* projectName and contacts feed the page header only, which the
+           embedded view drops — the screen already names the project. */
+        model: buildProgrammingSummary({
+          projectName: '',
+          contacts:    [],
+          row:         rowRes.data || null,
+          config,
+        }),
+      })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [programOpen, progLeftView, projectId])
 
   const toggleOpen = (id) => {
     setOpenSet(prev => {
@@ -874,6 +966,25 @@ export default function MeetingSummariesTab({
         onClose={() => setProgramMode(null)}
         closeDisabled={savingRow}
         error={errorMsg}
+        /* The left pane's view switch lives in the screen's top row, not
+           in the pane — the pane is the only scroller on this screen and
+           its height is the scarce resource. */
+        toolbarExtra={
+          <div className="ms-program-viewtabs" role="tablist" aria-label="תצוגת פרוגרמה">
+            {PROG_VIEWS.map(v => (
+              <button
+                key={v.key}
+                type="button"
+                role="tab"
+                aria-selected={progLeftView === v.key}
+                className={`ms-program-viewtab${progLeftView === v.key ? ' ms-program-viewtab--active' : ''}`}
+                onClick={() => setProgLeftView(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        }
       >
         {/* Visual-RIGHT pane (first child in RTL): editor. */}
           <section className="ms-program-pane ms-program-pane--editor">
@@ -921,14 +1032,37 @@ export default function MeetingSummariesTab({
               screen title so this pane's own header carries the
               context. Save path lives INSIDE the questionnaire —
               writes to programming_questionnaires by project_id. */}
+          {/* NO pane header: the switch that used to sit here moved to
+              the screen's top row, and the labels there already say what
+              this pane is showing. The pane is all body, which is the
+              whole point — it is the only scroller on the screen. */}
           <section className="ms-program-pane ms-program-pane--quest">
-            <div className="ms-program-pane-header">שאלון פרוגרמה + בונה הבית</div>
             <div className="ms-program-pane-body ms-program-pane-body--flush">
-              <ClientProgrammingQuestionnaire
-                embeddedProjectId={projectId}
-                forceAdminEdit
-                embedded
-              />
+              {/* READ-ONLY document. Mounted only while it is showing —
+                  it holds no user input, so there is nothing to lose. */}
+              {progLeftView === PROG_VIEW_SUMMARY && (
+                progSummary.status === 'error'
+                  ? <div className="ms-program-view-note">{LOAD_ERROR_LABEL}</div>
+                  : progSummary.model
+                    ? <ProgrammingSummaryDocument model={progSummary.model} embedded />
+                    : <div className="ms-program-view-note">טוען...</div>
+              )}
+
+              {/* The questionnaire stays MOUNTED across switches — hidden,
+                  never unmounted. Remounting it would re-fetch the row and
+                  throw away anything typed but not yet auto-saved. The
+                  wrapper uses display:contents when visible, so the pane's
+                  layout is exactly what it was before this switch existed. */}
+              <div
+                className="ms-program-view-host"
+                style={{ display: progLeftView === PROG_VIEW_QUEST ? 'contents' : 'none' }}
+              >
+                <ClientProgrammingQuestionnaire
+                  embeddedProjectId={projectId}
+                  forceAdminEdit
+                  embedded
+                />
+              </div>
             </div>
           </section>
       </FocusedEditorScreen>

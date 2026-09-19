@@ -692,6 +692,10 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  /* Anchor for the view switch, which is positioned against this row's
+     inline-start edge rather than flowing between the title and סגור.
+     Harmless for the regular summary screen, which has no such child. */
+  position: relative;
 }
 
 .ms-program-title {
@@ -702,19 +706,49 @@
   color: #1a1a18;
 }
 
+/* ── The focused editor screen is FIXED-HEIGHT ─────────────────────────
+   It fills .pd-tab-content's content box exactly — height:100% resolves
+   against that box, and the tab's own 20px/32px padding sits outside it,
+   so the total is precisely the tab's clientHeight and nothing overflows.
+
+   This replaced `height: 80vh` on the split below, which was the bug:
+   80vh takes no account of the project header, the tabs bar or the
+   tab's padding, so the screen was ~11px too tall at 900px of viewport
+   and ~51px too tall at 700px. .pd-tab-content (overflow-y:auto) then
+   scrolled — the second scrollbar — and the editor pane's lower edge
+   fell below its fold. Nothing above this element is touched. */
+.ms-root--focused {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  /* ── The split's geometry, in ONE place ──────────────────────────────
+     Both panes are `flex: 1 1 var(--ms-pane-basis)` with
+     `gap: var(--ms-split-gap)`, so each ends up
+     (basis − gap/2) wide and the SECOND pane — the visual-left one —
+     begins at (basis + gap/2) from the container's inline-start.
+     The top row's view switch is offset by that same expression, so it
+     lines up with the pane below it at every width, and changing the
+     ratio or the gap here moves both together. */
+  --ms-pane-basis: 50%;
+  --ms-split-gap: 16px;
+}
+
 .ms-program-split {
   display: flex;
   direction: rtl;
-  gap: 16px;
-  /* Bounded so each pane can have its own scroll instead of scrolling
-     the entire tab. 80vh keeps the split visible without hiding the
-     project's own header. */
-  height: 80vh;
-  min-height: 480px;
+  gap: var(--ms-split-gap);
+  /* Takes whatever the toolbar above leaves. min-height:0 is the part
+     that matters: without it a flex child refuses to shrink below its
+     content, which is how a "fixed height" layout quietly becomes a
+     content-sized one again. */
+  flex: 1;
+  min-height: 0;
 }
 
 .ms-program-pane {
-  flex: 1 1 50%;
+  flex: 1 1 var(--ms-pane-basis);
   min-width: 0;                    /* let panes shrink under 50% */
   display: flex;
   flex-direction: column;
@@ -728,6 +762,84 @@
    takes the whole width instead of half. Same chrome otherwise. */
 .ms-program-pane--full {
   flex: 1 1 100%;
+}
+
+/* ── The view switch, in the screen's TOP ROW ──────────────────────────
+   Same visual language as the app's other sub-tab strips
+   (.hours-admin-tabs-bar / .pd-subtabs-bar): underline on active, muted
+   when not, no new control style invented for the same idea.
+
+   It used to sit in the left pane's header. That pane is the only
+   scroller on this screen, so a row spent on chrome was a row taken
+   from the document; here it costs nothing, because the top row exists
+   for סגור anyway.
+
+   RTL placement: the switch is aligned with the LEFT pane below it —
+   its inline-start (visual RIGHT) edge flush with that pane's
+   inline-start edge, so it reads as belonging to the pane it controls.
+
+   It is positioned against the row rather than flowed between the title
+   and סגור, because `justify-content: space-between` distributes the
+   free space and would fight a precise offset. inset-inline-start
+   places THIS element's inline-start edge that far from the toolbar's
+   inline-start edge — in RTL both of those are the visual right, which
+   is exactly the edge we are matching. Logical property throughout: a
+   physical `left` here would mirror the result to the wrong side.
+
+   The offset is the split's own geometry, not a measured constant:
+   panes are `flex: 1 1 basis` with `gap`, so each settles at
+   (basis − gap/2) and the second one starts at (basis + gap/2).
+   Both values come from --ms-pane-basis / --ms-split-gap on
+   .ms-root--focused, so this cannot drift from the split.
+
+   Vertically it stays centred on the row, matching סגור, which the
+   toolbar's align-items:center gave it before. */
+.ms-program-viewtabs {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  direction: rtl;
+  position: absolute;
+  inset-inline-start: calc(var(--ms-pane-basis) + var(--ms-split-gap) / 2);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ms-program-viewtab {
+  height: 34px;
+  padding: 0 14px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  /* No -1px overlap any more: in the pane header the underline sat on
+     that header's 1px bottom border, and the toolbar has none. The
+     toolbar centres its children, so this now aligns on its own. */
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.ms-program-viewtab:hover {
+  color: #333;
+}
+
+.ms-program-viewtab--active {
+  color: #111;
+  border-bottom-color: #111;
+}
+
+/* Loading / error stand-in, sized like the document's own padding. */
+.ms-program-view-note {
+  padding: 16px;
+  font-family: 'Heebo', sans-serif;
+  font-size: 13px;
+  color: #8a8680;
 }
 
 .ms-program-pane-header {
@@ -754,17 +866,88 @@
   padding: 0;
 }
 
+/* ── The editor pane fits, it does not scroll ──────────────────────────
+   Everything from the pane body down is one flex column, each link
+   carrying min-height:0 so the chain can actually shrink. The fields
+   above and the buttons below keep their natural size; the summary
+   editor (.ms-edit-row--grow) absorbs whatever is left, and scrolls
+   INSIDE itself when the text is longer than that.
+
+   The floor is 120px: below that the editor stops shrinking and the
+   pane body — which keeps overflow-y:auto — scrolls as a last resort,
+   so a very short window degrades to an internal scroll rather than
+   clipping the buttons. Scoped to this pane so the regular summary
+   editor and the client portal's rich text are untouched. */
+.ms-program-pane--editor .ms-program-pane-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ms-program-pane--editor .ms-edit-form {
+  flex: 1;
+  min-height: 0;
+}
+
+.ms-program-pane--editor .ms-edit-row--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.ms-program-pane--editor .ms-edit-row--grow .rte-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* TipTap's <EditorContent> renders an unclassed wrapper div between
+   .rte-root and the ProseMirror surface. It is `flex: 0 1 auto` by
+   default, so without this the surface below cannot grow and collapses
+   to its min-height while the row around it stays half empty. Selected
+   structurally rather than by adding a class to RichTextEditor, which
+   the regular summary editor and the client portal also render. */
+.ms-program-pane--editor .ms-edit-row--grow .rte-root > div:not(.rte-toolbar) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.ms-program-pane--editor .ms-edit-row--grow .rte-content {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+}
+
 /* On narrow screens the split becomes a vertical stack so both panes
    are still usable. Height turns off so each pane can size naturally. */
 @media (max-width: 900px) {
+  /* Stacked, the screen is deliberately content-sized again: two panes
+     of up to 70vh cannot both fit a short window, so the tab's own
+     scroller takes over — the behaviour this layout always had on
+     narrow screens. The fixed-height rules above are undone here. */
+  .ms-root--focused {
+    height: auto;
+    display: block;
+  }
   .ms-program-split {
     flex-direction: column;
+    flex: 0 0 auto;
     height: auto;
     min-height: 0;
   }
   .ms-program-pane {
     flex: 0 0 auto;
     max-height: 70vh;
+  }
+  /* Stacked, there is no left pane beside a right one to align with, so
+     the switch returns to the flow and sits beside the title again. */
+  .ms-program-viewtabs {
+    position: static;
+    transform: none;
+    margin-inline-start: 16px;
+    margin-inline-end: auto;
   }
 }
 

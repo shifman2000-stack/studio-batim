@@ -132,7 +132,22 @@ export default function StaffQuestionnaireView() {
   if (status !== 'ready') return <Pane text="טוען..." />
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F7F5F2', direction: 'rtl' }}>
+    /* THE SCROLL CONTAINER. index.css locks the app shell — body is
+       height:100% + overflow:hidden and #root is a flex column with
+       overflow:hidden — because every screen is expected to provide its OWN
+       scrolling area (the client portal's .cp-content, InquiryForm's
+       overflowY:auto). A plain min-height:100vh here grows past the window
+       and is simply clipped: unscrollable by wheel, scrollbar or touch.
+       These four properties are the same fix .ps-page carries in
+       ProgrammingSummary.css. */
+    <div style={{
+      flex:      1,
+      minHeight: 0,
+      height:    '100%',
+      overflowY: 'auto',
+      background: '#F7F5F2',
+      direction: 'rtl',
+    }}>
       {/* Header — project name plus the ONE back control. RTL: the title
           leads at the right, the button sits after it. */}
       <header style={{

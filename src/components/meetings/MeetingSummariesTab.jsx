@@ -124,9 +124,14 @@ const PROGRAM_DEFAULT_STAGE_NAME = 'קליטת פרויקט'
    Deliberately keeps the .ms-program-* class names it was extracted
    from: they already carry the exact spacing and pane chrome, and
    renaming them would churn CSS that is working. */
+/* A takeover screen: the summary list is not rendered while it is open,
+   so it owns the tab's whole height. `ms-root--focused` makes it a
+   FIXED-HEIGHT column that fills the tab's content box exactly, rather
+   than a content-sized block that pushes .pd-tab-content into scrolling.
+   The split below it flexes into whatever is left. */
 function FocusedEditorScreen({ title, onClose, closeDisabled, error, children }) {
   return (
-    <div className="ms-root" dir="rtl">
+    <div className="ms-root ms-root--focused" dir="rtl">
       <div className="ms-program-toolbar">
         <h2 className="ms-program-title">{title}</h2>
         <button
@@ -263,7 +268,11 @@ function MeetingEditForm({
         </select>
       </div>
 
-      <div className="ms-edit-row ms-edit-row--md">
+      {/* --grow marks the ONE row that absorbs the leftover height in the
+          fixed-height programming screen: the fields above and the
+          buttons below keep their natural size, this editor takes the
+          rest and scrolls internally when the text outgrows it. */}
+      <div className="ms-edit-row ms-edit-row--md ms-edit-row--grow">
         <RichTextEditor
           value={summaryHtml}
           onChange={setSummaryHtml}

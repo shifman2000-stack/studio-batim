@@ -66,10 +66,11 @@ export const DEFAULT_ROOM_SIZE = { S: 8, M: 12, L: 18 };
    toleranceDeviationPct = אחוז הסטייה המותר בין השטח המחושב ליעד הלקוח
    בשאלון (ClientProgrammingQuestionnaire).
 
-   corridorsPct ו-wallsPct מכאן ואילך משקפים את הקונפיג הפעיל בשני
-   הסביבות, Dev ו-Prod כאחד, נכון ל-19.09.2026: 7 + 10 (מכפיל 1.17).
-   קודם לכן היו 10 + 0 (מכפיל 1.10) — ערך מורשת מימי
-   CIRCULATION_FACTOR הקבוע, שכבר לא תאם אף סביבה.
+   שלושת הפרמטרים מכאן ואילך משקפים את הקונפיג הפעיל בשתי הסביבות,
+   Dev ו-Prod כאחד, נכון ל-19.09.2026: corridorsPct 7 + wallsPct 10
+   (מכפיל 1.17) ו-toleranceDeviationPct 5. קודם לכן היו 10 + 0
+   (מכפיל 1.10) ו-10 — ערכי מורשת מימי CIRCULATION_FACTOR הקבוע,
+   שכבר לא תאמו אף סביבה.
 
    ⚠️ שוויון המכפיל אינו מספיק כדי ששני המסלולים יחזירו אותו מספר:
    ROOM_SIZES הסטטי כאן ורשימת החללים המוחרגים מהחישוב עדיין שונים
@@ -78,8 +79,7 @@ export const DEFAULT_ROOM_SIZE = { S: 8, M: 12, L: 18 };
 export const DEFAULT_CALC_PARAMS = {
   corridorsPct: 7,
   wallsPct: 10,
-  /* לא שונה בכוונה — ראו הדוח: שתי הסביבות מגדירות 5. */
-  toleranceDeviationPct: 10,
+  toleranceDeviationPct: 5,
 };
 
 /* תצורת ברירת מחדל לחלל חדש */

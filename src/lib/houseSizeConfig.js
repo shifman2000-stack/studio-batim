@@ -63,12 +63,22 @@ export const DEFAULT_ROOM_SIZE = { S: 8, M: 12, L: 18 };
 /* פרמטרי מחשבון — ברירות מחדל (fallback כשאין קונפיג פעיל ב-DB, וגם
    הערכים המשמשים חלל שאין לו ערך מוגדר בקונפיג). corridorsPct = "מעברים",
    wallsPct = "עובי קירות" — שני אחוזים שמתווספים על סכום שטחי החללים.
-   10 כברירת מחדל ל-corridorsPct משמר את ההתנהגות הישנה (היה
-   CIRCULATION_FACTOR קבוע = 1.10). toleranceDeviationPct = אחוז הסטייה
-   המותר בין השטח המחושב ליעד הלקוח בשאלון (ClientProgrammingQuestionnaire). */
+   toleranceDeviationPct = אחוז הסטייה המותר בין השטח המחושב ליעד הלקוח
+   בשאלון (ClientProgrammingQuestionnaire).
+
+   corridorsPct ו-wallsPct מכאן ואילך משקפים את הקונפיג הפעיל בשני
+   הסביבות, Dev ו-Prod כאחד, נכון ל-19.09.2026: 7 + 10 (מכפיל 1.17).
+   קודם לכן היו 10 + 0 (מכפיל 1.10) — ערך מורשת מימי
+   CIRCULATION_FACTOR הקבוע, שכבר לא תאם אף סביבה.
+
+   ⚠️ שוויון המכפיל אינו מספיק כדי ששני המסלולים יחזירו אותו מספר:
+   ROOM_SIZES הסטטי כאן ורשימת החללים המוחרגים מהחישוב עדיין שונים
+   מאלה שבקונפיג ב-DB, ולכן מסלול ה-fallback עדיין נותן תוצאה אחרת.
+   ראו את הדוח שנלווה לשינוי הזה. */
 export const DEFAULT_CALC_PARAMS = {
-  corridorsPct: 10,
-  wallsPct: 0,
+  corridorsPct: 7,
+  wallsPct: 10,
+  /* לא שונה בכוונה — ראו הדוח: שתי הסביבות מגדירות 5. */
   toleranceDeviationPct: 10,
 };
 

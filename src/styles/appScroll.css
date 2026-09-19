@@ -1,0 +1,40 @@
+/* src/styles/appScroll.css
+   ────────────────────────────────────────────────────────────────────
+   .app-scroll-page — THE definition of "this screen is its own
+   scrolling area". One rule, imported by every screen that needs it.
+
+   Why it exists: index.css deliberately locks the app shell. `body` is
+   height:100% + overflow:hidden and `#root` is a flex column with
+   overflow:hidden + min-height:0, because each screen is expected to
+   supply its OWN scroller rather than letting the document scroll. A
+   screen that instead relies on `min-height: 100vh` grows past the
+   window and is simply clipped — unscrollable by wheel, scrollbar or
+   touch. That bug was fixed one screen at a time (the programming
+   summary, the staff questionnaire view, the contractor portal, the
+   staff-view picker) until the same four properties had been written
+   out four times; this file is where they live now.
+
+   The four together, not three:
+     flex: 1        — take the free space when the parent IS a flex
+                      column (#root is); inert when it isn't.
+     min-height: 0  — without it a flex child refuses to shrink below
+                      its content, and the overflow never engages.
+     height: 100%   — the non-flex path to the same size.
+     overflow-y: auto — the actual scroller.
+
+   Deliberately carries NO colour, font, padding or direction: those
+   belong to the screen. Compose it — `class="app-scroll-page ps-page"`
+   — never extend it.
+
+   ⚠ Do NOT fold these rules into a shared page class such as
+   .cp-page. That class is used by ~20 client-portal screens that
+   already sit inside .cp-content's scroller; giving each of them a
+   second nested scroller would break the portal. Add this class at
+   the CALL SITE of the screen that is genuinely the outermost one. */
+
+.app-scroll-page {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}

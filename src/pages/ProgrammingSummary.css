@@ -8,17 +8,10 @@
    the reading direction instead of fighting it. */
 
 /* ── The scroll container ──────────────────────────────────────────────
-   index.css locks the app shell: body is height:100% + overflow:hidden and
-   #root is a flex column with overflow:hidden, because every screen is
-   expected to provide its OWN scroll container (the client portal's
-   .cp-content, InquiryForm's overflowY:auto). This page is that container:
-   it fills #root and scrolls itself. A plain min-height:100vh here grows
-   past the viewport and is simply clipped — unscrollable. */
+   The four properties that make this page its own scroller now live in
+   src/styles/appScroll.css as .app-scroll-page, which the document
+   composes with this class. Only the look stays here. */
 .ps-page {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  overflow-y: auto;
   background: var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-body);

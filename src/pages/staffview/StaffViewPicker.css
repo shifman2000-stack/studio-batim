@@ -3,8 +3,11 @@
    .cp-container / .cp-card / .cp-input chrome — this screen borrows
    that system rather than duplicating it. */
 
+/* The scrolling itself comes from .app-scroll-page
+   (src/styles/appScroll.css), composed onto this element in the JSX.
+   min-height:100vh used to live here and was the bug: it grew the page
+   past the window, which #root then clipped. */
 .sv-picker-page {
-  min-height: 100vh;
   background: #F7F5F2;
   box-sizing: border-box;
 }

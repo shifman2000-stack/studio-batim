@@ -34,6 +34,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import '../styles/appScroll.css'
 import ClientProgrammingQuestionnaire from './client/ClientProgrammingQuestionnaire'
 import { MEETINGS_TAB_ID } from '../components/meetings/MeetingSummariesTab'
 import {
@@ -132,19 +133,11 @@ export default function StaffQuestionnaireView() {
   if (status !== 'ready') return <Pane text="טוען..." />
 
   return (
-    /* THE SCROLL CONTAINER. index.css locks the app shell — body is
-       height:100% + overflow:hidden and #root is a flex column with
-       overflow:hidden — because every screen is expected to provide its OWN
-       scrolling area (the client portal's .cp-content, InquiryForm's
-       overflowY:auto). A plain min-height:100vh here grows past the window
-       and is simply clipped: unscrollable by wheel, scrollbar or touch.
-       These four properties are the same fix .ps-page carries in
-       ProgrammingSummary.css. */
-    <div style={{
-      flex:      1,
-      minHeight: 0,
-      height:    '100%',
-      overflowY: 'auto',
+    /* THE SCROLL CONTAINER — .app-scroll-page (src/styles/appScroll.css).
+       index.css locks the app shell, so this page has to be its own
+       scroller or it is clipped and unscrollable. Only the look stays
+       inline. */
+    <div className="app-scroll-page" style={{
       background: '#F7F5F2',
       direction: 'rtl',
     }}>

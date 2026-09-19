@@ -32,6 +32,7 @@ import {
   PERSON_EMPTY_LABEL,
   UNANSWERED_MARK,
 } from '../lib/programmingSummary'
+import '../styles/appScroll.css'
 import './ProgrammingSummary.css'
 
 /* Display-only: drop a trailing extension, because the chip beside the name
@@ -190,7 +191,7 @@ function Chapter({ chapter }) {
 
 export default function ProgrammingSummaryDocument({ model }) {
   return (
-    <div className="ps-page">
+    <div className="app-scroll-page ps-page">
       <article className="ps-doc" dir="rtl" lang="he">
         <header className="ps-header">
           <p className="ps-eyebrow">{model.title}</p>

@@ -128,6 +128,20 @@ export function estimateArea(roomsFlat, opts = {}) {
   return Math.round(sum * (1 + (corridorsPct + wallsPct) / 100));
 }
 
+/* Is this area key a yard? The builder config decides, from its own
+   isYard flag (see houseBuilderConfigSource). The derivation below is
+   only the fallback for a config object that predates isYardArea: an
+   area key that is not one of the interior FLOOR_DEFS, which is how
+   the summary page has always told them apart. A config carrying
+   neither excludes nothing by area, exactly as before this rule. */
+function isYardAreaKey(cfg, key) {
+  if (typeof cfg.isYardArea === 'function') return cfg.isYardArea(key);
+  const areaKeys  = Array.isArray(cfg.AREA_KEYS)  ? cfg.AREA_KEYS  : null;
+  const floorDefs = Array.isArray(cfg.FLOOR_DEFS) ? cfg.FLOOR_DEFS : null;
+  if (!areaKeys || !floorDefs) return false;
+  return areaKeys.includes(key) && !floorDefs.some(f => f && f.key === key);
+}
+
 /**
  * שטח משוער עבור קבוצת אזורים מתוך עץ ה-rooms השמור.
  *
@@ -148,9 +162,12 @@ export function estimateArea(roomsFlat, opts = {}) {
  * need not sum to the whole-house figure. Neither number is wrong; they
  * round at different points. Do not "fix" that by reconciling them.
  *
+ * Areas the config flags as a yard contribute ZERO whatever is in
+ * them — see isYardAreaKey above.
+ *
  * @param roomsByArea עץ החדרים: { [areaKey]: [room] }
  * @param areaKeys מפתחות האזורים לחישוב (למשל ['ground'] או כולם)
- * @param config קונפיג בונה הבית הפעיל (getFixedArea / isExcludedFromAreaCalc / ROOM_SIZES / calcParams)
+ * @param config קונפיג בונה הבית הפעיל (isYardArea / getFixedArea / isExcludedFromAreaCalc / ROOM_SIZES / calcParams)
  * @returns מ"ר מעוגל
  */
 export function estimateAreaForAreaKeys(roomsByArea, areaKeys, config) {
@@ -163,7 +180,16 @@ export function estimateAreaForAreaKeys(roomsByArea, areaKeys, config) {
       if (Array.isArray(r.children)) visit(r.children);
     }
   };
-  for (const areaKey of (Array.isArray(areaKeys) ? areaKeys : [])) visit(roomsByArea[areaKey]);
+  for (const areaKey of (Array.isArray(areaKeys) ? areaKeys : [])) {
+    /* A YARD HAS NO BUILT AREA. Skip the whole area, with its nested
+       children, before any room is even looked at — so a free-text
+       room the client typed there, whose type the config has never
+       seen and therefore cannot flag, counts for nothing too. This is
+       ADDITIONAL to the per-type excludeFromAreaCalc check below,
+       which is unchanged and still applies everywhere. */
+    if (isYardAreaKey(cfg, areaKey)) continue;
+    visit(roomsByArea[areaKey]);
+  }
 
   const annotated = flat.map(r => ({
     type:                r.type,

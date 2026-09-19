@@ -692,6 +692,10 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  /* Anchor for the view switch, which is positioned against this row's
+     inline-start edge rather than flowing between the title and סגור.
+     Harmless for the regular summary screen, which has no such child. */
+  position: relative;
 }
 
 .ms-program-title {
@@ -718,12 +722,23 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+
+  /* ── The split's geometry, in ONE place ──────────────────────────────
+     Both panes are `flex: 1 1 var(--ms-pane-basis)` with
+     `gap: var(--ms-split-gap)`, so each ends up
+     (basis − gap/2) wide and the SECOND pane — the visual-left one —
+     begins at (basis + gap/2) from the container's inline-start.
+     The top row's view switch is offset by that same expression, so it
+     lines up with the pane below it at every width, and changing the
+     ratio or the gap here moves both together. */
+  --ms-pane-basis: 50%;
+  --ms-split-gap: 16px;
 }
 
 .ms-program-split {
   display: flex;
   direction: rtl;
-  gap: 16px;
+  gap: var(--ms-split-gap);
   /* Takes whatever the toolbar above leaves. min-height:0 is the part
      that matters: without it a flex child refuses to shrink below its
      content, which is how a "fixed height" layout quietly becomes a
@@ -733,7 +748,7 @@
 }
 
 .ms-program-pane {
-  flex: 1 1 50%;
+  flex: 1 1 var(--ms-pane-basis);
   min-width: 0;                    /* let panes shrink under 50% */
   display: flex;
   flex-direction: column;
@@ -759,18 +774,35 @@
    from the document; here it costs nothing, because the top row exists
    for סגור anyway.
 
-   RTL placement: the toolbar is `justify-content: space-between` with
-   the title first (visual RIGHT) and סגור last (visual LEFT). The auto
-   margin on this element's inline-END soaks up the free space on its
-   left, so the switch settles immediately beside the title and סגור
-   keeps the far end to itself. Logical property — no left/right. */
+   RTL placement: the switch is aligned with the LEFT pane below it —
+   its inline-start (visual RIGHT) edge flush with that pane's
+   inline-start edge, so it reads as belonging to the pane it controls.
+
+   It is positioned against the row rather than flowed between the title
+   and סגור, because `justify-content: space-between` distributes the
+   free space and would fight a precise offset. inset-inline-start
+   places THIS element's inline-start edge that far from the toolbar's
+   inline-start edge — in RTL both of those are the visual right, which
+   is exactly the edge we are matching. Logical property throughout: a
+   physical `left` here would mirror the result to the wrong side.
+
+   The offset is the split's own geometry, not a measured constant:
+   panes are `flex: 1 1 basis` with `gap`, so each settles at
+   (basis − gap/2) and the second one starts at (basis + gap/2).
+   Both values come from --ms-pane-basis / --ms-split-gap on
+   .ms-root--focused, so this cannot drift from the split.
+
+   Vertically it stays centred on the row, matching סגור, which the
+   toolbar's align-items:center gave it before. */
 .ms-program-viewtabs {
   display: flex;
   flex-direction: row;
   gap: 4px;
   direction: rtl;
-  margin-inline-start: 16px;
-  margin-inline-end: auto;
+  position: absolute;
+  inset-inline-start: calc(var(--ms-pane-basis) + var(--ms-split-gap) / 2);
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .ms-program-viewtab {
@@ -908,6 +940,14 @@
   .ms-program-pane {
     flex: 0 0 auto;
     max-height: 70vh;
+  }
+  /* Stacked, there is no left pane beside a right one to align with, so
+     the switch returns to the flow and sits beside the title again. */
+  .ms-program-viewtabs {
+    position: static;
+    transform: none;
+    margin-inline-start: 16px;
+    margin-inline-end: auto;
   }
 }
 

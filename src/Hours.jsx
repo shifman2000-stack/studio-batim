@@ -1385,6 +1385,11 @@ function Hours() {
             ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
           ]
           const hasMarks = Boolean(calStatus)
+          /* The cell is too short to give the annotations even one line. They
+             are NOT dropped silently: the status row carries a bare "…"
+             instead, which costs no height because that row already exists,
+             and the cell's title still lists everything. */
+          const annotationsHidden = annotations.length > 0 && annotationLines === 0
 
           return (
             <div
@@ -1398,7 +1403,7 @@ function Hours() {
                   three lines, and at the heights the window forces here (down
                   to 32px) the third would be clipped — and a mark must never
                   be the thing that gets cut. Side by side they cost one. */}
-              {(hasMarks || (isAdmin && dots.length > 0)) && (
+              {(hasMarks || annotationsHidden || (isAdmin && dots.length > 0)) && (
                 <div className="cal-status-row">
                   {isAdmin && dots.length > 0 && (
                     <span className="cal-gcal-dots">
@@ -1439,16 +1444,17 @@ function Hours() {
                   {calStatus === 'rejected' && (
                     <span className="cal-status-rejected">✗</span>
                   )}
+                  {annotationsHidden && (
+                    <span className="cal-overflow-mark" title="">…</span>
+                  )}
                 </div>
               )}
               {/* One block, not one element per line: the two-line clamp has
                   to be a budget shared by the holiday and the vacation lines,
                   and a clamp only counts the line boxes of a single element.
                   The <br/>s keep it one inline run so the count is exact. */}
-              {/* Zero lines means the window is too short for even one, so
-                  the block is dropped rather than drawn and clipped — the
-                  cell keeps its title attribute, which still carries
-                  everything. */}
+              {/* Zero lines is handled by the "…" in the status row above:
+                  drawing a line the cell cannot hold would only get clipped. */}
               {annotations.length > 0 && annotationLines > 0 && (
                 <div className="cal-annotations">
                   {annotations.map((a, i) => (

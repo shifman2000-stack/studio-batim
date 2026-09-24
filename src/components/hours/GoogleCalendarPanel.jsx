@@ -73,11 +73,16 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
                             manual "התחבר" button). */
   const silentTriedRef      = useRef(false)
   const silentInProgressRef = useRef(false)
-  /* Resolved id of HOLIDAY_CALENDAR_NAME. undefined = not looked up yet,
-     null = looked up and not subscribed. The calendar list changes far more
-     rarely than the viewed month, so it is resolved once per connection
-     instead of on every window move. */
+  /* Resolved id of HOLIDAY_CALENDAR_NAME, and ONLY when the lookup succeeded
+     — a miss is never cached, so a calendar subscribed or renamed after the
+     app loaded is picked up on the next fetch without reconnecting Google.
+     Cleared whenever a fetch against it fails, which is what a deleted or
+     unsubscribed calendar looks like. */
   const holidayCalIdRef     = useRef(undefined)
+  /* 'idle' until the first holiday fetch settles, then 'ok' or 'not-found'.
+     Drives the one-line notice beside the Google controls, so "no holiday
+     calendar" stops looking exactly like "no holidays this month". */
+  const [holidayStatus, setHolidayStatus] = useState('idle')
 
   // ── 1. Load gapi and restore saved token ──────────────────────────────────
   useEffect(() => {
@@ -226,31 +231,87 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
 
     // ── the subscribed holiday calendar → one title per day
     if (onMonthHolidays == null) return
-    try {
-      /* Resolve the calendar id once per connection. Matching on the name the
-         account sees: summaryOverride wins, because renaming a subscribed
-         calendar in Google sets that and leaves `summary` at the original. */
-      if (holidayCalIdRef.current === undefined) {
-        const cals = (await window.gapi.client.calendar.calendarList.list({ maxResults: 250 })).result.items || []
-        const hit = cals.find(c => (c.summaryOverride || c.summary) === HOLIDAY_CALENDAR_NAME)
-        holidayCalIdRef.current = hit ? hit.id : null
-      }
-      if (!holidayCalIdRef.current) { onMonthHolidays({}); return }
 
-      const items = (await listEvents(holidayCalIdRef.current, 250)).result.items || []
+    /* Look the calendar up by the name the ACCOUNT sees. For a calendar the
+       user subscribed to and then renamed by hand — a Hebcal feed, say —
+       Google keeps the feed's own title in `summary` and puts the user's name
+       in `summaryOverride`, so the override has to win. Trimmed, because a
+       name typed by hand can pick up a trailing space. */
+    const calendarName = (c) => ((c.summaryOverride || c.summary) || '').trim()
+
+    const resolveHolidayCalendar = async () => {
+      const cals = (await window.gapi.client.calendar.calendarList.list({ maxResults: 250 })).result.items || []
+      const hit = cals.find(c => calendarName(c) === HOLIDAY_CALENDAR_NAME)
+      return { id: hit ? hit.id : null, names: cals.map(calendarName) }
+    }
+
+    /* Deliberately NOT cached: only a successful lookup is remembered. A
+       failed one stays unresolved so the next fetch tries again, which is
+       what lets a calendar subscribed (or renamed) after the app loaded be
+       picked up without disconnecting Google. */
+    const notFound = (names) => {
+      console.warn(
+        `[hours] holiday calendar "${HOLIDAY_CALENDAR_NAME}" not found. ` +
+        'Calendars visible to this account:', names
+      )
+      setHolidayStatus('not-found')
+      onMonthHolidays({})
+    }
+
+    const toMap = (items) => {
       const holidays = {}
       items.forEach(ev => {
         const ds = eventDateStr(ev)
         if (!ds || !ev.summary) return
         if (!holidays[ds]) holidays[ds] = ev.summary   // first event of the day wins
       })
-      onMonthHolidays(holidays)
+      return holidays
+    }
+
+    try {
+      let calId = holidayCalIdRef.current
+      let known = null
+      if (!calId) {
+        const r = await resolveHolidayCalendar()
+        known = r.names
+        if (!r.id) { notFound(known); return }
+        calId = holidayCalIdRef.current = r.id
+      }
+
+      let items
+      try {
+        items = (await listEvents(calId, 250)).result.items || []
+      } catch (e) {
+        if (e.status === 401) { handleExpired(); return }
+        /* The cached id no longer resolves — the calendar was deleted or
+           unsubscribed. Forget it and look the name up again, once. */
+        holidayCalIdRef.current = undefined
+        const r = await resolveHolidayCalendar()
+        if (!r.id) { notFound(r.names); return }
+        calId = holidayCalIdRef.current = r.id
+        items = (await listEvents(calId, 250)).result.items || []
+      }
+
+      /* Nothing came back. That is ordinary for a quiet month, but it is also
+         what a stale id looks like when the API answers politely instead of
+         erroring, so re-resolve and retry if the name now points elsewhere. */
+      if (items.length === 0) {
+        const r = await resolveHolidayCalendar()
+        if (!r.id) { notFound(r.names); return }
+        if (r.id !== calId) {
+          calId = holidayCalIdRef.current = r.id
+          items = (await listEvents(calId, 250)).result.items || []
+        }
+      }
+
+      setHolidayStatus('ok')
+      onMonthHolidays(toMap(items))
     } catch (e) {
-      /* A missing or unreadable holiday calendar must never break the dots or
-         the panel — the day cells simply show no holiday line. */
+      /* An unreadable holiday calendar must never break the dots or the
+         panel — the day cells simply show no holiday line. */
       console.warn('gcal holiday fetch skipped:', e)
       if (e.status === 401) handleExpired()
-      else onMonthHolidays({})
+      else { holidayCalIdRef.current = undefined; onMonthHolidays({}) }
     }
   }, [gapiReady, connected, onMonthEvents, onMonthHolidays, handleExpired])
 
@@ -302,6 +363,7 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
   }
 
   const handleDisconnect = () => {
+    setHolidayStatus('idle')
     const token = window.gapi?.client?.getToken()
     if (token?.access_token) {
       window.google?.accounts?.oauth2?.revoke(token.access_token, () => {})
@@ -360,6 +422,13 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
           )}
           {selectedDate && !loading && !error && events.length === 0 && (
             <p className="gcal-empty">אין פגישות היום</p>
+          )}
+          {/* Quiet, one line, only when the holiday calendar cannot be found
+              — deliberately not a banner or a modal. */}
+          {holidayStatus === 'not-found' && (
+            <p className="gcal-holiday-note">
+              לוח החגים "{HOLIDAY_CALENDAR_NAME}" לא נמצא ברשימת היומנים
+            </p>
           )}
           {selectedDate && !loading && !error && events.length > 0 && (
             <ul className="gcal-events-list">

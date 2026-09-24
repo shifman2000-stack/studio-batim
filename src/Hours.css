@@ -1,4 +1,10 @@
 /* ── Hours Page ── */
+/* Unchanged mechanism: index.css locks body and #root at overflow:hidden, and
+   this element is the flex child that takes the height left under the header
+   (flex:1 + min-height:0) and owns the screen's scrolling. With two calendars
+   stacked, the layout below is built so the content FITS and this never
+   actually scrolls; overflow-y:auto is kept only as a safety valve so nothing
+   can become unreachable on an unusually short window. */
 .hours-page {
   flex: 1;
   min-height: 0;
@@ -7,12 +13,14 @@
 }
 
 /* ── Split layout ── */
+/* align-items: stretch (not flex-start) gives BOTH columns the full height of
+   .hours-page, which is what lets the calendar column hand its leftover height
+   to the day panel and the right column scroll inside itself instead of
+   dragging the page. */
 .hours-split {
   display: flex;
-  align-items: flex-start;
-  /* min-height: 0 lets the flex container shrink to its actual content height.
-     Previously was `calc(100vh - 56px)` which forced content slightly above viewport
-     once drill-down rows and multi-select changes were added, causing a page scrollbar. */
+  align-items: stretch;
+  height: 100%;
   min-height: 0;
   direction: rtl;
 }
@@ -387,10 +395,41 @@
 }
 
 /* ── RIGHT: Calendar Panel ── */
+/* A column: the month header, the fixed two-month block, and then the day
+   panel, which absorbs whatever height is left. overflow:hidden because
+   nothing in this column scrolls except the day panel itself. */
 .hours-calendar-panel {
   width: 50%;
-  padding: 24px 20px;
-  overflow-y: auto;
+  /* Less bottom padding than the form column: every pixel here comes off the
+     day panel, which is the first thing to give way on a short window. */
+  padding: 24px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The two grids. flex: 0 0 auto — they keep their natural height and never
+   scroll; the day panel is what gives way. */
+.hours-cal-months {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hours-cal-month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The first month is named by .hours-cal-title in the header above the pair;
+   this names the second one. Same weight, one step down in size. */
+.hours-cal-month-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .hours-user-filter {
@@ -420,7 +459,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .hours-cal-title {
@@ -455,23 +494,26 @@
   font-size: 11px;
   font-weight: 700;
   color: #888;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .hours-cal-empty {
   /* placeholder for offset days */
 }
 
+/* Compacted when the screen went from one month to two: at 1400x700 there is
+   only ~644px under the header for both grids plus the day panel, and the old
+   56px row simply did not fit twice. Same structure, tighter metrics. */
 .hours-cal-cell {
-  min-height: 56px;
+  min-height: 40px;
   border: 1px solid #eee;
   border-radius: 6px;
-  padding: 4px 5px;
+  padding: 1px 4px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: #fff;
   transition: background 0.1s;
 }
@@ -481,13 +523,15 @@
 }
 
 .cal-day-num {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1.15;
   color: #222;
 }
 
 .cal-day-hours {
-  font-size: 10px;
+  font-size: 9px;
+  line-height: 1.15;
   color: #555;
 }
 
@@ -497,19 +541,20 @@
   flex-direction: row;
   justify-content: center;
   gap: 2px;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .cal-gcal-dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .cal-day-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
+  line-height: 1.15;
 }
 
 /* ── "<שם> בחופש" lines inside a day cell (admin only) ──────────────────
@@ -574,12 +619,12 @@
   background: #000;
   color: #fff;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* Selected */
@@ -590,7 +635,7 @@
 
 /* Calendar status icons */
 .cal-status-approved {
-  font-size: 12px;
+  font-size: 11px;
   color: #2e7d32;
   font-weight: 700;
   line-height: 1;
@@ -620,8 +665,14 @@
   direction: rtl;
 }
 
-/* ── Admin: stack of per-employee summary rows below the calendar ── */
+/* ── Admin: stack of per-employee summary rows below BOTH calendars ──
+   The only scroller in this column. flex: 1 1 auto + min-height: 0 means it
+   takes the height the two grids leave over and, when the selected day has
+   more entries than fit, scrolls inside itself rather than pushing the page. */
 .hours-monthly-summary-admin {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;

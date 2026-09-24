@@ -65,6 +65,16 @@ const todayISO = () => {
   return isoDate(n.getFullYear(), n.getMonth(), n.getDate())
 }
 
+/* The calendar shows two consecutive months at once, (y, m) and the one after
+   it. This is the ISO range covering exactly those two — first of the first
+   month to last of the second — and it is the ONLY range this screen fetches,
+   so no row outside the two displayed months is ever loaded. */
+const pairRange = (y, m) => {
+  const end     = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }
+  const lastDay = new Date(end.y, end.m + 1, 0).getDate()
+  return { first: isoDate(y, m, 1), last: isoDate(end.y, end.m, lastDay) }
+}
+
 const formatTitle = (dateStr) => {
   if (!dateStr) return ''
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('he-IL', {
@@ -257,9 +267,8 @@ function Hours() {
 
   // ── Calendar data ──
   const fetchCalendarData = async () => {
-    const first = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`
-    const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
-    const last = isoDate(viewYear, viewMonth, lastDay)
+    /* Both displayed months in one range — one round-trip per table, not two. */
+    const { first, last } = pairRange(viewYear, viewMonth)
 
     const [{ data: reports }, { data: attendance }, { data: pending }] = await Promise.all([
       supabase.from('hour_reports').select('date, hours, minutes')
@@ -348,9 +357,9 @@ function Hours() {
 
   // ── Monthly summary ──
   const fetchMonthlySummary = async () => {
-    const first = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`
-    const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
-    const last = isoDate(viewYear, viewMonth, lastDay)
+    /* Same two-month range as the calendar: the day panel below the grids can
+       now be showing a day from either month, and so can the vacation lines. */
+    const { first, last } = pairRange(viewYear, viewMonth)
 
     const [{ data: attData }, { data: repData }, { data: pendData }] = await Promise.all([
       supabase.from('attendance').select('day_type, work_from_home, arrival_time, departure_time')
@@ -1168,11 +1177,23 @@ function Hours() {
   }
 
   // ── Calendar grid ──
-  const daysInMonth  = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay()
-  const cells = []
-  for (let i = 0; i < firstWeekday; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  /* TWO months are shown, stacked, for every user. viewYear/viewMonth are the
+     FIRST of the pair; the second is always the month straight after it, so
+     the two can never drift apart. The arrows step the pair by two months
+     (see the header below), which is also why nextMonthOf is used for the
+     fetch range rather than a second piece of state. */
+  const nextMonthOf = (y, m) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })
+  const secondMonth = nextMonthOf(viewYear, viewMonth)
+  const monthsShown = [{ y: viewYear, m: viewMonth }, secondMonth]
+
+  const cellsFor = (y, m) => {
+    const daysInMonth  = new Date(y, m + 1, 0).getDate()
+    const firstWeekday = new Date(y, m, 1).getDay()
+    const out = []
+    for (let i = 0; i < firstWeekday; i++) out.push(null)
+    for (let d = 1; d <= daysInMonth; d++) out.push(d)
+    return out
+  }
 
   const diff = Math.abs(workMins() - recordMins())
 
@@ -1184,30 +1205,28 @@ function Hours() {
 
   // ─── Reusable JSX fragments ────────────────────────────────────────────
 
-  // Calendar + monthly summary — used in employee right panel and admin left panel
-  const calendarContent = (
-    <>
-      <div className="hours-cal-header">
-        <button className="hours-cal-nav" onClick={() => {
-          setGcalDots({})
-          if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
-          else setViewMonth(m => m + 1)
-        }}>‹</button>
-        <span className="hours-cal-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-        <button className="hours-cal-nav" onClick={() => {
-          setGcalDots({})
-          if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-          else setViewMonth(m => m - 1)
-        }}>›</button>
-      </div>
+  /* Step the PAIR. One click moves two months, so the view walks the year in
+     non-overlapping blocks: Sep+Oct → Nov+Dec → Jan+Feb. `dir` is +1 for the
+     later pair. In this RTL header ‹ is the later pair and › the earlier one,
+     which is how the single-month version already read. */
+  const stepMonths = (dir) => {
+    setGcalDots({})
+    const total = viewYear * 12 + viewMonth + dir * 2
+    setViewYear(Math.floor(total / 12))
+    setViewMonth(((total % 12) + 12) % 12)
+  }
 
-      <div className="hours-cal-grid">
-        {DAY_NAMES.map(d => (
-          <div key={d} className="hours-cal-dayname">{d}</div>
-        ))}
-        {cells.map((day, idx) => {
+  /* One month's day-name row + grid. Called once per month in the pair; every
+     cell reads the same `selectedDate`, so the selected outline can only ever
+     land on one cell across BOTH grids. */
+  const monthGrid = (y, m) => (
+    <div className="hours-cal-grid">
+      {DAY_NAMES.map(d => (
+        <div key={d} className="hours-cal-dayname">{d}</div>
+      ))}
+      {cellsFor(y, m).map((day, idx) => {
           if (!day) return <div key={`e-${idx}`} className="hours-cal-empty" />
-          const ds        = isoDate(viewYear, viewMonth, day)
+          const ds        = isoDate(y, m, day)
           const info      = calData[ds]
           const dt        = info?.dayType   || 'work'
           const mins      = info?.totalMins || 0
@@ -1280,10 +1299,34 @@ function Hours() {
             </div>
           )
         })}
+    </div>
+  )
+
+  // Calendar + monthly summary — used in employee right panel and admin left panel
+  const calendarContent = (
+    <>
+      <div className="hours-cal-header">
+        <button className="hours-cal-nav" onClick={() => stepMonths(1)}>‹</button>
+        <span className="hours-cal-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button className="hours-cal-nav" onClick={() => stepMonths(-1)}>›</button>
+      </div>
+
+      {/* The two grids are a fixed block: they never scroll. Only the day
+          panel below them takes the leftover height and scrolls. */}
+      <div className="hours-cal-months">
+        {monthsShown.map(({ y, m }, i) => (
+          <div className="hours-cal-month" key={`${y}-${m}`}>
+            {/* The first month is already named by the header above. */}
+            {i > 0 && (
+              <div className="hours-cal-month-title">{MONTH_NAMES[m]} {y}</div>
+            )}
+            {monthGrid(y, m)}
+          </div>
+        ))}
       </div>
 
       {isAdmin ? (
-        /* Admin: per-day view, driven by clicking a day in the calendar.
+        /* Admin: per-day view, driven by clicking a day in EITHER month.
            For each currently-selected employee that has an entry on the
            selected day, render one row using the same daily-entry format
            as the report's drill-down lines. Employees with no entry for

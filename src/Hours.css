@@ -547,19 +547,21 @@
   color: #555;
 }
 
-/* The overflow marker for a cell too short to show even one annotation line.
-   Muted and a size below the marks beside it, so it reads as "there is more
-   here" rather than as content. The cell's title attribute has the rest. */
-.cal-overflow-mark {
-  font-size: 11px;
-  line-height: 1;
-  color: #999;
-  letter-spacing: -0.5px;
+/* The cell's first line: the date at the inline START — the visual RIGHT in
+   this RTL screen — and the Google dots at the inline END. space-between
+   resolves against the writing direction, so no physical left/right is named
+   anywhere and the pair flips correctly with it. Sharing this line is what
+   leaves the row below free for the day's marks. */
+.cal-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
 }
 
-/* The one row under the date that carries the Google dots and the day's own
-   marks side by side. Stacking them cost a line the cell cannot spare once
-   the window has set its height. */
+/* The row under it, now carrying only the day's own marks. */
 .cal-status-row {
   display: flex;
   align-items: center;

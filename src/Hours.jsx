@@ -78,21 +78,24 @@ const todayISO = () => {
    change size as you navigate. */
 const WORST_WEEK_ROWS = 6
 
-/* Floor. Below this the cells stop shrinking and the page is allowed to
-   scroll instead. 32px is where a cell still holds the date (13.8) plus one
-   status mark (11) plus its padding; under that the marks themselves would
-   start colliding, and an unreadable calendar is worse than a scrollbar.
-   In practice this bites below roughly a 660px-tall window. */
-const MIN_CELL_H = 32
-
-/* What a cell spends before any annotation: the date line (13.8), the gap
-   under it, the single status row that carries the dots and the day's marks
-   (11), and the cell's 2px padding — plus one more gap before the annotation
-   block. Used to decide how many annotation lines a cell of a given height
-   can actually show. */
-const CELL_MARKS_RESERVE = 29
+/* What a cell spends before any annotation: its 2px padding, the top row
+   holding the date and the dots (18 at its tallest, when the date is today's
+   circle), the row of marks below it (11), and the gap on either side of
+   that row. Measured, not guessed — see the commit that introduced it. */
+const CELL_MARKS_RESERVE = 33
 const ANNOTATION_LINE_H  = 11.25
 const MAX_ANNOTATION_LINES = 2
+
+/* Floor, and the rule that matters: a cell must ALWAYS be tall enough for one
+   full annotation line, because "…" with nothing readable above it tells the
+   reader only that they have been kept in the dark. So the floor is the
+   reserve plus one whole line, rounded up — not the smallest cell that can
+   hold the marks.
+
+   This is what gives way first when the window is short: below the window
+   height where twelve of these plus the column's chrome stop fitting, the
+   cells stay at this height and the PAGE scrolls instead. */
+const MIN_CELL_H = Math.ceil(CELL_MARKS_RESERVE + ANNOTATION_LINE_H)
 
 /* The calendar shows two consecutive months at once, (y, m) and the one after
    it. This is the ISO range covering exactly those two — first of the first
@@ -1290,9 +1293,11 @@ function Hours() {
      it how many annotation lines a cell of that height can hold: two when
      there is room, otherwise one. Null until the first layout pass, when the
      stylesheet's own fallbacks apply for a single frame. */
+  /* Never below one: the cell height is floored at a full line precisely so
+     that one always fits, and clamping to zero here would throw that away. */
   const annotationLines = cellH == null
     ? 1
-    : Math.max(0, Math.min(MAX_ANNOTATION_LINES,
+    : Math.max(1, Math.min(MAX_ANNOTATION_LINES,
         Math.floor((cellH - CELL_MARKS_RESERVE) / ANNOTATION_LINE_H)))
   const calPanelVars = cellH == null ? undefined : {
     '--cal-cell-h': `${cellH}px`,
@@ -1385,11 +1390,6 @@ function Hours() {
             ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
           ]
           const hasMarks = Boolean(calStatus)
-          /* The cell is too short to give the annotations even one line. They
-             are NOT dropped silently: the status row carries a bare "…"
-             instead, which costs no height because that row already exists,
-             and the cell's title still lists everything. */
-          const annotationsHidden = annotations.length > 0 && annotationLines === 0
 
           return (
             <div
@@ -1398,20 +1398,22 @@ function Hours() {
               onClick={() => selectDay(ds)}
               title={annotations.length ? annotations.map(a => a.text).join('\n') : undefined}
             >
-              <span className="cal-day-num">{day}</span>
-              {/* Dots and the day's marks share ONE row. Stacked, they cost
-                  three lines, and at the heights the window forces here (down
-                  to 32px) the third would be clipped — and a mark must never
-                  be the thing that gets cut. Side by side they cost one. */}
-              {(hasMarks || annotationsHidden || (isAdmin && dots.length > 0)) && (
+              {/* Top row: the date at the inline start — the visual RIGHT
+                  here — and the Google dots at the inline end. Sharing a line
+                  keeps the row below free for the day's own marks, which in
+                  turn leaves room for a readable annotation line. */}
+              <div className="cal-top-row">
+                <span className="cal-day-num">{day}</span>
+                {isAdmin && dots.length > 0 && (
+                  <span className="cal-gcal-dots">
+                    {dots.slice(0, 3).map((color, i) => (
+                      <span key={i} className="cal-gcal-dot" style={{ background: color }} />
+                    ))}
+                  </span>
+                )}
+              </div>
+              {hasMarks && (
                 <div className="cal-status-row">
-                  {isAdmin && dots.length > 0 && (
-                    <span className="cal-gcal-dots">
-                      {dots.slice(0, 3).map((color, i) => (
-                        <span key={i} className="cal-gcal-dot" style={{ background: color }} />
-                      ))}
-                    </span>
-                  )}
                   {calStatus === 'approved' && dt === 'work' && (
                     <>
                       <span className="cal-status-approved">✓</span>
@@ -1444,18 +1446,15 @@ function Hours() {
                   {calStatus === 'rejected' && (
                     <span className="cal-status-rejected">✗</span>
                   )}
-                  {annotationsHidden && (
-                    <span className="cal-overflow-mark" title="">…</span>
-                  )}
                 </div>
               )}
               {/* One block, not one element per line: the two-line clamp has
                   to be a budget shared by the holiday and the vacation lines,
                   and a clamp only counts the line boxes of a single element.
                   The <br/>s keep it one inline run so the count is exact. */}
-              {/* Zero lines is handled by the "…" in the status row above:
-                  drawing a line the cell cannot hold would only get clipped. */}
-              {annotations.length > 0 && annotationLines > 0 && (
+              {/* Always at least one line — see MIN_CELL_H. A cell showing a
+                  bare "…" with nothing readable above it is not reachable. */}
+              {annotations.length > 0 && (
                 <div className="cal-annotations">
                   {annotations.map((a, i) => (
                     <Fragment key={i}>

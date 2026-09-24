@@ -6,6 +6,17 @@ import NewTaskModal from './NewTaskModal'
 import { PdNotesCell } from './ProjectDetail'
 import './Tasks.css'
 
+/* The "suspended" stage, by ID. `projects` carries both a `stage_id` integer
+   and a `current_stage` text column, and on Dev and Prod alike stage_id is
+   populated on every row and never disagrees with the name — so the id is
+   the safe handle: renaming the stage in the admin screen moves the label,
+   not the meaning, and this filter keeps working. The same id is already
+   hardcoded a few lines below, where it is dropped from the STAGE dropdown.
+   The name is only ever used as a fallback for a row whose stage_id is null,
+   and even then it is read from the stages table by id rather than typed
+   here as a Hebrew literal. */
+const SUSPENDED_STAGE_ID = 9
+
 // ── Constants (kept for display fallbacks) ──
 const STATUS_META = {
   'דחוף':  { color: '#E24B4A' },
@@ -214,6 +225,9 @@ export default function Tasks() {
   const [projects,     setProjects]     = useState([])
   const [users,        setUsers]        = useState([])
   const [taskStages,   setTaskStages]   = useState([])
+  /* Name of SUSPENDED_STAGE_ID as the stages table currently spells it —
+     resolved, never hardcoded. Only used for projects missing a stage_id. */
+  const [suspendedStageName, setSuspendedStageName] = useState(null)
   const [taskStatuses, setTaskStatuses] = useState([])
   const [loading,      setLoading]      = useState(true)
 
@@ -325,14 +339,15 @@ export default function Tasks() {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const [{ data: p }, { data: u }, { data: stg }, { data: sts }] = await Promise.all([
-      supabase.from('projects').select('id, name').order('name'),
+      supabase.from('projects').select('id, name, archived, stage_id, current_stage').order('name'),
       supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'employee']).order('first_name'),
       supabase.from('stages').select('id, name').eq('is_active', true).order('order_index'),
       supabase.from('task_statuses').select('id, name, color').order('id'),
     ])
     setProjects(p || [])
     setUsers(u || [])
-    setTaskStages((stg || []).filter(s => s.id !== 9))
+    setSuspendedStageName((stg || []).find(s => s.id === SUSPENDED_STAGE_ID)?.name ?? null)
+    setTaskStages((stg || []).filter(s => s.id !== SUSPENDED_STAGE_ID))
     setTaskStatuses(sts || [])
     await fetchTasks(archiveView)
   }, [fetchTasks, archiveView])
@@ -364,6 +379,35 @@ export default function Tasks() {
       : result
     )
     setLoading(false)
+  }
+
+  /* ── Options for the PROJECT filter ────────────────────────────────────
+     Finished (archived) and suspended projects are not offered. Note this
+     shapes the DROPDOWN only — `tasks` is untouched, so a task belonging to
+     an archived or suspended project still shows in the list exactly as
+     before.
+
+     The one exception is the project already chosen in the filter. If it is
+     archived or suspended while selected, removing it would leave the select
+     showing a value its own options do not contain — the control would go
+     blank and the list would look unexplained. So a selected project is kept,
+     and labelled with the reason it would otherwise be gone.
+
+     Filtering the fetched array in place keeps the database's `order('name')`
+     exactly as it was, retained entry included. */
+  const isSuspendedProject = useCallback((p) => (
+    p.stage_id != null
+      ? p.stage_id === SUSPENDED_STAGE_ID
+      : (suspendedStageName != null && p.current_stage === suspendedStageName)
+  ), [suspendedStageName])
+
+  const isOfferable   = useCallback((p) => !p.archived && !isSuspendedProject(p), [isSuspendedProject])
+  const projectOptions = projects.filter(p => isOfferable(p) || String(p.id) === filterProject)
+
+  const projectOptionLabel = (p) => {
+    if (isOfferable(p)) return p.name
+    if (p.archived) return `${p.name} (בארכיון)`
+    return `${p.name} (${suspendedStageName || 'מושהה'})`
   }
 
   // ── Filtered tasks ──
@@ -535,7 +579,9 @@ export default function Tasks() {
                 <span className="tasks-filter-label">פרויקט</span>
                 <select className="tasks-filter-select" value={filterProject} onChange={e => setFilterProject(e.target.value)}>
                   <option value="">הכל</option>
-                  {projects.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                  {projectOptions.map(p => (
+                    <option key={p.id} value={String(p.id)}>{projectOptionLabel(p)}</option>
+                  ))}
                 </select>
               </div>
               <div className="tasks-filter-group tasks-filter-group--reset">

@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect } from 'react'
+import { Fragment, useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import GoogleCalendarPanel from './components/hours/GoogleCalendarPanel'
@@ -65,6 +65,48 @@ const todayISO = () => {
   return isoDate(n.getFullYear(), n.getMonth(), n.getDate())
 }
 
+/* ── Day-cell sizing ──────────────────────────────────────────────────────
+   The WINDOW decides the cell height, not the content: two months must fit
+   without the page scrolling. The height is measured at runtime (see
+   useCellHeight below) as
+
+     (height available to the calendar column − everything else in it) ÷ 12
+
+   12 = two months of six week-rows, the worst a pair can be. Sizing for the
+   worst case is what keeps every cell identical in every month — a 5-row
+   month just leaves a row's worth of space unused — instead of rows that
+   change size as you navigate. */
+const WORST_WEEK_ROWS = 6
+
+/* What a cell spends before any annotation: its 2px padding, the top row
+   holding the date and the dots (18 at its tallest, when the date is today's
+   circle), the row of marks below it (11), and the gap on either side of
+   that row. Measured, not guessed — see the commit that introduced it. */
+const CELL_MARKS_RESERVE = 33
+const ANNOTATION_LINE_H  = 11.25
+const MAX_ANNOTATION_LINES = 2
+
+/* Floor, and the rule that matters: a cell must ALWAYS be tall enough for one
+   full annotation line, because "…" with nothing readable above it tells the
+   reader only that they have been kept in the dark. So the floor is the
+   reserve plus one whole line, rounded up — not the smallest cell that can
+   hold the marks.
+
+   This is what gives way first when the window is short: below the window
+   height where twelve of these plus the column's chrome stop fitting, the
+   cells stay at this height and the PAGE scrolls instead. */
+const MIN_CELL_H = Math.ceil(CELL_MARKS_RESERVE + ANNOTATION_LINE_H)
+
+/* The calendar shows two consecutive months at once, (y, m) and the one after
+   it. This is the ISO range covering exactly those two — first of the first
+   month to last of the second — and it is the ONLY range this screen fetches,
+   so no row outside the two displayed months is ever loaded. */
+const pairRange = (y, m) => {
+  const end     = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }
+  const lastDay = new Date(end.y, end.m + 1, 0).getDate()
+  return { first: isoDate(y, m, 1), last: isoDate(end.y, end.m, lastDay) }
+}
+
 const formatTitle = (dateStr) => {
   if (!dateStr) return ''
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('he-IL', {
@@ -129,6 +171,14 @@ function Hours() {
      (with `date` added to the SELECT). Rendered below the calendar as a
      per-day view keyed by the user's currently selected day. */
   const [dailyByEmployee, setDailyByEmployee] = useState([])
+  /* Who is on vacation on each day of the calendar's viewed month (ADMIN view).
+     Shape: { 'YYYY-MM-DD': [userId, ...] }. Derived in fetchMonthlySummary's
+     admin branch from the `allAtt` rows it ALREADY fetches for the month — no
+     query of its own, so an employee's screen issues nothing extra. Names are
+     resolved at render time from `allUsers`, which init() loads for admins.
+     Replaced wholesale on every month change, so navigating back and forth
+     cannot accumulate entries. */
+  const [vacationByDate, setVacationByDate] = useState({})
 
   /* ── Drill-down state ──
      Calendar drill-down (below the calendar — keyed by userId).
@@ -148,6 +198,12 @@ function Hours() {
      in the DOM before window.print() captures it. */
   const [printPending, setPrintPending] = useState(false)
   const [gcalDots, setGcalDots]           = useState({}) // { 'YYYY-MM-DD': ['#hex',...] }
+  /* Jewish holidays for the displayed pair, from the subscribed holiday
+     calendar rather than the studio's own: { 'YYYY-MM-DD': 'Yom Kippur' }.
+     Titles are rendered verbatim, exactly as Google returns them — no
+     translation table, so switching the subscribed calendar to a Hebrew one
+     changes the wording with no code change. Admin-only, like the dots. */
+  const [gcalHolidays, setGcalHolidays]   = useState({})
   const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
   const [employeeTab, setEmployeeTab]     = useState(1) // 1=הזנת שעות 2=דוחות
   const [reportYear, setReportYear]       = useState(new Date().getFullYear())
@@ -158,6 +214,81 @@ function Hours() {
   /* Admin report multi-select: set of employee IDs currently visible.
      Initialized to ALL employees when allUsers loads (see useEffect below). */
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set())
+
+  /* ── Cell height, derived from the window ───────────────────────────────
+     Everything in the calendar column that is NOT a week-row is measured
+     from the live DOM — the arrows row and its margin, the gap between the
+     two month blocks, each month's title and the gap under it, each
+     weekday header row, and the grid's row gaps — and what is left over is
+     divided by twelve.
+
+     Two notes on scope. The available height comes from .hours-page, not
+     from the column: the column is content-sized (align-items: flex-start),
+     so measuring it would be circular, while .hours-page is the flex child
+     that owns exactly the height under the header. And the day panel is
+     subtracted along with the rest, one item beyond the brief's list — it
+     sits in this column too, and leaving it out would let it push the page
+     into scrolling however small the cells got, which is the one thing this
+     is supposed to prevent.
+
+     Nothing measured here depends on the cell height, so this settles in a
+     single pass — no layout feedback loop. */
+  const calPanelRef = useRef(null)
+  const [cellH, setCellH] = useState(null)
+
+  useLayoutEffect(() => {
+    const panel = calPanelRef.current
+    if (!panel) return
+    const page = panel.closest('.hours-page')
+    if (!page) return
+
+    const px = (el, prop) => parseFloat(getComputedStyle(el)[prop]) || 0
+
+    const measure = () => {
+      const months = panel.querySelector('.hours-cal-months')
+      const header = panel.querySelector('.hours-cal-header')
+      if (!months || !header) return
+
+      const available = page.clientHeight - px(panel, 'paddingTop') - px(panel, 'paddingBottom')
+
+      let chrome = header.offsetHeight + px(header, 'marginBottom') + px(months, 'rowGap')
+      for (const month of months.children) {
+        const title   = month.querySelector('.hours-cal-month-title')
+        const grid    = month.querySelector('.hours-cal-grid')
+        const dayname = grid && grid.querySelector('.hours-cal-dayname')
+        chrome += title ? title.offsetHeight + px(month, 'rowGap') : 0
+        chrome += dayname ? dayname.offsetHeight : 0
+        /* One gap under the weekday row plus one between each pair of week
+           rows — WORST_WEEK_ROWS gaps for WORST_WEEK_ROWS rows. */
+        chrome += grid ? WORST_WEEK_ROWS * px(grid, 'rowGap') : 0
+      }
+      /* The day panel below the grids, when the admin layout has one. */
+      const dayPanel = panel.querySelector('.hours-monthly-summary-admin')
+      if (dayPanel) chrome += dayPanel.offsetHeight + px(dayPanel, 'marginTop')
+
+      const fitted = Math.floor((available - chrome) / (2 * WORST_WEEK_ROWS))
+      setCellH(Math.max(MIN_CELL_H, fitted))
+    }
+
+    measure()
+    /* Two listeners on purpose. The ResizeObserver catches any change to the
+       height this screen is given — a window resize, but also the sidebar or
+       a devtools pane changing the room available — while watching
+       .hours-page rather than the column we resize, so there is no feedback.
+       The window resize event is the plain fallback for the case where the
+       observer does not deliver (it does not fire at all inside the embedded
+       preview pane, for one). Both call the same idempotent measure. */
+    const ro = new ResizeObserver(measure)
+    ro.observe(page)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+    /* userRole rather than the derived isAdmin: that const is declared further
+       down this component, so naming it here would hit its temporal dead
+       zone when the deps array is built. */
+  }, [userRole, viewYear, viewMonth, selectedDate, dailyByEmployee, selectedEmployeeIds, adminTab, employeeTab])
 
   useEffect(() => { init() }, [])
   useEffect(() => {
@@ -249,9 +380,8 @@ function Hours() {
 
   // ── Calendar data ──
   const fetchCalendarData = async () => {
-    const first = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`
-    const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
-    const last = isoDate(viewYear, viewMonth, lastDay)
+    /* Both displayed months in one range — one round-trip per table, not two. */
+    const { first, last } = pairRange(viewYear, viewMonth)
 
     const [{ data: reports }, { data: attendance }, { data: pending }] = await Promise.all([
       supabase.from('hour_reports').select('date, hours, minutes')
@@ -340,9 +470,9 @@ function Hours() {
 
   // ── Monthly summary ──
   const fetchMonthlySummary = async () => {
-    const first = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`
-    const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
-    const last = isoDate(viewYear, viewMonth, lastDay)
+    /* Same two-month range as the calendar: the day panel below the grids can
+       now be showing a day from either month, and so can the vacation lines. */
+    const { first, last } = pairRange(viewYear, viewMonth)
 
     const [{ data: attData }, { data: repData }, { data: pendData }] = await Promise.all([
       supabase.from('attendance').select('day_type, work_from_home, arrival_time, departure_time')
@@ -402,6 +532,18 @@ function Hours() {
         supabase.from('hour_reports').select('user_id, date, hours, minutes')
           .gte('date', first).lte('date', last),
       ])
+
+      /* Vacation names for the calendar cells. Rides on `allAtt` above, which
+         is already the whole month for EVERY user — including admins, who are
+         missing from `employees` (role = 'employee') and so never reach
+         empDaily. A user with two rows on one day is counted once. */
+      const vacMap = {}
+      for (const a of (allAtt || [])) {
+        if (a.day_type !== 'vacation') continue
+        if (!vacMap[a.date]) vacMap[a.date] = []
+        if (!vacMap[a.date].includes(a.user_id)) vacMap[a.date].push(a.user_id)
+      }
+      setVacationByDate(vacMap)
 
       const empDaily = (employees || []).map(emp => {
         const empAtt = allAtt ? allAtt.filter(a => a.user_id === emp.id) : []
@@ -705,6 +847,25 @@ function Hours() {
   const isAdmin = userRole === 'admin'
   const isPast  = !!(selectedDate && selectedDate < today)
   const isToday  = !!(selectedDate && selectedDate === today)
+
+  /* First names for the calendar's vacation lines. The first name is what the
+     cell shows; when it is missing we fall back to the same display name the
+     rest of this screen uses for a profile — "first last", or "-" when there
+     is nothing at all (see the `name` field built in fetchMonthlySummary and
+     the approvals list). Sorted so the order is stable across re-renders and
+     month navigation. */
+  const vacationNamesFor = (ds) => {
+    const ids = vacationByDate[ds]
+    if (!ids || ids.length === 0) return []
+    return ids
+      .map(id => {
+        const u = allUsers.find(x => x.id === id)
+        const first = (u?.first_name || '').trim()
+        if (first) return first
+        return [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim() || '-'
+      })
+      .sort((a, b) => a.localeCompare(b, 'he'))
+  }
 
   // Time fields editable: admin always, employee only in manual-entry mode
   const timeFieldsEditable = isAdmin || manualEntry
@@ -1128,12 +1289,39 @@ function Hours() {
     setArrivalError(''); setDepartureError('')
   }
 
+  /* The measured cell height reaches the CSS as custom properties, and with
+     it how many annotation lines a cell of that height can hold: two when
+     there is room, otherwise one. Null until the first layout pass, when the
+     stylesheet's own fallbacks apply for a single frame. */
+  /* Never below one: the cell height is floored at a full line precisely so
+     that one always fits, and clamping to zero here would throw that away. */
+  const annotationLines = cellH == null
+    ? 1
+    : Math.max(1, Math.min(MAX_ANNOTATION_LINES,
+        Math.floor((cellH - CELL_MARKS_RESERVE) / ANNOTATION_LINE_H)))
+  const calPanelVars = cellH == null ? undefined : {
+    '--cal-cell-h': `${cellH}px`,
+    '--cal-annotation-lines': annotationLines,
+  }
+
   // ── Calendar grid ──
-  const daysInMonth  = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay()
-  const cells = []
-  for (let i = 0; i < firstWeekday; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  /* TWO months are shown, stacked, for every user. viewYear/viewMonth are the
+     FIRST of the pair; the second is always the month straight after it, so
+     the two can never drift apart. The arrows step the pair by two months
+     (see the header below), which is also why nextMonthOf is used for the
+     fetch range rather than a second piece of state. */
+  const nextMonthOf = (y, m) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })
+  const secondMonth = nextMonthOf(viewYear, viewMonth)
+  const monthsShown = [{ y: viewYear, m: viewMonth }, secondMonth]
+
+  const cellsFor = (y, m) => {
+    const daysInMonth  = new Date(y, m + 1, 0).getDate()
+    const firstWeekday = new Date(y, m, 1).getDay()
+    const out = []
+    for (let i = 0; i < firstWeekday; i++) out.push(null)
+    for (let d = 1; d <= daysInMonth; d++) out.push(d)
+    return out
+  }
 
   const diff = Math.abs(workMins() - recordMins())
 
@@ -1145,30 +1333,29 @@ function Hours() {
 
   // ─── Reusable JSX fragments ────────────────────────────────────────────
 
-  // Calendar + monthly summary — used in employee right panel and admin left panel
-  const calendarContent = (
-    <>
-      <div className="hours-cal-header">
-        <button className="hours-cal-nav" onClick={() => {
-          setGcalDots({})
-          if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
-          else setViewMonth(m => m + 1)
-        }}>‹</button>
-        <span className="hours-cal-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
-        <button className="hours-cal-nav" onClick={() => {
-          setGcalDots({})
-          if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-          else setViewMonth(m => m - 1)
-        }}>›</button>
-      </div>
+  /* Slide the window by ONE month, so consecutive views overlap:
+     Sep+Oct → Oct+Nov → Nov+Dec. Every consecutive pair is reachable. `dir` is
+     +1 for the later window. In this RTL header ‹ is the later window and ›
+     the earlier one, which is how the single-month version already read. */
+  const stepMonths = (dir) => {
+    setGcalDots({})
+    setGcalHolidays({})
+    const total = viewYear * 12 + viewMonth + dir
+    setViewYear(Math.floor(total / 12))
+    setViewMonth(((total % 12) + 12) % 12)
+  }
 
-      <div className="hours-cal-grid">
-        {DAY_NAMES.map(d => (
-          <div key={d} className="hours-cal-dayname">{d}</div>
-        ))}
-        {cells.map((day, idx) => {
+  /* One month's day-name row + grid. Called once per month in the pair; every
+     cell reads the same `selectedDate`, so the selected outline can only ever
+     land on one cell across BOTH grids. */
+  const monthGrid = (y, m) => (
+    <div className="hours-cal-grid">
+      {DAY_NAMES.map(d => (
+        <div key={d} className="hours-cal-dayname">{d}</div>
+      ))}
+      {cellsFor(y, m).map((day, idx) => {
           if (!day) return <div key={`e-${idx}`} className="hours-cal-empty" />
-          const ds        = isoDate(viewYear, viewMonth, day)
+          const ds        = isoDate(y, m, day)
           const info      = calData[ds]
           const dt        = info?.dayType   || 'work'
           const mins      = info?.totalMins || 0
@@ -1184,56 +1371,130 @@ function Hours() {
           if (isSel)        cls += ' cal-selected'
 
           const dots = gcalDots[ds] || []
+          /* Admin-only. For an employee vacationByDate is never populated —
+             the query it derives from lives in the admin branch — and the
+             guard below keeps the cell byte-identical to today's. */
+          const vacationNames = isAdmin ? vacationNamesFor(ds) : []
+          /* Admin-only too: gcalHolidays is only ever filled by the Google
+             panel, which exists only in the admin layout. */
+          const holiday = isAdmin ? gcalHolidays[ds] : null
+
+          /* The cell's annotations, in render order: the holiday names the
+             day, then one line per person away. The cell is a fixed height,
+             so this list is clamped to two lines on screen — the native
+             title carries the whole thing, visible lines included, which is
+             what makes the clamped "…" recoverable without a tooltip
+             library. */
+          const annotations = [
+            ...(holiday ? [{ text: holiday, cls: 'cal-holiday' }] : []),
+            ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
+          ]
+          const hasMarks = Boolean(calStatus)
 
           return (
-            <div key={ds} className={cls} onClick={() => selectDay(ds)}>
-              <span className="cal-day-num">{day}</span>
-              {isAdmin && dots.length > 0 && (
-                <div className="cal-gcal-dots">
-                  {dots.slice(0, 3).map((color, i) => (
-                    <span key={i} className="cal-gcal-dot" style={{ background: color }} />
-                  ))}
+            <div
+              key={ds}
+              className={cls}
+              onClick={() => selectDay(ds)}
+              title={annotations.length ? annotations.map(a => a.text).join('\n') : undefined}
+            >
+              {/* Top row: the date at the inline start — the visual RIGHT
+                  here — and the Google dots at the inline end. Sharing a line
+                  keeps the row below free for the day's own marks, which in
+                  turn leaves room for a readable annotation line. */}
+              <div className="cal-top-row">
+                <span className="cal-day-num">{day}</span>
+                {isAdmin && dots.length > 0 && (
+                  <span className="cal-gcal-dots">
+                    {dots.slice(0, 3).map((color, i) => (
+                      <span key={i} className="cal-gcal-dot" style={{ background: color }} />
+                    ))}
+                  </span>
+                )}
+              </div>
+              {hasMarks && (
+                <div className="cal-status-row">
+                  {calStatus === 'approved' && dt === 'work' && (
+                    <>
+                      <span className="cal-status-approved">✓</span>
+                      {(mins > 0 || attMins > 0) && (
+                        <span className="cal-day-hours">{toHHMM(attMins > 0 ? attMins : mins)}</span>
+                      )}
+                    </>
+                  )}
+                  {calStatus === 'approved' && dt === 'vacation' && (
+                    <span className="cal-day-label">חופש</span>
+                  )}
+                  {calStatus === 'approved' && dt === 'sick' && (
+                    <span className="cal-day-label">מחלה</span>
+                  )}
+                  {calStatus === 'pending' && dt === 'work' && (
+                    <span className="cal-status-pending">⏳</span>
+                  )}
+                  {calStatus === 'pending' && dt === 'vacation' && (
+                    <>
+                      <span className="cal-day-label">חופש</span>
+                      <span className="cal-status-pending">⏳</span>
+                    </>
+                  )}
+                  {calStatus === 'pending' && dt === 'sick' && (
+                    <>
+                      <span className="cal-day-label">מחלה</span>
+                      <span className="cal-status-pending">⏳</span>
+                    </>
+                  )}
+                  {calStatus === 'rejected' && (
+                    <span className="cal-status-rejected">✗</span>
+                  )}
                 </div>
               )}
-              {calStatus === 'approved' && dt === 'work' && (
-                <>
-                  <span className="cal-status-approved">✓</span>
-                  {(mins > 0 || attMins > 0) && (
-                    <span className="cal-day-hours">{toHHMM(attMins > 0 ? attMins : mins)}</span>
-                  )}
-                </>
-              )}
-              {calStatus === 'approved' && dt === 'vacation' && (
-                <span className="cal-day-label">חופש</span>
-              )}
-              {calStatus === 'approved' && dt === 'sick' && (
-                <span className="cal-day-label">מחלה</span>
-              )}
-              {calStatus === 'pending' && dt === 'work' && (
-                <span className="cal-status-pending">⏳</span>
-              )}
-              {calStatus === 'pending' && dt === 'vacation' && (
-                <>
-                  <span className="cal-day-label">חופש</span>
-                  <span className="cal-status-pending">⏳</span>
-                </>
-              )}
-              {calStatus === 'pending' && dt === 'sick' && (
-                <>
-                  <span className="cal-day-label">מחלה</span>
-                  <span className="cal-status-pending">⏳</span>
-                </>
-              )}
-              {calStatus === 'rejected' && (
-                <span className="cal-status-rejected">✗</span>
+              {/* One block, not one element per line: the two-line clamp has
+                  to be a budget shared by the holiday and the vacation lines,
+                  and a clamp only counts the line boxes of a single element.
+                  The <br/>s keep it one inline run so the count is exact. */}
+              {/* Always at least one line — see MIN_CELL_H. A cell showing a
+                  bare "…" with nothing readable above it is not reachable. */}
+              {annotations.length > 0 && (
+                <div className="cal-annotations">
+                  {annotations.map((a, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && <br />}
+                      <span className={a.cls}>{a.text}</span>
+                    </Fragment>
+                  ))}
+                </div>
               )}
             </div>
           )
         })}
+    </div>
+  )
+
+  // Calendar + monthly summary — used in employee right panel and admin left panel
+  const calendarContent = (
+    <>
+      <div className="hours-cal-header">
+        <button className="hours-cal-nav" onClick={() => stepMonths(1)}>‹</button>
+        <span className="hours-cal-title">{MONTH_NAMES[viewMonth]} {viewYear}</span>
+        <button className="hours-cal-nav" onClick={() => stepMonths(-1)}>›</button>
+      </div>
+
+      {/* The two grids are a fixed block: they never scroll. Only the day
+          panel below them takes the leftover height and scrolls. */}
+      <div className="hours-cal-months">
+        {monthsShown.map(({ y, m }, i) => (
+          <div className="hours-cal-month" key={`${y}-${m}`}>
+            {/* The first month is already named by the header above. */}
+            {i > 0 && (
+              <div className="hours-cal-month-title">{MONTH_NAMES[m]} {y}</div>
+            )}
+            {monthGrid(y, m)}
+          </div>
+        ))}
       </div>
 
       {isAdmin ? (
-        /* Admin: per-day view, driven by clicking a day in the calendar.
+        /* Admin: per-day view, driven by clicking a day in EITHER month.
            For each currently-selected employee that has an entry on the
            selected day, render one row using the same daily-entry format
            as the report's drill-down lines. Employees with no entry for
@@ -1620,7 +1881,7 @@ function Hours() {
         {isAdmin ? (
           <>
             {/* Admin: LEFT = calendar, RIGHT = tabbed interface */}
-            <div className="hours-calendar-panel">
+            <div className="hours-calendar-panel" ref={calPanelRef} style={calPanelVars}>
               {calendarContent}
             </div>
 
@@ -1656,6 +1917,7 @@ function Hours() {
                   viewYear={viewYear}
                   viewMonth={viewMonth}
                   onMonthEvents={setGcalDots}
+                  onMonthHolidays={setGcalHolidays}
                 />
               )}
               {adminTab === 2 && entryFormBody}
@@ -1666,7 +1928,7 @@ function Hours() {
         ) : (
           <>
             {/* Employee: RIGHT = calendar, LEFT = tabbed interface (entry / reports) */}
-            <div className="hours-calendar-panel">
+            <div className="hours-calendar-panel" ref={calPanelRef} style={calPanelVars}>
               {calendarContent}
             </div>
 

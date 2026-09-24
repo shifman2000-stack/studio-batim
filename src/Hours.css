@@ -1,4 +1,10 @@
 /* ── Hours Page ── */
+/* index.css locks body and #root at overflow:hidden, so this element — the
+   flex child that takes the height left under the header — is the hours
+   screen's scroll container. It is also the ONLY one: when two months plus
+   the day panel are taller than the window the whole screen scrolls here, as
+   one document, and when everything fits overflow-y:auto shows no scrollbar
+   and reserves no gutter. Nothing nested inside may scroll on its own. */
 .hours-page {
   flex: 1;
   min-height: 0;
@@ -7,17 +13,22 @@
 }
 
 /* ── Split layout ── */
+/* align-items: flex-start, and deliberately NO height: the columns take their
+   natural height and the page grows with them. Stretching them to the
+   viewport (as an earlier revision did) is what forced the calendar column to
+   ration its height and squeezed the day panel to a single scrolling line. */
 .hours-split {
   display: flex;
   align-items: flex-start;
-  /* min-height: 0 lets the flex container shrink to its actual content height.
-     Previously was `calc(100vh - 56px)` which forced content slightly above viewport
-     once drill-down rows and multi-select changes were added, causing a page scrollbar. */
   min-height: 0;
   direction: rtl;
 }
 
 /* ── LEFT: Form Panel ── */
+/* No overflow-y of its own: the tab column scrolls with the page so the two
+   halves of the screen move together as one document. (The rule it used to
+   carry was inert for most of this file's life — it only started producing a
+   second scrollbar when .hours-split was stretched to full height.) */
 .hours-form-panel {
   width: 50%;
   border-left: none;
@@ -25,7 +36,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
 }
 
 .hours-no-selection {
@@ -387,10 +397,35 @@
 }
 
 /* ── RIGHT: Calendar Panel ── */
+/* A column: the month header, the fixed two-month block, and then the day
+   panel, which absorbs whatever height is left. overflow:hidden because
+   nothing in this column scrolls except the day panel itself. */
+/* Plain block again: no overflow, no min-height, nothing to ration. The two
+   grids and the day panel below them are simply as tall as they are, and the
+   page scrolls if that exceeds the window. */
 .hours-calendar-panel {
   width: 50%;
   padding: 24px 20px;
-  overflow-y: auto;
+}
+
+.hours-cal-months {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hours-cal-month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The first month is named by .hours-cal-title in the header above the pair;
+   this names the second one. Same weight, one step down in size. */
+.hours-cal-month-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .hours-user-filter {
@@ -420,7 +455,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .hours-cal-title {
@@ -455,25 +490,44 @@
   font-size: 11px;
   font-weight: 700;
   color: #888;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .hours-cal-empty {
   /* placeholder for offset days */
 }
 
+/* Fixed height, and the WINDOW sets it, not the content. Hours.jsx measures
+   what is left in this column after the arrows row, the month titles, the
+   weekday rows, the gaps and the day panel, divides by twelve (two six-row
+   months, the worst a pair can be) and hands the result down as
+   --cal-cell-h. So two months always fit without the page scrolling, and
+   every cell is identical in both months whatever it holds — a 5-row month
+   simply leaves a row's worth of space unused.
+
+   The 40px fallback is the height this file used before the measurement
+   existed: it covers the single frame before the first layout pass, and the
+   case where the script never runs at all. */
 .hours-cal-cell {
-  min-height: 56px;
+  height: var(--cal-cell-h, 40px);
+  overflow: hidden;
   border: 1px solid #eee;
   border-radius: 6px;
-  padding: 4px 5px;
+  padding: 1px 4px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: #fff;
   transition: background 0.1s;
+}
+
+/* Marks keep their size no matter what: they are never the thing that gives
+   way. The annotation block is last in the cell, so it is also the first
+   thing any clipping would reach. */
+.hours-cal-cell > * {
+  flex: 0 0 auto;
 }
 
 .hours-cal-cell:hover {
@@ -481,14 +535,40 @@
 }
 
 .cal-day-num {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1.15;
   color: #222;
 }
 
 .cal-day-hours {
-  font-size: 10px;
+  font-size: 9px;
+  line-height: 1.15;
   color: #555;
+}
+
+/* The cell's first line: the date at the inline START — the visual RIGHT in
+   this RTL screen — and the Google dots at the inline END. space-between
+   resolves against the writing direction, so no physical left/right is named
+   anywhere and the pair flips correctly with it. Sharing this line is what
+   leaves the row below free for the day's marks. */
+.cal-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+
+/* The row under it, now carrying only the day's own marks. */
+.cal-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* Google Calendar event dots on calendar cells */
@@ -496,20 +576,72 @@
   display: flex;
   flex-direction: row;
   justify-content: center;
+  align-items: center;
   gap: 2px;
-  margin-top: 2px;
 }
 
 .cal-gcal-dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .cal-day-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
+  line-height: 1.15;
+}
+
+/* ── The cell's annotation block (admin only) ───────────────────────────
+   Holiday title first, then one "<שם> בחופש" line per person away. One
+   element holding the lot, because the two-line budget is shared between
+   them and a line clamp can only count the line boxes of a single element.
+
+   A line too WIDE wraps instead of being cut; overflow-wrap: break-word
+   breaks only a word that could not fit on a line of its own, so ordinary
+   words are never split. When the wrapped result exceeds two lines the
+   clamp ends it with a quiet "…", and the cell's title attribute carries
+   the full list — visible lines included. */
+.cal-annotations {
+  width: 100%;
+  min-width: 0;
+  margin-block-start: 1px;
+  font-size: 9px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: break-word;
+  /* Per-line direction. Without it the whole block is RTL, and the clamp's
+     "…" is placed at the RTL end — the visual LEFT — so a Latin holiday
+     title reads "…Feast of the". plaintext resolves each line from its own
+     first strong character, which puts the marker after Latin text and
+     before Hebrew text, each at its own reading end. */
+  unicode-bidi: plaintext;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  /* How many lines fit is a function of the measured cell height, so the
+     clamp comes down with it: two lines when the cell can hold them, one
+     otherwise. Either way the cell's title attribute holds the full list. */
+  -webkit-line-clamp: var(--cal-annotation-lines, 1);
+  line-clamp: var(--cal-annotation-lines, 1);
+  overflow: hidden;
+}
+
+/* The two kinds of annotation differ only in colour and weight now — size,
+   wrapping and clamping all belong to the block above. Indigo names the DAY,
+   muted grey names PEOPLE, so the two never read as one list. Titles arrive
+   verbatim from Google and are usually Latin script, so each run keeps its
+   own direction inside this RTL screen. */
+.cal-holiday {
+  font-weight: 500;
+  color: #5b4bb7;
+  unicode-bidi: plaintext;
+}
+
+.cal-vacation-name {
+  font-weight: 400;
+  color: #777;
+  unicode-bidi: plaintext;
 }
 
 /* Vacation: green background */
@@ -543,12 +675,12 @@
   background: #000;
   color: #fff;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 /* Selected */
@@ -559,7 +691,7 @@
 
 /* Calendar status icons */
 .cal-status-approved {
-  font-size: 12px;
+  font-size: 11px;
   color: #2e7d32;
   font-weight: 700;
   line-height: 1;
@@ -589,7 +721,12 @@
   direction: rtl;
 }
 
-/* ── Admin: stack of per-employee summary rows below the calendar ── */
+/* ── Admin: stack of per-employee summary rows below BOTH calendars ──
+   The only scroller in this column. flex: 1 1 auto + min-height: 0 means it
+   takes the height the two grids leave over and, when the selected day has
+   more entries than fit, scrolls inside itself rather than pushing the page. */
+/* Natural height, every row visible, no scroller of its own. The squeezed
+   one-line version this replaces was worse than a page scrollbar. */
 .hours-monthly-summary-admin {
   display: flex;
   flex-direction: column;
@@ -1155,13 +1292,22 @@
 }
 
 /* ── GoogleCalendarPanel component styles ── */
+/* A card, so the panel reads as a region instead of three lines of text
+   floating on the page. Chrome borrowed from .hours-records-box further up
+   this file — the card already used on this screen for the project rows:
+   1px #e0e0e0, 8px radius. Background stated explicitly, as .inq-card does.
+
+   No height: the column is top-aligned and the card is exactly as tall as
+   its content, leaving the space below it empty rather than stretching. */
 .gcal-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
   padding: 16px 14px;
   direction: rtl;
   gap: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
 }
 
 .gcal-panel-header {
@@ -1247,6 +1393,20 @@
   padding: 8px 0;
 }
 
+/* "the holiday calendar is not in this account's list" — a quiet line, not an
+   error and not a banner. Its whole job is to stop that state looking
+   identical to a month that simply has no holidays in it. */
+.gcal-holiday-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #a08a4a;
+  background: #fdf8e8;
+  border: 1px solid #f0e3bd;
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin: 0;
+}
+
 /* ── Events list ── */
 .gcal-events-list {
   list-style: none;
@@ -1304,14 +1464,20 @@
 }
 
 /* ── Disconnect link ── */
+/* Anchored to the bottom EDGE of the card by a rule of its own, so it reads
+   as part of the panel instead of hanging under it in white space. margin-top
+   auto keeps it last if the card ever gains spare height. Logical properties:
+   this card is dir="rtl", where physical `right` is the inline START. */
 .gcal-disconnect-btn {
   background: none;
   border: none;
+  border-block-start: 1px solid #e0e0e0;
   color: #aaa;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 0;
-  text-align: right;
+  padding-block: 8px 0;
+  padding-inline: 0;
+  text-align: start;
   text-decoration: underline;
   margin-top: auto;
   transition: color 0.15s;

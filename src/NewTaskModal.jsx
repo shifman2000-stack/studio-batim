@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
+import { NOT_SUSPENDED_FILTER } from './lib/stages'
 import './NewTaskModal.css'
 
 // Props:
@@ -67,6 +68,10 @@ export default function NewTaskModal({ project: initialProject, editTask, onClos
         .select('id, name, current_stage')
         .ilike('name', `%${projectQuery}%`)
         .eq('archived', false)
+        /* Suspended projects are not offered, matching the tasks screen's own
+           project filter. Applied in the QUERY so the limit below is spent on
+           rows that can actually be picked, not on ones thrown away after. */
+        .or(NOT_SUSPENDED_FILTER)
         .limit(8)
       setProjectResults(data || [])
       setSearchOpen((data || []).length > 0)

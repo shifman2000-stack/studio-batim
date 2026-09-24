@@ -129,6 +129,14 @@ function Hours() {
      (with `date` added to the SELECT). Rendered below the calendar as a
      per-day view keyed by the user's currently selected day. */
   const [dailyByEmployee, setDailyByEmployee] = useState([])
+  /* Who is on vacation on each day of the calendar's viewed month (ADMIN view).
+     Shape: { 'YYYY-MM-DD': [userId, ...] }. Derived in fetchMonthlySummary's
+     admin branch from the `allAtt` rows it ALREADY fetches for the month — no
+     query of its own, so an employee's screen issues nothing extra. Names are
+     resolved at render time from `allUsers`, which init() loads for admins.
+     Replaced wholesale on every month change, so navigating back and forth
+     cannot accumulate entries. */
+  const [vacationByDate, setVacationByDate] = useState({})
 
   /* ── Drill-down state ──
      Calendar drill-down (below the calendar — keyed by userId).
@@ -402,6 +410,18 @@ function Hours() {
         supabase.from('hour_reports').select('user_id, date, hours, minutes')
           .gte('date', first).lte('date', last),
       ])
+
+      /* Vacation names for the calendar cells. Rides on `allAtt` above, which
+         is already the whole month for EVERY user — including admins, who are
+         missing from `employees` (role = 'employee') and so never reach
+         empDaily. A user with two rows on one day is counted once. */
+      const vacMap = {}
+      for (const a of (allAtt || [])) {
+        if (a.day_type !== 'vacation') continue
+        if (!vacMap[a.date]) vacMap[a.date] = []
+        if (!vacMap[a.date].includes(a.user_id)) vacMap[a.date].push(a.user_id)
+      }
+      setVacationByDate(vacMap)
 
       const empDaily = (employees || []).map(emp => {
         const empAtt = allAtt ? allAtt.filter(a => a.user_id === emp.id) : []
@@ -705,6 +725,25 @@ function Hours() {
   const isAdmin = userRole === 'admin'
   const isPast  = !!(selectedDate && selectedDate < today)
   const isToday  = !!(selectedDate && selectedDate === today)
+
+  /* First names for the calendar's vacation lines. The first name is what the
+     cell shows; when it is missing we fall back to the same display name the
+     rest of this screen uses for a profile — "first last", or "-" when there
+     is nothing at all (see the `name` field built in fetchMonthlySummary and
+     the approvals list). Sorted so the order is stable across re-renders and
+     month navigation. */
+  const vacationNamesFor = (ds) => {
+    const ids = vacationByDate[ds]
+    if (!ids || ids.length === 0) return []
+    return ids
+      .map(id => {
+        const u = allUsers.find(x => x.id === id)
+        const first = (u?.first_name || '').trim()
+        if (first) return first
+        return [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim() || '-'
+      })
+      .sort((a, b) => a.localeCompare(b, 'he'))
+  }
 
   // Time fields editable: admin always, employee only in manual-entry mode
   const timeFieldsEditable = isAdmin || manualEntry
@@ -1184,6 +1223,10 @@ function Hours() {
           if (isSel)        cls += ' cal-selected'
 
           const dots = gcalDots[ds] || []
+          /* Admin-only. For an employee vacationByDate is never populated —
+             the query it derives from lives in the admin branch — and the
+             guard below keeps the cell byte-identical to today's. */
+          const vacationNames = isAdmin ? vacationNamesFor(ds) : []
 
           return (
             <div key={ds} className={cls} onClick={() => selectDay(ds)}>
@@ -1226,6 +1269,13 @@ function Hours() {
               )}
               {calStatus === 'rejected' && (
                 <span className="cal-status-rejected">✗</span>
+              )}
+              {vacationNames.length > 0 && (
+                <div className="cal-vacation-names">
+                  {vacationNames.map((n, i) => (
+                    <span key={i} className="cal-vacation-name">{n} בחופש</span>
+                  ))}
+                </div>
               )}
             </div>
           )

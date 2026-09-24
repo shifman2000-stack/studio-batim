@@ -512,6 +512,37 @@
   font-weight: 600;
 }
 
+/* ── "<שם> בחופש" lines inside a day cell (admin only) ──────────────────
+   One line per person, stacked. Deliberately small and muted so the date
+   number stays the loudest thing in the cell. The cell is a flex column
+   with only a min-height, so two or three lines simply make the row
+   taller instead of overflowing.
+
+   Logical properties throughout: this screen is dir="rtl", where physical
+   `left` paints on the visual RIGHT. */
+.cal-vacation-names {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  margin-block-start: 1px;
+}
+
+.cal-vacation-name {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #777;
+  text-align: center;
+  /* Narrow columns at phone width: wrap rather than push the grid wider.
+     A long single word breaks instead of forcing a horizontal scrollbar. */
+  overflow-wrap: anywhere;
+}
+
 /* Vacation: green background */
 .cal-vacation {
   background: #e8f5e9;

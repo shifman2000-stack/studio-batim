@@ -497,15 +497,19 @@
   /* placeholder for offset days */
 }
 
-/* FIXED height, never content-driven, so a week of holidays is exactly as
-   tall as an empty week and the grid's height depends only on how many weeks
-   it has. 74px comes from measuring the tallest stack a cell can hold:
-   today-circle 18 + dots 5 + approved tick 11 + hours 10.34 + two annotation
-   lines 22.5 + four 1px gaps + 2px padding = 72.8.
-   overflow:hidden is the backstop; the annotation block below clamps itself
-   before it ever reaches this. */
+/* Fixed height, and the WINDOW sets it, not the content. Hours.jsx measures
+   what is left in this column after the arrows row, the month titles, the
+   weekday rows, the gaps and the day panel, divides by twelve (two six-row
+   months, the worst a pair can be) and hands the result down as
+   --cal-cell-h. So two months always fit without the page scrolling, and
+   every cell is identical in both months whatever it holds — a 5-row month
+   simply leaves a row's worth of space unused.
+
+   The 40px fallback is the height this file used before the measurement
+   existed: it covers the single frame before the first layout pass, and the
+   case where the script never runs at all. */
 .hours-cal-cell {
-  height: 74px;
+  height: var(--cal-cell-h, 40px);
   overflow: hidden;
   border: 1px solid #eee;
   border-radius: 6px;
@@ -543,13 +547,25 @@
   color: #555;
 }
 
+/* The one row under the date that carries the Google dots and the day's own
+   marks side by side. Stacking them cost a line the cell cannot spare once
+   the window has set its height. */
+.cal-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
 /* Google Calendar event dots on calendar cells */
 .cal-gcal-dots {
   display: flex;
   flex-direction: row;
   justify-content: center;
+  align-items: center;
   gap: 2px;
-  margin-top: 1px;
 }
 
 .cal-gcal-dot {
@@ -591,8 +607,11 @@
   unicode-bidi: plaintext;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  /* How many lines fit is a function of the measured cell height, so the
+     clamp comes down with it: two lines when the cell can hold them, one
+     otherwise. Either way the cell's title attribute holds the full list. */
+  -webkit-line-clamp: var(--cal-annotation-lines, 1);
+  line-clamp: var(--cal-annotation-lines, 1);
   overflow: hidden;
 }
 

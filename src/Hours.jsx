@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect } from 'react'
+import { Fragment, useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import GoogleCalendarPanel from './components/hours/GoogleCalendarPanel'
@@ -64,6 +64,35 @@ const todayISO = () => {
   const n = new Date()
   return isoDate(n.getFullYear(), n.getMonth(), n.getDate())
 }
+
+/* ── Day-cell sizing ──────────────────────────────────────────────────────
+   The WINDOW decides the cell height, not the content: two months must fit
+   without the page scrolling. The height is measured at runtime (see
+   useCellHeight below) as
+
+     (height available to the calendar column − everything else in it) ÷ 12
+
+   12 = two months of six week-rows, the worst a pair can be. Sizing for the
+   worst case is what keeps every cell identical in every month — a 5-row
+   month just leaves a row's worth of space unused — instead of rows that
+   change size as you navigate. */
+const WORST_WEEK_ROWS = 6
+
+/* Floor. Below this the cells stop shrinking and the page is allowed to
+   scroll instead. 32px is where a cell still holds the date (13.8) plus one
+   status mark (11) plus its padding; under that the marks themselves would
+   start colliding, and an unreadable calendar is worse than a scrollbar.
+   In practice this bites below roughly a 660px-tall window. */
+const MIN_CELL_H = 32
+
+/* What a cell spends before any annotation: the date line (13.8), the gap
+   under it, the single status row that carries the dots and the day's marks
+   (11), and the cell's 2px padding — plus one more gap before the annotation
+   block. Used to decide how many annotation lines a cell of a given height
+   can actually show. */
+const CELL_MARKS_RESERVE = 29
+const ANNOTATION_LINE_H  = 11.25
+const MAX_ANNOTATION_LINES = 2
 
 /* The calendar shows two consecutive months at once, (y, m) and the one after
    it. This is the ISO range covering exactly those two — first of the first
@@ -182,6 +211,81 @@ function Hours() {
   /* Admin report multi-select: set of employee IDs currently visible.
      Initialized to ALL employees when allUsers loads (see useEffect below). */
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState(() => new Set())
+
+  /* ── Cell height, derived from the window ───────────────────────────────
+     Everything in the calendar column that is NOT a week-row is measured
+     from the live DOM — the arrows row and its margin, the gap between the
+     two month blocks, each month's title and the gap under it, each
+     weekday header row, and the grid's row gaps — and what is left over is
+     divided by twelve.
+
+     Two notes on scope. The available height comes from .hours-page, not
+     from the column: the column is content-sized (align-items: flex-start),
+     so measuring it would be circular, while .hours-page is the flex child
+     that owns exactly the height under the header. And the day panel is
+     subtracted along with the rest, one item beyond the brief's list — it
+     sits in this column too, and leaving it out would let it push the page
+     into scrolling however small the cells got, which is the one thing this
+     is supposed to prevent.
+
+     Nothing measured here depends on the cell height, so this settles in a
+     single pass — no layout feedback loop. */
+  const calPanelRef = useRef(null)
+  const [cellH, setCellH] = useState(null)
+
+  useLayoutEffect(() => {
+    const panel = calPanelRef.current
+    if (!panel) return
+    const page = panel.closest('.hours-page')
+    if (!page) return
+
+    const px = (el, prop) => parseFloat(getComputedStyle(el)[prop]) || 0
+
+    const measure = () => {
+      const months = panel.querySelector('.hours-cal-months')
+      const header = panel.querySelector('.hours-cal-header')
+      if (!months || !header) return
+
+      const available = page.clientHeight - px(panel, 'paddingTop') - px(panel, 'paddingBottom')
+
+      let chrome = header.offsetHeight + px(header, 'marginBottom') + px(months, 'rowGap')
+      for (const month of months.children) {
+        const title   = month.querySelector('.hours-cal-month-title')
+        const grid    = month.querySelector('.hours-cal-grid')
+        const dayname = grid && grid.querySelector('.hours-cal-dayname')
+        chrome += title ? title.offsetHeight + px(month, 'rowGap') : 0
+        chrome += dayname ? dayname.offsetHeight : 0
+        /* One gap under the weekday row plus one between each pair of week
+           rows — WORST_WEEK_ROWS gaps for WORST_WEEK_ROWS rows. */
+        chrome += grid ? WORST_WEEK_ROWS * px(grid, 'rowGap') : 0
+      }
+      /* The day panel below the grids, when the admin layout has one. */
+      const dayPanel = panel.querySelector('.hours-monthly-summary-admin')
+      if (dayPanel) chrome += dayPanel.offsetHeight + px(dayPanel, 'marginTop')
+
+      const fitted = Math.floor((available - chrome) / (2 * WORST_WEEK_ROWS))
+      setCellH(Math.max(MIN_CELL_H, fitted))
+    }
+
+    measure()
+    /* Two listeners on purpose. The ResizeObserver catches any change to the
+       height this screen is given — a window resize, but also the sidebar or
+       a devtools pane changing the room available — while watching
+       .hours-page rather than the column we resize, so there is no feedback.
+       The window resize event is the plain fallback for the case where the
+       observer does not deliver (it does not fire at all inside the embedded
+       preview pane, for one). Both call the same idempotent measure. */
+    const ro = new ResizeObserver(measure)
+    ro.observe(page)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+    /* userRole rather than the derived isAdmin: that const is declared further
+       down this component, so naming it here would hit its temporal dead
+       zone when the deps array is built. */
+  }, [userRole, viewYear, viewMonth, selectedDate, dailyByEmployee, selectedEmployeeIds, adminTab, employeeTab])
 
   useEffect(() => { init() }, [])
   useEffect(() => {
@@ -1182,6 +1286,19 @@ function Hours() {
     setArrivalError(''); setDepartureError('')
   }
 
+  /* The measured cell height reaches the CSS as custom properties, and with
+     it how many annotation lines a cell of that height can hold: two when
+     there is room, otherwise one. Null until the first layout pass, when the
+     stylesheet's own fallbacks apply for a single frame. */
+  const annotationLines = cellH == null
+    ? 1
+    : Math.max(0, Math.min(MAX_ANNOTATION_LINES,
+        Math.floor((cellH - CELL_MARKS_RESERVE) / ANNOTATION_LINE_H)))
+  const calPanelVars = cellH == null ? undefined : {
+    '--cal-cell-h': `${cellH}px`,
+    '--cal-annotation-lines': annotationLines,
+  }
+
   // ── Calendar grid ──
   /* TWO months are shown, stacked, for every user. viewYear/viewMonth are the
      FIRST of the pair; the second is always the month straight after it, so
@@ -1267,6 +1384,7 @@ function Hours() {
             ...(holiday ? [{ text: holiday, cls: 'cal-holiday' }] : []),
             ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
           ]
+          const hasMarks = Boolean(calStatus)
 
           return (
             <div
@@ -1276,50 +1394,62 @@ function Hours() {
               title={annotations.length ? annotations.map(a => a.text).join('\n') : undefined}
             >
               <span className="cal-day-num">{day}</span>
-              {isAdmin && dots.length > 0 && (
-                <div className="cal-gcal-dots">
-                  {dots.slice(0, 3).map((color, i) => (
-                    <span key={i} className="cal-gcal-dot" style={{ background: color }} />
-                  ))}
-                </div>
-              )}
-              {calStatus === 'approved' && dt === 'work' && (
-                <>
-                  <span className="cal-status-approved">✓</span>
-                  {(mins > 0 || attMins > 0) && (
-                    <span className="cal-day-hours">{toHHMM(attMins > 0 ? attMins : mins)}</span>
+              {/* Dots and the day's marks share ONE row. Stacked, they cost
+                  three lines, and at the heights the window forces here (down
+                  to 32px) the third would be clipped — and a mark must never
+                  be the thing that gets cut. Side by side they cost one. */}
+              {(hasMarks || (isAdmin && dots.length > 0)) && (
+                <div className="cal-status-row">
+                  {isAdmin && dots.length > 0 && (
+                    <span className="cal-gcal-dots">
+                      {dots.slice(0, 3).map((color, i) => (
+                        <span key={i} className="cal-gcal-dot" style={{ background: color }} />
+                      ))}
+                    </span>
                   )}
-                </>
-              )}
-              {calStatus === 'approved' && dt === 'vacation' && (
-                <span className="cal-day-label">חופש</span>
-              )}
-              {calStatus === 'approved' && dt === 'sick' && (
-                <span className="cal-day-label">מחלה</span>
-              )}
-              {calStatus === 'pending' && dt === 'work' && (
-                <span className="cal-status-pending">⏳</span>
-              )}
-              {calStatus === 'pending' && dt === 'vacation' && (
-                <>
-                  <span className="cal-day-label">חופש</span>
-                  <span className="cal-status-pending">⏳</span>
-                </>
-              )}
-              {calStatus === 'pending' && dt === 'sick' && (
-                <>
-                  <span className="cal-day-label">מחלה</span>
-                  <span className="cal-status-pending">⏳</span>
-                </>
-              )}
-              {calStatus === 'rejected' && (
-                <span className="cal-status-rejected">✗</span>
+                  {calStatus === 'approved' && dt === 'work' && (
+                    <>
+                      <span className="cal-status-approved">✓</span>
+                      {(mins > 0 || attMins > 0) && (
+                        <span className="cal-day-hours">{toHHMM(attMins > 0 ? attMins : mins)}</span>
+                      )}
+                    </>
+                  )}
+                  {calStatus === 'approved' && dt === 'vacation' && (
+                    <span className="cal-day-label">חופש</span>
+                  )}
+                  {calStatus === 'approved' && dt === 'sick' && (
+                    <span className="cal-day-label">מחלה</span>
+                  )}
+                  {calStatus === 'pending' && dt === 'work' && (
+                    <span className="cal-status-pending">⏳</span>
+                  )}
+                  {calStatus === 'pending' && dt === 'vacation' && (
+                    <>
+                      <span className="cal-day-label">חופש</span>
+                      <span className="cal-status-pending">⏳</span>
+                    </>
+                  )}
+                  {calStatus === 'pending' && dt === 'sick' && (
+                    <>
+                      <span className="cal-day-label">מחלה</span>
+                      <span className="cal-status-pending">⏳</span>
+                    </>
+                  )}
+                  {calStatus === 'rejected' && (
+                    <span className="cal-status-rejected">✗</span>
+                  )}
+                </div>
               )}
               {/* One block, not one element per line: the two-line clamp has
                   to be a budget shared by the holiday and the vacation lines,
                   and a clamp only counts the line boxes of a single element.
                   The <br/>s keep it one inline run so the count is exact. */}
-              {annotations.length > 0 && (
+              {/* Zero lines means the window is too short for even one, so
+                  the block is dropped rather than drawn and clipped — the
+                  cell keeps its title attribute, which still carries
+                  everything. */}
+              {annotations.length > 0 && annotationLines > 0 && (
                 <div className="cal-annotations">
                   {annotations.map((a, i) => (
                     <Fragment key={i}>
@@ -1746,7 +1876,7 @@ function Hours() {
         {isAdmin ? (
           <>
             {/* Admin: LEFT = calendar, RIGHT = tabbed interface */}
-            <div className="hours-calendar-panel">
+            <div className="hours-calendar-panel" ref={calPanelRef} style={calPanelVars}>
               {calendarContent}
             </div>
 
@@ -1793,7 +1923,7 @@ function Hours() {
         ) : (
           <>
             {/* Employee: RIGHT = calendar, LEFT = tabbed interface (entry / reports) */}
-            <div className="hours-calendar-panel">
+            <div className="hours-calendar-panel" ref={calPanelRef} style={calPanelVars}>
               {calendarContent}
             </div>
 

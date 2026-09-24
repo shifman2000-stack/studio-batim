@@ -1257,8 +1257,24 @@ function Hours() {
              panel, which exists only in the admin layout. */
           const holiday = isAdmin ? gcalHolidays[ds] : null
 
+          /* The cell's annotations, in render order: the holiday names the
+             day, then one line per person away. The cell is a fixed height,
+             so this list is clamped to two lines on screen — the native
+             title carries the whole thing, visible lines included, which is
+             what makes the clamped "…" recoverable without a tooltip
+             library. */
+          const annotations = [
+            ...(holiday ? [{ text: holiday, cls: 'cal-holiday' }] : []),
+            ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
+          ]
+
           return (
-            <div key={ds} className={cls} onClick={() => selectDay(ds)}>
+            <div
+              key={ds}
+              className={cls}
+              onClick={() => selectDay(ds)}
+              title={annotations.length ? annotations.map(a => a.text).join('\n') : undefined}
+            >
               <span className="cal-day-num">{day}</span>
               {isAdmin && dots.length > 0 && (
                 <div className="cal-gcal-dots">
@@ -1299,16 +1315,17 @@ function Hours() {
               {calStatus === 'rejected' && (
                 <span className="cal-status-rejected">✗</span>
               )}
-              {/* The holiday names the DAY, the lines under it name PEOPLE, so
-                  the day's own nature reads first. Verbatim from Google — the
-                  title is whatever the subscribed calendar calls it. */}
-              {holiday && (
-                <span className="cal-holiday" title={holiday}>{holiday}</span>
-              )}
-              {vacationNames.length > 0 && (
-                <div className="cal-vacation-names">
-                  {vacationNames.map((n, i) => (
-                    <span key={i} className="cal-vacation-name">{n} בחופש</span>
+              {/* One block, not one element per line: the two-line clamp has
+                  to be a budget shared by the holiday and the vacation lines,
+                  and a clamp only counts the line boxes of a single element.
+                  The <br/>s keep it one inline run so the count is exact. */}
+              {annotations.length > 0 && (
+                <div className="cal-annotations">
+                  {annotations.map((a, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && <br />}
+                      <span className={a.cls}>{a.text}</span>
+                    </Fragment>
                   ))}
                 </div>
               )}

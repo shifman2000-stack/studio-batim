@@ -497,11 +497,16 @@
   /* placeholder for offset days */
 }
 
-/* Compacted when the screen went from one month to two: at 1400x700 there is
-   only ~644px under the header for both grids plus the day panel, and the old
-   56px row simply did not fit twice. Same structure, tighter metrics. */
+/* FIXED height, never content-driven, so a week of holidays is exactly as
+   tall as an empty week and the grid's height depends only on how many weeks
+   it has. 74px comes from measuring the tallest stack a cell can hold:
+   today-circle 18 + dots 5 + approved tick 11 + hours 10.34 + two annotation
+   lines 22.5 + four 1px gaps + 2px padding = 72.8.
+   overflow:hidden is the backstop; the annotation block below clamps itself
+   before it ever reaches this. */
 .hours-cal-cell {
-  min-height: 40px;
+  height: 74px;
+  overflow: hidden;
   border: 1px solid #eee;
   border-radius: 6px;
   padding: 1px 4px;
@@ -512,6 +517,13 @@
   gap: 1px;
   background: #fff;
   transition: background 0.1s;
+}
+
+/* Marks keep their size no matter what: they are never the thing that gives
+   way. The annotation block is last in the cell, so it is also the first
+   thing any clipping would reach. */
+.hours-cal-cell > * {
+  flex: 0 0 auto;
 }
 
 .hours-cal-cell:hover {
@@ -553,59 +565,52 @@
   line-height: 1.15;
 }
 
-/* ── Jewish holiday name inside a day cell (admin only) ─────────────────
-   Deliberately unlike the vacation lines below: those are muted grey and
-   name people, this is indigo and names the day itself, so the two never
-   read as one list. Titles arrive verbatim from the subscribed Google
-   calendar and are usually Latin script, so the run keeps its own
-   direction inside this RTL screen.
+/* ── The cell's annotation block (admin only) ───────────────────────────
+   Holiday title first, then one "<שם> בחופש" line per person away. One
+   element holding the lot, because the two-line budget is shared between
+   them and a line clamp can only count the line boxes of a single element.
 
-   Strictly ONE line: a wrapped title would add a second row's height to
-   the whole week, and two months only just fit under a short window. Long
-   titles ellipsise and the full text is in the element's title attribute. */
-.cal-holiday {
-  max-width: 100%;
-  min-width: 0;
-  font-size: 9px;
-  font-weight: 500;
-  line-height: 1.2;
-  color: #5b4bb7;
-  text-align: center;
-  unicode-bidi: plaintext;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── "<שם> בחופש" lines inside a day cell (admin only) ──────────────────
-   One line per person, stacked. Deliberately small and muted so the date
-   number stays the loudest thing in the cell. The cell is a flex column
-   with only a min-height, so two or three lines simply make the row
-   taller instead of overflowing.
-
-   Logical properties throughout: this screen is dir="rtl", where physical
-   `left` paints on the visual RIGHT. */
-.cal-vacation-names {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
+   A line too WIDE wraps instead of being cut; overflow-wrap: break-word
+   breaks only a word that could not fit on a line of its own, so ordinary
+   words are never split. When the wrapped result exceeds two lines the
+   clamp ends it with a quiet "…", and the cell's title attribute carries
+   the full list — visible lines included. */
+.cal-annotations {
   width: 100%;
   min-width: 0;
   margin-block-start: 1px;
+  font-size: 9px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: break-word;
+  /* Per-line direction. Without it the whole block is RTL, and the clamp's
+     "…" is placed at the RTL end — the visual LEFT — so a Latin holiday
+     title reads "…Feast of the". plaintext resolves each line from its own
+     first strong character, which puts the marker after Latin text and
+     before Hebrew text, each at its own reading end. */
+  unicode-bidi: plaintext;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* The two kinds of annotation differ only in colour and weight now — size,
+   wrapping and clamping all belong to the block above. Indigo names the DAY,
+   muted grey names PEOPLE, so the two never read as one list. Titles arrive
+   verbatim from Google and are usually Latin script, so each run keeps its
+   own direction inside this RTL screen. */
+.cal-holiday {
+  font-weight: 500;
+  color: #5b4bb7;
+  unicode-bidi: plaintext;
 }
 
 .cal-vacation-name {
-  max-width: 100%;
-  min-width: 0;
-  font-size: 9px;
   font-weight: 400;
-  line-height: 1.25;
   color: #777;
-  text-align: center;
-  /* Narrow columns at phone width: wrap rather than push the grid wider.
-     A long single word breaks instead of forcing a horizontal scrollbar. */
-  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 /* Vacation: green background */
@@ -1256,13 +1261,22 @@
 }
 
 /* ── GoogleCalendarPanel component styles ── */
+/* A card, so the panel reads as a region instead of three lines of text
+   floating on the page. Chrome borrowed from .hours-records-box further up
+   this file — the card already used on this screen for the project rows:
+   1px #e0e0e0, 8px radius. Background stated explicitly, as .inq-card does.
+
+   No height: the column is top-aligned and the card is exactly as tall as
+   its content, leaving the space below it empty rather than stretching. */
 .gcal-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
   padding: 16px 14px;
   direction: rtl;
   gap: 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
 }
 
 .gcal-panel-header {
@@ -1405,14 +1419,20 @@
 }
 
 /* ── Disconnect link ── */
+/* Anchored to the bottom EDGE of the card by a rule of its own, so it reads
+   as part of the panel instead of hanging under it in white space. margin-top
+   auto keeps it last if the card ever gains spare height. Logical properties:
+   this card is dir="rtl", where physical `right` is the inline START. */
 .gcal-disconnect-btn {
   background: none;
   border: none;
+  border-block-start: 1px solid #e0e0e0;
   color: #aaa;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 0;
-  text-align: right;
+  padding-block: 8px 0;
+  padding-inline: 0;
+  text-align: start;
   text-decoration: underline;
   margin-top: auto;
   transition: color 0.15s;

@@ -1,10 +1,10 @@
 /* ── Hours Page ── */
-/* Unchanged mechanism: index.css locks body and #root at overflow:hidden, and
-   this element is the flex child that takes the height left under the header
-   (flex:1 + min-height:0) and owns the screen's scrolling. With two calendars
-   stacked, the layout below is built so the content FITS and this never
-   actually scrolls; overflow-y:auto is kept only as a safety valve so nothing
-   can become unreachable on an unusually short window. */
+/* index.css locks body and #root at overflow:hidden, so this element — the
+   flex child that takes the height left under the header — is the hours
+   screen's scroll container. It is also the ONLY one: when two months plus
+   the day panel are taller than the window the whole screen scrolls here, as
+   one document, and when everything fits overflow-y:auto shows no scrollbar
+   and reserves no gutter. Nothing nested inside may scroll on its own. */
 .hours-page {
   flex: 1;
   min-height: 0;
@@ -13,19 +13,22 @@
 }
 
 /* ── Split layout ── */
-/* align-items: stretch (not flex-start) gives BOTH columns the full height of
-   .hours-page, which is what lets the calendar column hand its leftover height
-   to the day panel and the right column scroll inside itself instead of
-   dragging the page. */
+/* align-items: flex-start, and deliberately NO height: the columns take their
+   natural height and the page grows with them. Stretching them to the
+   viewport (as an earlier revision did) is what forced the calendar column to
+   ration its height and squeezed the day panel to a single scrolling line. */
 .hours-split {
   display: flex;
-  align-items: stretch;
-  height: 100%;
+  align-items: flex-start;
   min-height: 0;
   direction: rtl;
 }
 
 /* ── LEFT: Form Panel ── */
+/* No overflow-y of its own: the tab column scrolls with the page so the two
+   halves of the screen move together as one document. (The rule it used to
+   carry was inert for most of this file's life — it only started producing a
+   second scrollbar when .hours-split was stretched to full height.) */
 .hours-form-panel {
   width: 50%;
   border-left: none;
@@ -33,7 +36,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow-y: auto;
 }
 
 .hours-no-selection {
@@ -398,30 +400,24 @@
 /* A column: the month header, the fixed two-month block, and then the day
    panel, which absorbs whatever height is left. overflow:hidden because
    nothing in this column scrolls except the day panel itself. */
+/* Plain block again: no overflow, no min-height, nothing to ration. The two
+   grids and the day panel below them are simply as tall as they are, and the
+   page scrolls if that exceeds the window. */
 .hours-calendar-panel {
   width: 50%;
-  /* Less bottom padding than the form column: every pixel here comes off the
-     day panel, which is the first thing to give way on a short window. */
-  padding: 24px 20px 8px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  padding: 24px 20px;
 }
 
-/* The two grids. flex: 0 0 auto — they keep their natural height and never
-   scroll; the day panel is what gives way. */
 .hours-cal-months {
-  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .hours-cal-month {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 /* The first month is named by .hours-cal-title in the header above the pair;
@@ -459,7 +455,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .hours-cal-title {
@@ -693,18 +689,14 @@
    The only scroller in this column. flex: 1 1 auto + min-height: 0 means it
    takes the height the two grids leave over and, when the selected day has
    more entries than fit, scrolls inside itself rather than pushing the page. */
+/* Natural height, every row visible, no scroller of its own. The squeezed
+   one-line version this replaces was worse than a page scrollbar. */
 .hours-monthly-summary-admin {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* Tight vertical padding on purpose: padding is this panel's floor — a
-     flex item cannot shrink below it — and on a short window with a tall
-     month pair that floor is the difference between fitting and clipping. */
-  padding: 5px 4px;
-  margin-top: 6px;
+  padding: 10px 4px;
+  margin-top: 10px;
   border-top: 1px solid #e0e0e0;
   direction: rtl;
 }

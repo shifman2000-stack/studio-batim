@@ -4,18 +4,14 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import NewTaskModal from './NewTaskModal'
 import { PdNotesCell } from './ProjectDetail'
+/* Shared with NewTaskModal — see src/lib/stages.js for why it lives there
+   and not in this file. `projects` carries both a stage_id integer and a
+   current_stage text column; the id is the safe handle, so renaming the
+   stage moves the label without disabling this filter. The name is used
+   only as a fallback for a row whose stage_id is null, and even then it is
+   read out of the stages table by id rather than typed here. */
+import { SUSPENDED_STAGE_ID } from './lib/stages'
 import './Tasks.css'
-
-/* The "suspended" stage, by ID. `projects` carries both a `stage_id` integer
-   and a `current_stage` text column, and on Dev and Prod alike stage_id is
-   populated on every row and never disagrees with the name — so the id is
-   the safe handle: renaming the stage in the admin screen moves the label,
-   not the meaning, and this filter keeps working. The same id is already
-   hardcoded a few lines below, where it is dropped from the STAGE dropdown.
-   The name is only ever used as a fallback for a row whose stage_id is null,
-   and even then it is read from the stages table by id rather than typed
-   here as a Hebrew literal. */
-const SUSPENDED_STAGE_ID = 9
 
 // ── Constants (kept for display fallbacks) ──
 const STATUS_META = {

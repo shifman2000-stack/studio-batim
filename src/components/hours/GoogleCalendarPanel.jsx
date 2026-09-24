@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+/* Unchanged. calendar.readonly already covers calendarList.list and events on
+   EVERY calendar the account can see, including subscribed ones under "Other
+   calendars" — so reading the holiday calendar needs no new scope and no
+   re-consent. Only the calendarId parameter below was ever limiting us. */
 const SCOPE     = 'https://www.googleapis.com/auth/calendar.readonly'
+
+/* The subscribed calendar the studio takes Jewish holidays from, matched by
+   the name it shows under "Other calendars". Deliberately ONE constant: if the
+   studio subscribes to a different holiday calendar (a Hebrew-titled one, say)
+   this is the single line to change. Not found → no holiday lines, no error. */
+const HOLIDAY_CALENDAR_NAME = 'חגים בישראל'
 
 // Google Calendar colorId → hex
 const GCAL_COLORS = {
@@ -45,7 +55,7 @@ function eventDateStr(ev) {
   return null
 }
 
-export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear, viewMonth, onMonthEvents }) {
+export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear, viewMonth, onMonthEvents, onMonthHolidays }) {
   const [connected, setConnected]       = useState(false)
   const [events, setEvents]             = useState([])
   const [loading, setLoading]           = useState(false)
@@ -63,6 +73,11 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
                             manual "התחבר" button). */
   const silentTriedRef      = useRef(false)
   const silentInProgressRef = useRef(false)
+  /* Resolved id of HOLIDAY_CALENDAR_NAME. undefined = not looked up yet,
+     null = looked up and not subscribed. The calendar list changes far more
+     rarely than the viewed month, so it is resolved once per connection
+     instead of on every window move. */
+  const holidayCalIdRef     = useRef(undefined)
 
   // ── 1. Load gapi and restore saved token ──────────────────────────────────
   useEffect(() => {
@@ -163,52 +178,91 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
     window.gapi.client.setToken(null)
     setConnected(false)
     setEvents([])
+    holidayCalIdRef.current = undefined
     if (onMonthEvents) onMonthEvents({})
+    if (onMonthHolidays) onMonthHolidays({})
     setError('פג תוקף החיבור — אנא התחבר מחדש')
-  }, [onMonthEvents])
+  }, [onMonthEvents, onMonthHolidays])
 
-  // ── 4. Fetch events for the full visible month → pass dots to parent ───────
+  // ── 4. Fetch events for the two displayed months → dots + holidays ────────
+  /* The calendar shows a pair of consecutive months, so the range runs from
+     the 1st of `month` to the last day of the month after it. events.list
+     takes an arbitrary time window, so this is ONE request per calendar for
+     the whole pair rather than one per month — half the round-trips, and no
+     chance of the two months arriving out of step with each other. */
   const fetchMonthEvents = useCallback(async (year, month) => {
-    if (!gapiReady || !connected || onMonthEvents == null) return
-    try {
-      const firstDay  = new Date(year, month, 1)
-      const lastDay   = new Date(year, month + 1, 0)
-      const timeMin   = firstDay.toISOString()
-      const timeMax   = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59).toISOString()
-      const res = await window.gapi.client.calendar.events.list({
-        calendarId:   'primary',
-        timeMin,
-        timeMax,
+    if (!gapiReady || !connected) return
+    const firstDay = new Date(year, month, 1)
+    const lastDay  = new Date(year, month + 2, 0)   // last day of month + 1
+    const timeMin  = firstDay.toISOString()
+    const timeMax  = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59).toISOString()
+
+    const listEvents = (calendarId, maxResults) =>
+      window.gapi.client.calendar.events.list({
+        calendarId, timeMin, timeMax,
         singleEvents: true,
         orderBy:      'startTime',
-        maxResults:   500,
+        maxResults,
       })
-      const items = res.result.items || []
 
-      // Build { 'YYYY-MM-DD': ['#hex', ...] }
-      const dots = {}
+    // ── the studio's own calendar → the coloured dots (unchanged behaviour)
+    if (onMonthEvents != null) {
+      try {
+        const items = (await listEvents('primary', 500)).result.items || []
+        const dots = {}
+        items.forEach(ev => {
+          const ds = eventDateStr(ev)
+          if (!ds) return
+          const color = ev.colorId ? (GCAL_COLORS[ev.colorId] || DEFAULT_COLOR) : DEFAULT_COLOR
+          if (!dots[ds]) dots[ds] = []
+          if (dots[ds].length < 3) dots[ds].push(color)
+        })
+        onMonthEvents(dots)
+      } catch (e) {
+        console.error('gcal month fetch error:', e)
+        if (e.status === 401) { handleExpired(); return }
+      }
+    }
+
+    // ── the subscribed holiday calendar → one title per day
+    if (onMonthHolidays == null) return
+    try {
+      /* Resolve the calendar id once per connection. Matching on the name the
+         account sees: summaryOverride wins, because renaming a subscribed
+         calendar in Google sets that and leaves `summary` at the original. */
+      if (holidayCalIdRef.current === undefined) {
+        const cals = (await window.gapi.client.calendar.calendarList.list({ maxResults: 250 })).result.items || []
+        const hit = cals.find(c => (c.summaryOverride || c.summary) === HOLIDAY_CALENDAR_NAME)
+        holidayCalIdRef.current = hit ? hit.id : null
+      }
+      if (!holidayCalIdRef.current) { onMonthHolidays({}); return }
+
+      const items = (await listEvents(holidayCalIdRef.current, 250)).result.items || []
+      const holidays = {}
       items.forEach(ev => {
         const ds = eventDateStr(ev)
-        if (!ds) return
-        const color = ev.colorId ? (GCAL_COLORS[ev.colorId] || DEFAULT_COLOR) : DEFAULT_COLOR
-        if (!dots[ds]) dots[ds] = []
-        if (dots[ds].length < 3) dots[ds].push(color)
+        if (!ds || !ev.summary) return
+        if (!holidays[ds]) holidays[ds] = ev.summary   // first event of the day wins
       })
-      onMonthEvents(dots)
+      onMonthHolidays(holidays)
     } catch (e) {
-      console.error('gcal month fetch error:', e)
+      /* A missing or unreadable holiday calendar must never break the dots or
+         the panel — the day cells simply show no holiday line. */
+      console.warn('gcal holiday fetch skipped:', e)
       if (e.status === 401) handleExpired()
+      else onMonthHolidays({})
     }
-  }, [gapiReady, connected, onMonthEvents, handleExpired])
+  }, [gapiReady, connected, onMonthEvents, onMonthHolidays, handleExpired])
 
-  // Re-fetch month dots whenever month/year changes or connection established
+  // Re-fetch whenever the displayed window moves or the connection is made
   useEffect(() => {
     if (connected && viewYear != null && viewMonth != null) {
       fetchMonthEvents(viewYear, viewMonth)
-    } else if (!connected && onMonthEvents) {
-      onMonthEvents({})
+    } else if (!connected) {
+      if (onMonthEvents)   onMonthEvents({})
+      if (onMonthHolidays) onMonthHolidays({})
     }
-  }, [connected, viewYear, viewMonth, fetchMonthEvents, onMonthEvents])
+  }, [connected, viewYear, viewMonth, fetchMonthEvents, onMonthEvents, onMonthHolidays])
 
   // ── 5. Fetch events for the selected day ──────────────────────────────────
   const fetchEvents = useCallback(async (dateStr) => {
@@ -257,7 +311,9 @@ export default function GoogleCalendarPanel({ selectedDate, userEmail, viewYear,
     setConnected(false)
     setEvents([])
     setError('')
+    holidayCalIdRef.current = undefined
     if (onMonthEvents) onMonthEvents({})
+    if (onMonthHolidays) onMonthHolidays({})
   }
 
   // ── 7. Render ─────────────────────────────────────────────────────────────

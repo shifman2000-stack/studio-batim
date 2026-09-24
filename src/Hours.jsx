@@ -166,6 +166,12 @@ function Hours() {
      in the DOM before window.print() captures it. */
   const [printPending, setPrintPending] = useState(false)
   const [gcalDots, setGcalDots]           = useState({}) // { 'YYYY-MM-DD': ['#hex',...] }
+  /* Jewish holidays for the displayed pair, from the subscribed holiday
+     calendar rather than the studio's own: { 'YYYY-MM-DD': 'Yom Kippur' }.
+     Titles are rendered verbatim, exactly as Google returns them — no
+     translation table, so switching the subscribed calendar to a Hebrew one
+     changes the wording with no code change. Admin-only, like the dots. */
+  const [gcalHolidays, setGcalHolidays]   = useState({})
   const [adminTab, setAdminTab]           = useState(1) // 1=פגישות 2=הזנת שעות 3=אישורים 4=דוחות
   const [employeeTab, setEmployeeTab]     = useState(1) // 1=הזנת שעות 2=דוחות
   const [reportYear, setReportYear]       = useState(new Date().getFullYear())
@@ -1205,13 +1211,14 @@ function Hours() {
 
   // ─── Reusable JSX fragments ────────────────────────────────────────────
 
-  /* Step the PAIR. One click moves two months, so the view walks the year in
-     non-overlapping blocks: Sep+Oct → Nov+Dec → Jan+Feb. `dir` is +1 for the
-     later pair. In this RTL header ‹ is the later pair and › the earlier one,
-     which is how the single-month version already read. */
+  /* Slide the window by ONE month, so consecutive views overlap:
+     Sep+Oct → Oct+Nov → Nov+Dec. Every consecutive pair is reachable. `dir` is
+     +1 for the later window. In this RTL header ‹ is the later window and ›
+     the earlier one, which is how the single-month version already read. */
   const stepMonths = (dir) => {
     setGcalDots({})
-    const total = viewYear * 12 + viewMonth + dir * 2
+    setGcalHolidays({})
+    const total = viewYear * 12 + viewMonth + dir
     setViewYear(Math.floor(total / 12))
     setViewMonth(((total % 12) + 12) % 12)
   }
@@ -1246,6 +1253,9 @@ function Hours() {
              the query it derives from lives in the admin branch — and the
              guard below keeps the cell byte-identical to today's. */
           const vacationNames = isAdmin ? vacationNamesFor(ds) : []
+          /* Admin-only too: gcalHolidays is only ever filled by the Google
+             panel, which exists only in the admin layout. */
+          const holiday = isAdmin ? gcalHolidays[ds] : null
 
           return (
             <div key={ds} className={cls} onClick={() => selectDay(ds)}>
@@ -1288,6 +1298,12 @@ function Hours() {
               )}
               {calStatus === 'rejected' && (
                 <span className="cal-status-rejected">✗</span>
+              )}
+              {/* The holiday names the DAY, the lines under it name PEOPLE, so
+                  the day's own nature reads first. Verbatim from Google — the
+                  title is whatever the subscribed calendar calls it. */}
+              {holiday && (
+                <span className="cal-holiday" title={holiday}>{holiday}</span>
               )}
               {vacationNames.length > 0 && (
                 <div className="cal-vacation-names">
@@ -1749,6 +1765,7 @@ function Hours() {
                   viewYear={viewYear}
                   viewMonth={viewMonth}
                   onMonthEvents={setGcalDots}
+                  onMonthHolidays={setGcalHolidays}
                 />
               )}
               {adminTab === 2 && entryFormBody}

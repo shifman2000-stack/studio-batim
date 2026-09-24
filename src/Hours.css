@@ -402,7 +402,7 @@
   width: 50%;
   /* Less bottom padding than the form column: every pixel here comes off the
      day panel, which is the first thing to give way on a short window. */
-  padding: 24px 20px 12px;
+  padding: 24px 20px 8px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -415,13 +415,13 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .hours-cal-month {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 /* The first month is named by .hours-cal-title in the header above the pair;
@@ -459,7 +459,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .hours-cal-title {
@@ -555,6 +555,30 @@
   font-size: 9px;
   font-weight: 600;
   line-height: 1.15;
+}
+
+/* ── Jewish holiday name inside a day cell (admin only) ─────────────────
+   Deliberately unlike the vacation lines below: those are muted grey and
+   name people, this is indigo and names the day itself, so the two never
+   read as one list. Titles arrive verbatim from the subscribed Google
+   calendar and are usually Latin script, so the run keeps its own
+   direction inside this RTL screen.
+
+   Strictly ONE line: a wrapped title would add a second row's height to
+   the whole week, and two months only just fit under a short window. Long
+   titles ellipsise and the full text is in the element's title attribute. */
+.cal-holiday {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #5b4bb7;
+  text-align: center;
+  unicode-bidi: plaintext;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── "<שם> בחופש" lines inside a day cell (admin only) ──────────────────
@@ -676,8 +700,11 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 4px;
-  margin-top: 10px;
+  /* Tight vertical padding on purpose: padding is this panel's floor — a
+     flex item cannot shrink below it — and on a short window with a tall
+     month pair that floor is the difference between fitting and clipping. */
+  padding: 5px 4px;
+  margin-top: 6px;
   border-top: 1px solid #e0e0e0;
   direction: rtl;
 }

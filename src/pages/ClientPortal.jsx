@@ -30,7 +30,14 @@ import ClientSharedFiles from './client/ClientSharedFiles'
 import ClientQuantities from './client/ClientQuantities'
 import ClientFinishing from './client/ClientFinishing'
 import ClientContractorSpec from './client/ClientContractorSpec'
+/* שלבי התקדמות — TWO implementations live side by side.
+   ClientProgressJourney (the map) is what renders; ClientProgress (the
+   original accordion) is untouched and still works.
+   TO SWITCH BACK: in MENU_ITEMS below, change the 'progress' row's
+   Component from ClientProgressJourney to ClientProgress. Nothing else
+   needs to change — both take no props and read the same row. */
 import ClientProgress from './client/ClientProgress'
+import ClientProgressJourney from './client/ClientProgressJourney'
 import ClientMeetings from './client/ClientMeetings'
 import ClientProgrammingQuestionnaire from './client/ClientProgrammingQuestionnaire'
 import ClientAccount from './client/ClientAccount'
@@ -99,7 +106,7 @@ export const MENU_ITEMS = [
   { key: 'quantities',   label: 'כתב כמויות',       enabled: true,  Component: ClientQuantities },
   { key: 'finishing',    label: 'חומרי גמר',        enabled: true,  Component: ClientFinishing },
   { key: 'contractor',   label: 'מפרט לקבלן',       enabled: true,  Component: ClientContractorSpec },
-  { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgress },
+  { key: 'progress',     label: 'שלבי התקדמות',     enabled: true,  Component: ClientProgressJourney },
   { key: 'meetings',     label: 'סיכומי פגישות',    enabled: true,  Component: ClientMeetings },
   /* "פרטי חשבון" — pinned at the drawer bottom as an avatar+name row.
      Excluded from the main menu loop via the `footer: true` flag, but

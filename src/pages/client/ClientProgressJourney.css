@@ -1,0 +1,357 @@
+/* ══════════════════════════════════════════════════════════════════════
+   שלבי התקדמות — journey map (ClientProgressJourney.jsx)
+
+   Colour comes ONLY from theme.css tokens; there is not a hex value below.
+   Where the isometric block needs a third shade for its shaded face, it is
+   mixed between two EXISTING tokens rather than introducing a new one.
+
+   State → token:
+     בעבודה (current) → --sage / --sage-dark            (the app's accent)
+     הושלם  (done)    → --sand                           (solid but quieter)
+     בהמשך  (future)  → --bg-page + --border-default     (hollow outline)
+
+   RTL: this screen is dir="rtl", where physical `left` paints on the visual
+   RIGHT. Everything below uses logical properties.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cpj {
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+/* ── Masthead ── */
+.cpj-mast {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cpj-brand {
+  letter-spacing: 2px;
+}
+
+.cpj-title {
+  font-family: var(--font-body);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.25;
+  margin-block: 14px 4px;
+}
+
+.cpj-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Empty gantt_state — information, not an error. */
+.cpj-pending-note {
+  margin-block: 12px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-deep);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cpj-current {
+  margin-block: 14px 8px;
+  padding: 10px 12px;
+  background: var(--bg-surface-deep);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cpj-current::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--sage);
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ── Track headings ── */
+.cpj-headings {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-block-start: 8px;
+}
+
+.cpj-phase {
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  background: none;
+  border: 0;
+  padding: 4px 1px;
+  min-height: 46px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cpj-phase small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cpj-phase[aria-pressed="true"] {
+  color: var(--sage-dark);
+}
+
+.cpj-phase:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── The map ── */
+.cpj-map-wrap {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.cpj-map {
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.cpj-rail {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+.cpj-edge {
+  stroke: var(--sage-dark);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.cpj-arrow-head {
+  fill: var(--sage-dark);
+}
+
+/* ── Blocks ── */
+.cpj-block {
+  cursor: pointer;
+}
+
+.cpj-hit {
+  fill: transparent;
+}
+
+.cpj-block:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 1px;
+}
+
+.cpj-shadow {
+  fill: var(--border-strong);
+  opacity: 0.14;
+}
+
+.cpj-face,
+.cpj-cell,
+.cpj-cell-lip {
+  stroke-linejoin: round;
+}
+
+.cpj-cell-edge {
+  stroke-width: 0.45;
+}
+
+/* בהמשך — hollow, so an untouched step never reads as progress. */
+.cpj-block--future .cpj-face {
+  fill: var(--bg-page);
+  stroke: var(--border-default);
+  stroke-width: 0.65;
+}
+.cpj-block--future .cpj-face--front { fill: var(--bg-surface-deep); }
+.cpj-block--future .cpj-cell        { fill: var(--border-default); opacity: 0.5; }
+.cpj-block--future .cpj-cell-lip    { fill: var(--bg-surface-deep); }
+.cpj-block--future .cpj-cell-edge   { stroke: var(--border-default); }
+.cpj-block--future .cpj-shadow      { opacity: 0.06; }
+
+/* הושלם — solid sand: finished, and deliberately quieter than the accent. */
+.cpj-block--done .cpj-face--top   { fill: var(--sand); stroke: none; }
+.cpj-block--done .cpj-face--front { fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-face--side  { fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-cell        { fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-lip    { fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-edge   { stroke: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+
+/* בעבודה — the app's sage, the loudest thing on the map. */
+.cpj-block--current .cpj-face--top   { fill: var(--sage); stroke: none; }
+.cpj-block--current .cpj-face--front { fill: var(--sage-dark); stroke: none; }
+.cpj-block--current .cpj-face--side  { fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); stroke: none; }
+.cpj-block--current .cpj-cell        { fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+.cpj-block--current .cpj-cell-lip    { fill: var(--sage-dark); }
+.cpj-block--current .cpj-cell-edge   { stroke: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+
+/* The selected block keeps its own colour and gains a halo, so selection
+   never masquerades as a status. */
+.cpj-block--selected .cpj-shadow {
+  fill: var(--sage);
+  opacity: 0.55;
+}
+
+/* ── Legend ── */
+.cpj-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-block: 6px 16px;
+}
+
+.cpj-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 5px;
+  border-radius: 2px;
+}
+
+.cpj-swatch--done    { background: var(--sand); }
+.cpj-swatch--current { background: var(--sage); border-radius: 50%; }
+.cpj-swatch--future  { background: var(--bg-page); border: 1px solid var(--border-default); }
+
+/* ── Detail panel ── */
+.cpj-panel {
+  background: var(--bg-surface-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 14px 12px 8px;
+}
+
+.cpj-panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 2px;
+  margin-block-end: 10px;
+}
+
+.cpj-meta   { font-size: 11px; color: var(--text-secondary); }
+.cpj-status { font-size: 11px; color: var(--sage-dark); }
+.cpj-status[data-status="future"] { color: var(--text-secondary); }
+.cpj-status[data-status="done"]   { color: var(--badge-pending-text); }
+
+.cpj-browse {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
+}
+
+.cpj-nav {
+  font: inherit;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.cpj-nav:disabled { opacity: 0.25; cursor: default; }
+.cpj-nav:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+
+.cpj-title-wrap {
+  text-align: center;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cpj-step-title {
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.cpj-position { font-size: 11px; color: var(--text-secondary); }
+
+.cpj-note {
+  margin-block: 10px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--badge-active-bg);
+  color: var(--badge-active-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cpj-relations {
+  margin-block-start: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.cpj-relation-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 4px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.cpj-relation-label { font-size: 11px; color: var(--text-secondary); }
+
+.cpj-relation-links {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 9px;
+}
+
+.cpj-relation {
+  font: inherit;
+  padding-block: 8px;
+  min-height: 34px;
+  text-align: start;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 4px;
+}
+
+.cpj-relation:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+.cpj-relation-empty { color: var(--text-secondary); }
+
+.cpj-return {
+  display: block;
+  margin: 4px auto 0;
+  min-height: 40px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cpj-return:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+
+.cpj-foot {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-block-start: 12px;
+}

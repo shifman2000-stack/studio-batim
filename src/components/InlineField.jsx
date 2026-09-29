@@ -91,10 +91,42 @@ export default function InlineField({
     }
     /* A caller-supplied editor (e.g. a <select>) gets the same contract:
        controlled value, onChange, and blur-to-save. */
-    if (renderInput) return renderInput(props)
-    return multiline
-      ? <textarea rows={3} {...props} />
-      : <input type={type} {...props} />
+    const editor = renderInput
+      ? renderInput(props)
+      : multiline
+        ? <textarea rows={3} {...props} />
+        : <input type={type} {...props} />
+
+    /* splitCells means the caller has PLACED the resting value in a slot of
+       its own layout — the settings modal pins it to grid column 3 through
+       `className`. The editor has to land in that same slot. Returned bare,
+       it carries no placement at all, so the grid auto-places it into the
+       next free cell — the 26px pencil column — and the field collapses to
+       a pill you cannot read what you type in.
+
+       Wrapping it in the value's own class puts the editor exactly where the
+       text was. The wrapper rather than the element itself, because a
+       caller's renderInput sets its own className on the editor (the
+       אחראית and דגם נבחר selects both do) and would silently drop any class
+       passed through props.
+
+       justifySelf: 'stretch' as well as width:100%, because the row that
+       carries a copy button sizes its value column to CONTENT — and against
+       an auto-sized track a percentage width has nothing definite to resolve
+       against, so the editor fell back to an <input>'s intrinsic ~20
+       characters. Stretching fills the track however it was sized, and it
+       also overrides the `justify-self: end` that the LTR rows set. */
+    if (splitCells) {
+      return (
+        <span
+          className={className}
+          style={{ display: 'block', justifySelf: 'stretch', width: '100%', minWidth: 0 }}
+        >
+          {editor}
+        </span>
+      )
+    }
+    return editor
   }
 
   /* What the resting row reads as. Falls back to the stored value, so

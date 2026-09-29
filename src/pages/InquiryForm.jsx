@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import logoUrl from '../logo-A-stacked.svg'
+import LogoStacked from '../components/LogoStacked'
 
 // ── Project type options ──
 const PROJECT_TYPE_OPTIONS = [
@@ -240,7 +240,7 @@ export default function InquiryForm() {
   if (status === 'not_found') {
     return (
       <div style={styles.page}>
-        <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+        <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
         <div style={styles.stateBox}>
           <p style={styles.stateMsg}>הטופס אינו זמין.</p>
         </div>
@@ -251,7 +251,7 @@ export default function InquiryForm() {
   if (status === 'already_submitted') {
     return (
       <div style={styles.page}>
-        <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+        <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
         <div style={styles.stateBox}>
           <p style={styles.stateMsg}>הטופס כבר נשלח, תודה! 🏠</p>
         </div>
@@ -262,7 +262,7 @@ export default function InquiryForm() {
   if (status === 'success') {
     return (
       <div style={styles.page}>
-        <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+        <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
         <div style={styles.stateBox}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7a9478"
@@ -291,7 +291,7 @@ export default function InquiryForm() {
 
   return (
     <div style={styles.page} dir="rtl">
-      <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+      <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
 
       {/* Admin preview banner — simple text line */}
       {isReadOnly && (

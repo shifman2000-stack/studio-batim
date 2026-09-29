@@ -255,8 +255,21 @@
   flex-direction: column;
 }
 
+/* inline-size:100% is not decoration. Making this frame a flex column turns
+   the header row into a FLEX ITEM, and the desktop rule further down —
+   `.cp-content--with-header .cp-screen-header { max-width: 600px;
+   margin-inline: auto }` — then shrink-wraps it: auto margins on a flex item
+   beat align-items:stretch, so the row collapsed to its own content and sat
+   in the MIDDLE, title and back button clumped together. On every other tab
+   .cp-content is a block box, where those same margins centre a full-width
+   (or 600px-capped) block. 100% restores exactly that: margins resolve to 0
+   below 600px, and max-width still caps and centres above it.
+
+   This only ever showed at a viewport of 769px or more, which is where the
+   desktop overlay is actually looked at. */
 .cp-content--fixed > .cp-screen-header {
   flex: none;
+  inline-size: 100%;
 }
 
 /* Flush to the inline-start edge — the visual RIGHT here — rather than

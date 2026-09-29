@@ -97,9 +97,12 @@
   gap: 5px;
 }
 
+/* The viewBox is 38x30, so the box keeps the drawing's own aspect ratio —
+   a squashed swatch would be a different picture, not a smaller one. 26px
+   is the smallest size at which the four cells still read as holes. */
 .cpj-mini {
-  width: 24px;
-  height: 18px;
+  width: 26px;
+  height: 20.5px;
   flex: none;
   overflow: visible;
 }

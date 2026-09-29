@@ -81,33 +81,12 @@ const BUBBLE_PAD = 6        // smallest distance from the map's side edges
 
 const STATUS_LABEL = { done: 'הושלם', current: 'בעבודה', future: 'בהמשך' }
 
-/* The three visible faces, shared by the map's blocks and the legend's
-   miniatures so a swatch can never drift from the thing it describes.
-   Colour comes from the .cpj-block--<status> class on the wrapping <g>. */
-function BlockFaces() {
-  return (
-    <>
-      <polygon className="cpj-face cpj-face--side"  points="-18,-2 -8,6 -8,17 -18,9" />
-      <polygon className="cpj-face cpj-face--front" points="-8,6 18,-1 18,10 -8,17" />
-      <polygon className="cpj-face cpj-face--top"   points="-18,-2 8,-9 18,-1 -8,6" />
-    </>
-  )
-}
-
-/* Legend swatch: the same isometric block, same state colours, just small.
-   viewBox is the faces' own extent (x ∓18, y −9…17) plus a hair of air. */
-function MiniBlock({ status }) {
-  return (
-    <svg className="cpj-mini" viewBox="-19 -10 38 28" aria-hidden="true" focusable="false">
-      <g className={`cpj-block--${status}`}><BlockFaces /></g>
-    </svg>
-  )
-}
-
-/* One isometric block: three visible faces plus four hollow cells, the same
-   construction as the mockup. Colour comes from the CSS classes on <g>, so
-   every fill here is a token-backed CSS variable and never a literal. */
-function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
+/* THE block drawing, in its own units — the shadow, the three faces, and the
+   four hollow cells with their lips and grain edges. The map and the legend
+   both render THIS and nothing else, so a legend swatch is the same picture
+   seen smaller rather than a simplified stand-in that can drift from it.
+   Colour comes from the .cpj-block--<status> class on a wrapping <g>. */
+function BlockDrawing() {
   const project = (u, v) => [-18 + 26 * u + 10 * v, -2 - 7 * u + 8 * v]
   const pts = (arr) => arr.map(p => p.join(',')).join(' ')
 
@@ -120,6 +99,39 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
     }
   }
 
+  return (
+    <>
+      <ellipse className="cpj-shadow" cx={1} cy={17} rx={18} ry={2} />
+      <polygon className="cpj-face cpj-face--side"  points="-18,-2 -8,6 -8,17 -18,9" />
+      <polygon className="cpj-face cpj-face--front" points="-8,6 18,-1 18,10 -8,17" />
+      <polygon className="cpj-face cpj-face--top"   points="-18,-2 8,-9 18,-1 -8,6" />
+      {cells.map(({ a, b, c, d }, i) => (
+        <g key={i}>
+          <polygon className="cpj-cell"      points={pts([a, b, c, d])} />
+          <polygon className="cpj-cell-lip"  points={pts([a, b, [b[0], b[1] + 1.25], [a[0], a[1] + 1.25]])} />
+          <path    className="cpj-cell-edge" d={`M${a[0]} ${a[1]} L${b[0]} ${b[1]} L${c[0]} ${c[1]}`} fill="none" />
+        </g>
+      ))}
+    </>
+  )
+}
+
+/* Legend swatch: the map's block, unchanged, seen smaller. The viewBox is the
+   drawing's FULL extent — the faces span x ∓18 and y −9…17, and the shadow
+   reaches x 19 and y 19 — so nothing is cropped and the proportions are the
+   map's exactly. Size comes from the SVG's CSS box alone, which takes the
+   strokes down with it. */
+function MiniBlock({ status }) {
+  return (
+    <svg className="cpj-mini" viewBox="-19 -10 38 30" aria-hidden="true" focusable="false">
+      <g className={`cpj-block--${status}`}><BlockDrawing /></g>
+    </svg>
+  )
+}
+
+/* One block on the map: the shared drawing, placed and scaled, wrapped in
+   the interaction layer — hit area, role, keyboard, and the live dot. */
+function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
   return (
     <g
       /* data-cpj-hold marks everything that must NOT clear the selection;
@@ -145,15 +157,7 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
       <rect className="cpj-hit" x={x - 22} y={y - 14} width={44} height={30} rx={8} />
 
       <g transform={`translate(${x} ${y}) scale(${scale})`}>
-        <ellipse className="cpj-shadow" cx={1} cy={17} rx={18} ry={2} />
-        <BlockFaces />
-        {cells.map(({ a, b, c, d }, i) => (
-          <g key={i}>
-            <polygon className="cpj-cell"      points={pts([a, b, c, d])} />
-            <polygon className="cpj-cell-lip"  points={pts([a, b, [b[0], b[1] + 1.25], [a[0], a[1] + 1.25]])} />
-            <path    className="cpj-cell-edge" d={`M${a[0]} ${a[1]} L${b[0]} ${b[1]} L${c[0]} ${c[1]}`} fill="none" />
-          </g>
-        ))}
+        <BlockDrawing />
       </g>
 
       {/* The live dot — only on a step actually in progress, so "where are

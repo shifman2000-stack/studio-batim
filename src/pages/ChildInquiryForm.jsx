@@ -22,7 +22,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
-import logoUrl from '../logo-A-stacked.svg'
+import LogoStacked from '../components/LogoStacked'
 
 /* ID scans go into the SAME bucket the app's documents live in, under a
    `child-inquiries/` prefix — the anon INSERT storage policy
@@ -309,7 +309,7 @@ export default function ChildInquiryForm() {
   if (status === 'not_found') {
     return (
       <div style={styles.page}>
-        <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+        <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
         <div style={styles.stateBox}>
           <p style={styles.stateMsg}>הקישור אינו תקין.</p>
         </div>
@@ -320,7 +320,7 @@ export default function ChildInquiryForm() {
   if (status === 'success') {
     return (
       <div style={styles.page}>
-        <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+        <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
         <div style={styles.stateBox}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7a9478"
@@ -339,7 +339,7 @@ export default function ChildInquiryForm() {
 
   return (
     <div style={styles.page} dir="rtl">
-      <img src={logoUrl} alt="סטודיו בתים" style={styles.logo} />
+      <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
 
       <form onSubmit={handleSubmit} style={styles.form}>
 

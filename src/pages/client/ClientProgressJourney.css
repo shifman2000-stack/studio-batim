@@ -1,0 +1,442 @@
+/* ══════════════════════════════════════════════════════════════════════
+   שלבי התקדמות — journey map (ClientProgressJourney.jsx)
+
+   Colour comes ONLY from theme.css tokens; there is not a hex value below.
+   Where the isometric block needs a third shade for its shaded face, it is
+   mixed between two EXISTING tokens rather than introducing a new one.
+
+   State → token:
+     בעבודה (current) → --sage / --sage-dark            (the app's accent)
+     הושלם  (done)    → --sand                           (solid but quieter)
+     בהמשך  (future)  → --bg-page + --border-default     (hollow outline)
+
+   RTL: this screen is dir="rtl", where physical `left` paints on the visual
+   RIGHT. Everything below uses logical properties.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.cpj {
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+/* ── Masthead ── */
+.cpj-mast {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cpj-brand {
+  letter-spacing: 2px;
+}
+
+.cpj-title {
+  font-family: var(--font-body);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.25;
+  margin-block: 14px 4px;
+}
+
+.cpj-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Empty gantt_state — information, not an error. */
+.cpj-pending-note {
+  margin-block: 12px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-deep);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* The headline names EVERY step in progress, so on a project with two of
+   them it is a full sentence and has to be free to wrap. Nothing here
+   clamps or truncates: no nowrap, no line-clamp, no ellipsis. */
+.cpj-current {
+  margin-block: 14px 8px;
+  padding: 10px 12px;
+  background: var(--bg-surface-deep);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  line-height: 1.55;
+  display: flex;
+  gap: 8px;
+  /* start, not center: on two lines the dot belongs beside the first line
+     rather than floating in the middle of the sentence. */
+  align-items: flex-start;
+}
+
+.cpj-current::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--sage);
+  border-radius: 50%;
+  flex: none;
+  /* centres the dot on the first line's cap height */
+  margin-block-start: 7px;
+}
+
+/* ── Track headings ── */
+.cpj-headings {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-block-start: 8px;
+}
+
+.cpj-phase {
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  background: none;
+  border: 0;
+  padding: 4px 1px;
+  min-height: 46px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cpj-phase small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.cpj-phase[aria-pressed="true"] {
+  color: var(--sage-dark);
+}
+
+.cpj-phase:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── The map ── */
+.cpj-map-wrap {
+  inline-size: 100%;
+  min-inline-size: 0;
+  /* Positioning context for the step labels, which are HTML laid over the
+     SVG rather than SVG <text>. See the note at their JSX. */
+  position: relative;
+}
+
+.cpj-map {
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.cpj-rail {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+
+/* Every cross-track arrow is drawn at all times. The quiet style has to stay
+   legible on its own — it is the resting state of the map, not a hint, and
+   --border-strong at 1px was too faint for the direction to read at a
+   glance. --text-secondary is a solid grey that still sits well behind the
+   accent. */
+.cpj-edge {
+  stroke: var(--text-secondary);
+  stroke-width: 1.3;
+  stroke-dasharray: 4 3;
+}
+
+.cpj-arrow-head {
+  fill: var(--text-secondary);
+}
+
+/* …and an arrow touching the selected step steps forward: the accent, twice
+   the weight, solid rather than dashed. Painted last by the JSX ordering. */
+.cpj-edge--on {
+  stroke: var(--sage-dark);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.cpj-arrow-head--on {
+  fill: var(--sage-dark);
+}
+
+/* ── Blocks ── */
+.cpj-block {
+  cursor: pointer;
+}
+
+.cpj-hit {
+  fill: transparent;
+}
+
+.cpj-block:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 1px;
+}
+
+.cpj-shadow {
+  fill: var(--border-strong);
+  opacity: 0.14;
+}
+
+.cpj-face,
+.cpj-cell,
+.cpj-cell-lip {
+  stroke-linejoin: round;
+}
+
+.cpj-cell-edge {
+  stroke-width: 0.45;
+}
+
+/* בהמשך — hollow, so an untouched step never reads as progress. */
+.cpj-block--future .cpj-face {
+  fill: var(--bg-page);
+  stroke: var(--border-default);
+  stroke-width: 0.65;
+}
+.cpj-block--future .cpj-face--front { fill: var(--bg-surface-deep); }
+.cpj-block--future .cpj-cell        { fill: var(--border-default); opacity: 0.5; }
+.cpj-block--future .cpj-cell-lip    { fill: var(--bg-surface-deep); }
+.cpj-block--future .cpj-cell-edge   { stroke: var(--border-default); }
+.cpj-block--future .cpj-shadow      { opacity: 0.06; }
+
+/* הושלם — solid sand: finished, and deliberately quieter than the accent.
+   The plain token is declared FIRST as a fallback: an engine without
+   color-mix() drops that declaration at parse time and keeps the solid
+   fill, so a block is never left hollow — it only loses the third shade. */
+.cpj-block--done .cpj-face--top   { fill: var(--sand); stroke: none; }
+.cpj-block--done .cpj-face--front { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-face--side  { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-cell        { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-lip    { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-edge   { stroke: var(--sand); stroke: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+
+/* בעבודה — the app's sage, the loudest thing on the map. */
+.cpj-block--current .cpj-face--top   { fill: var(--sage); stroke: none; }
+.cpj-block--current .cpj-face--front { fill: var(--sage-dark); stroke: none; }
+.cpj-block--current .cpj-face--side  { fill: var(--sage-dark); fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); stroke: none; }
+.cpj-block--current .cpj-cell        { fill: var(--sage-dark); fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+.cpj-block--current .cpj-cell-lip    { fill: var(--sage-dark); }
+.cpj-block--current .cpj-cell-edge   { stroke: var(--sage-dark); stroke: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+
+/* The live dot — a step actually in progress, marked whatever is selected. */
+.cpj-live {
+  fill: var(--sage);
+  stroke: var(--bg-page);
+  stroke-width: 1.2;
+}
+
+/* Selection is a FRAME, never a fill. Tinting the shadow sage was the old
+   signal, and on a project whose gantt_state holds no 'current' step the
+   auto-selected FUTURE block then read as an active block that had failed
+   to paint: hollow faces over a green smudge. A frame cannot be read as a
+   status, so the two never collide again. */
+.cpj-ring {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 1.5;
+}
+
+.cpj-block--selected .cpj-shadow {
+  opacity: 0.22;
+}
+
+/* ── Step names ──
+   HTML over the SVG. Two lines at most; a longer name is clipped rather
+   than allowed to push into the row below, because the row pitch is what
+   keeps labels off the next block. */
+.cpj-label {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+  cursor: pointer;
+
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* Hebrew labels that contain digits ("טופס 4 – תעודת גמר") otherwise get
+     their clamp ellipsis on the wrong side. */
+  unicode-bidi: plaintext;
+}
+
+.cpj-label--done    { color: var(--text-primary); }
+.cpj-label--future  { color: var(--text-secondary); }
+.cpj-label--current { color: var(--sage-dark); font-weight: 500; }
+.cpj-label--selected { text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Legend ── */
+.cpj-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-block: 6px 16px;
+}
+
+.cpj-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 5px;
+  border-radius: 2px;
+}
+
+.cpj-swatch--done    { background: var(--sand); }
+.cpj-swatch--current { background: var(--sage); border-radius: 50%; }
+.cpj-swatch--future  { background: var(--bg-page); border: 1px solid var(--border-default); }
+
+/* ── Detail panel ── */
+.cpj-panel {
+  background: var(--bg-surface-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 14px 12px 8px;
+}
+
+/* Tells the reader the map is interactive before they have to guess. */
+.cpj-panel-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.cpj-panel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 2px;
+  margin-block-end: 10px;
+}
+
+.cpj-meta   { font-size: 11px; color: var(--text-secondary); }
+.cpj-status { font-size: 11px; color: var(--sage-dark); }
+.cpj-status[data-status="future"] { color: var(--text-secondary); }
+.cpj-status[data-status="done"]   { color: var(--badge-pending-text); }
+
+.cpj-browse {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
+}
+
+.cpj-nav {
+  font: inherit;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.cpj-nav:disabled { opacity: 0.25; cursor: default; }
+.cpj-nav:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+
+.cpj-title-wrap {
+  text-align: center;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.cpj-step-title {
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.cpj-position { font-size: 11px; color: var(--text-secondary); }
+
+.cpj-note {
+  margin-block: 10px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--badge-active-bg);
+  color: var(--badge-active-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cpj-relations {
+  margin-block-start: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.cpj-relation-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 4px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.cpj-relation-label { font-size: 11px; color: var(--text-secondary); }
+
+.cpj-relation-links {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 9px;
+}
+
+.cpj-relation {
+  font: inherit;
+  padding-block: 8px;
+  min-height: 34px;
+  text-align: start;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 4px;
+}
+
+.cpj-relation:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+.cpj-relation-empty { color: var(--text-secondary); }
+
+.cpj-return {
+  display: block;
+  margin: 4px auto 0;
+  min-height: 40px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cpj-return:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+
+.cpj-foot {
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-block-start: 12px;
+}

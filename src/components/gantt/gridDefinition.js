@@ -17,7 +17,7 @@ export const GANTT_GRID = [
   { col0: { id: 'tlat_meimad',    label: 'תלת מימד' },                                       col1: null, col2: null, col3: null },
   { col0: { id: 'ishur_skitsa',   label: 'אישור סקיצה סופי',      arrowTo: 'col1' },         col1: { id: 'garmushka',          label: 'הכנת גרמושקה' },                     col2: null, col3: null },
   { col0: null, col1: { id: 'ishur_yishuv',    label: 'אישור ישוב' },                        col2: null, col3: null },
-  { col0: null, col1: { id: 'ptikha_bakasha',  label: 'פתיחה בקשה להיתר' },                 col2: null, col3: null },
+  { col0: null, col1: { id: 'ptikha_bakasha',  label: 'פתיחת בקשה להיתר' },                 col2: null, col3: null },
   { col0: null, col1: { id: 'bkira_merchavit', label: 'בקרה מרחבית' },                       col2: null, col3: null },
   { col0: null, col1: { id: 'ishur_risuy',     label: 'אישור רישוי',      arrowTo: 'col2' }, col2: { id: 'hachanat_tochniot', label: 'הכנת תוכניות לביצוע' },             col3: null },
   { col0: null, col1: { id: 'bkarat_techn',    label: 'בקרת תכן' },                          col2: { id: 'pgisha_ishur',       label: 'פגישת אישור' },                      col3: null },

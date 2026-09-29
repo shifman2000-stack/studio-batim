@@ -14,32 +14,32 @@
    RIGHT. Everything below uses logical properties.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── Column layout ──
+   index.css pins body and #root to overflow:hidden, so nothing here can
+   fall back on the page scrolling. The portal's content frame becomes a
+   flex column for this tab (.cp-content--fixed), and these two carry that
+   column down to .cpj-scroll, which is the screen's ONE scroll container.
+   min-height:0 at every level, or a flex child refuses to shrink and the
+   map runs off the bottom instead of scrolling. */
+.cpj-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-block-end: 0;
+}
+
 .cpj {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-body);
   color: var(--text-primary);
 }
 
-/* ── Masthead ── */
-.cpj-mast {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.cpj-brand {
-  letter-spacing: 2px;
-}
-
-.cpj-title {
-  font-family: var(--font-body);
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 1.25;
-  margin-block: 14px 4px;
-}
-
 .cpj-summary {
+  flex: none;
   font-size: 12px;
   color: var(--text-secondary);
   margin: 0;
@@ -47,7 +47,8 @@
 
 /* Empty gantt_state — information, not an error. */
 .cpj-pending-note {
-  margin-block: 12px 0;
+  flex: none;
+  margin-block: 10px 0;
   padding: 8px 10px;
   border-radius: var(--radius-md);
   background: var(--bg-surface-deep);
@@ -55,51 +56,49 @@
   font-size: 12px;
 }
 
-/* The headline names EVERY step in progress, so on a project with two of
-   them it is a full sentence and has to be free to wrap. Nothing here
-   clamps or truncates: no nowrap, no line-clamp, no ellipsis. */
-.cpj-current {
-  margin-block: 14px 8px;
-  padding: 10px 12px;
-  background: var(--bg-surface-deep);
-  border-radius: var(--radius-lg);
-  font-size: 13px;
-  line-height: 1.55;
-  display: flex;
-  gap: 8px;
-  /* start, not center: on two lines the dot belongs beside the first line
-     rather than floating in the middle of the sentence. */
-  align-items: flex-start;
-}
-
-.cpj-current::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  background: var(--sage);
-  border-radius: 50%;
+/* ── Legend — at the top, under the header ──
+   The swatches are the real isometric block at 24px, drawn from the same
+   polygons and the same state classes as the map, so a swatch cannot drift
+   from what it describes. */
+.cpj-legend {
   flex: none;
-  /* centres the dot on the first line's cap height */
-  margin-block-start: 7px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-block: 10px 2px;
 }
 
-/* ── Track headings ── */
+.cpj-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cpj-mini {
+  width: 24px;
+  height: 18px;
+  flex: none;
+  overflow: visible;
+}
+
+/* ── Track headings ──
+   Plain text, not buttons: tapping anything that is not a block, a label or
+   the bubble clears the selection, and a heading that selected a step would
+   contradict that. */
 .cpj-headings {
+  flex: none;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  margin-block-start: 8px;
+  margin-block-start: 4px;
 }
 
 .cpj-phase {
-  font: inherit;
   font-size: 12px;
   text-align: center;
-  background: none;
-  border: 0;
   padding: 4px 1px;
-  min-height: 46px;
   color: inherit;
-  cursor: pointer;
 }
 
 .cpj-phase small {
@@ -108,23 +107,20 @@
   color: var(--text-secondary);
 }
 
-.cpj-phase[aria-pressed="true"] {
-  color: var(--sage-dark);
+/* ── The map — the only thing on this screen that scrolls ── */
+.cpj-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-.cpj-phase:focus-visible {
-  outline: 2px solid var(--sage);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* ── The map ── */
-.cpj-map-wrap {
-  inline-size: 100%;
-  min-inline-size: 0;
-  /* Positioning context for the step labels, which are HTML laid over the
-     SVG rather than SVG <text>. See the note at their JSX. */
+/* Positioning context for the labels and the bubble, which are HTML laid
+   over the SVG. Both scroll with the map because they live in here. */
+.cpj-map-inner {
   position: relative;
+  inline-size: 100%;
 }
 
 .cpj-map {
@@ -232,19 +228,14 @@
   stroke-width: 1.2;
 }
 
-/* Selection is a FRAME, never a fill. Tinting the shadow sage was the old
-   signal, and on a project whose gantt_state holds no 'current' step the
-   auto-selected FUTURE block then read as an active block that had failed
-   to paint: hollow faces over a green smudge. A frame cannot be read as a
-   status, so the two never collide again. */
-.cpj-ring {
-  fill: none;
-  stroke: var(--sage);
-  stroke-width: 1.5;
-}
-
-.cpj-block--selected .cpj-shadow {
-  opacity: 0.22;
+/* ── Selection ──
+   A soft wash behind the block AND its label, no border: selection is a
+   change of ground, never of the block's own colour, so it can never be
+   mistaken for a status. Drawn first in the SVG, so the rails, arrows and
+   blocks sit on top of it and the HTML labels sit on top of those. */
+.cpj-sel {
+  fill: var(--bg-hover);
+  stroke: none;
 }
 
 /* ── Step names ──
@@ -253,6 +244,7 @@
    keeps labels off the next block. */
 .cpj-label {
   position: absolute;
+  z-index: 1;
   margin: 0;
   padding: 0;
   border: 0;
@@ -275,168 +267,79 @@
 .cpj-label--done    { color: var(--text-primary); }
 .cpj-label--future  { color: var(--text-secondary); }
 .cpj-label--current { color: var(--sage-dark); font-weight: 500; }
-.cpj-label--selected { text-decoration: underline; text-underline-offset: 2px; }
+.cpj-label--selected { font-weight: 600; }
 
-/* ── Legend ── */
-.cpj-legend {
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-block: 6px 16px;
-}
-
-.cpj-swatch {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-inline-end: 5px;
-  border-radius: 2px;
-}
-
-.cpj-swatch--done    { background: var(--sand); }
-.cpj-swatch--current { background: var(--sage); border-radius: 50%; }
-.cpj-swatch--future  { background: var(--bg-page); border: 1px solid var(--border-default); }
-
-/* ── Detail panel ── */
-.cpj-panel {
-  background: var(--bg-surface-deep);
+/* ── The step bubble ──
+   Floats beside the selected block, inside the scrolled content so it
+   travels with it. Placement is computed in JS from its measured height;
+   everything here is appearance only. */
+.cpj-bubble {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 8px 10px 9px;
+  padding-inline-end: 26px;
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 14px 12px 8px;
-}
-
-/* Tells the reader the map is interactive before they have to guess. */
-.cpj-panel-hint {
-  margin: 0 0 10px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 14px var(--border-strong);
   font-size: 11px;
   line-height: 1.5;
-  color: var(--text-secondary);
-  text-align: center;
-}
-
-.cpj-panel-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  padding-inline: 2px;
-  margin-block-end: 10px;
-}
-
-.cpj-meta   { font-size: 11px; color: var(--text-secondary); }
-.cpj-status { font-size: 11px; color: var(--sage-dark); }
-.cpj-status[data-status="future"] { color: var(--text-secondary); }
-.cpj-status[data-status="done"]   { color: var(--badge-pending-text); }
-
-.cpj-browse {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  align-items: center;
-  gap: 4px;
-}
-
-.cpj-nav {
-  font: inherit;
-  border: 1px solid var(--border-default);
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
-  background: transparent;
-  color: inherit;
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.cpj-nav:disabled { opacity: 0.25; cursor: default; }
-.cpj-nav:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
-
-.cpj-title-wrap {
-  text-align: center;
-  min-height: 62px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.cpj-step-title {
-  font-family: var(--font-body);
-  font-size: 18px;
-  line-height: 1.35;
-  font-weight: 500;
-  margin: 0 0 4px;
-}
-
-.cpj-position { font-size: 11px; color: var(--text-secondary); }
-
-.cpj-note {
-  margin-block: 10px 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  background: var(--badge-active-bg);
-  color: var(--badge-active-text);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.cpj-relations {
-  margin-block-start: 10px;
-  padding-block-start: 10px;
-  border-block-start: 1px solid var(--border-subtle);
-}
-
-.cpj-relation-row {
-  display: grid;
-  grid-template-columns: 74px 1fr;
-  gap: 4px;
-  align-items: baseline;
-  font-size: 12px;
-}
-
-.cpj-relation-label { font-size: 11px; color: var(--text-secondary); }
-
-.cpj-relation-links {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 9px;
-}
-
-.cpj-relation {
-  font: inherit;
-  padding-block: 8px;
-  min-height: 34px;
   text-align: start;
+}
+
+.cpj-bubble-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cpj-bubble-row {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+}
+
+.cpj-bubble-key {
+  color: var(--text-secondary);
+}
+
+.cpj-bubble-link {
+  font: inherit;
+  padding: 0;
   border: 0;
   background: none;
-  color: inherit;
-  font-size: 12px;
+  color: var(--text-primary);
   cursor: pointer;
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
-  text-underline-offset: 4px;
+  text-underline-offset: 3px;
 }
 
-.cpj-relation:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
-.cpj-relation-empty { color: var(--text-secondary); }
+.cpj-bubble-link:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+}
 
-.cpj-return {
-  display: block;
-  margin: 4px auto 0;
-  min-height: 40px;
+/* inset-inline-end is the visual LEFT here — the far corner from the text,
+   which starts on the right. */
+.cpj-bubble-x {
+  position: absolute;
+  inset-inline-end: 2px;
+  inset-block-start: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: 0;
   background: none;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 11px;
+  font-size: 17px;
+  line-height: 1;
   cursor: pointer;
 }
 
-.cpj-return:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
-
-.cpj-foot {
-  text-align: center;
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin-block-start: 12px;
+.cpj-bubble-x:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 1px;
 }

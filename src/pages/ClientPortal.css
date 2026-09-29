@@ -243,6 +243,40 @@
   display: none;
 }
 
+/* שלבי התקדמות owns its own scrolling: its MAP is the single scroll
+   container, and the title, legend and track headings above it have to stay
+   put. So this frame stops scrolling and becomes a column that the screen's
+   own root continues — see the layout note atop ClientProgressJourney.css.
+   min-height:0 is what lets that child actually shrink instead of pushing
+   the map off the bottom. */
+.cp-content--fixed {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cp-content--fixed > .cp-screen-header {
+  flex: none;
+}
+
+/* The project name beside the tab title, separated by a small filled dot.
+   vertical-align:middle centres the dot on the text's x-height rather than
+   sitting it on the baseline. */
+.cp-screen-header-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-inline: 9px 7px;
+  border-radius: 50%;
+  background: var(--sage);
+  vertical-align: middle;
+}
+
+.cp-screen-header-project {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
 /* ── Drawer overlay (dim layer) ── */
 .cp-drawer-overlay {
   position: fixed;

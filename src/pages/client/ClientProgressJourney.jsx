@@ -142,7 +142,7 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
       <title>{`${point.label} — ${STATUS_LABEL[status]}`}</title>
       {/* Generous invisible hit area — the drawn block is ~36×26 CSS px and
           a finger is not. */}
-      <rect className="cpj-hit" x={x - 22} y={y - 14} width={44} height={30} />
+      <rect className="cpj-hit" x={x - 22} y={y - 14} width={44} height={30} rx={8} />
 
       <g transform={`translate(${x} ${y}) scale(${scale})`}>
         <ellipse className="cpj-shadow" cx={1} cy={17} rx={18} ry={2} />

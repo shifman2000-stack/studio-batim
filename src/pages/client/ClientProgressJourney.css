@@ -21,11 +21,21 @@
    column down to .cpj-scroll, which is the screen's ONE scroll container.
    min-height:0 at every level, or a flex child refuses to shrink and the
    map runs off the bottom instead of scrolling. */
-.cpj-page {
+/* .cp-page AND .cpj-page, i.e. specificity (0,2,0), deliberately: this has
+   to beat BOTH of ClientPortal.css's own rules — the base
+   `.cp-page { padding: 12px 12px 32px }` and the
+   `@media (max-width: 380px) { .cp-page { padding: 10px 8px 28px } }`.
+   Matching them on specificity alone loses to whichever stylesheet is
+   imported last, which is not a thing this file gets to decide. */
+.cp-page.cpj-page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* The map is the content, and it wants every pixel: four tracks across a
+     360px phone. 8px is the smallest gutter that still keeps the outermost
+     track's label off the screen edge. */
+  padding-inline: 8px;
   padding-block-end: 0;
 }
 
@@ -34,6 +44,12 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* .cp-container carries `margin: 0 auto`, and auto margins on a FLEX ITEM
+     beat align-items: stretch — so this box was shrinking to its own content
+     (286px inside a 360px phone) instead of filling the row. An explicit
+     100% makes the auto margins resolve to 0 here while max-width: 600px
+     still caps and centres it on a wide screen. */
+  inline-size: 100%;
   font-family: var(--font-body);
   color: var(--text-primary);
 }
@@ -68,6 +84,11 @@
   font-size: 11px;
   color: var(--text-secondary);
   margin-block: 10px 2px;
+  /* Same background token, radius and padding the removed "על מה עובדים
+     עכשיו" line carried, so the top of the screen keeps one soft band. */
+  padding: 10px 12px;
+  background: var(--bg-surface-deep);
+  border-radius: var(--radius-lg);
 }
 
 .cpj-legend span {
@@ -114,6 +135,14 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Hidden, not disabled: touch, wheel and trackpad all still scroll. It
+     also stops the gutter eating width the tracks need — clientWidth, which
+     the map measures itself from, comes back the full width. */
+  scrollbar-width: none;
+}
+
+.cpj-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* Positioning context for the labels and the bubble, which are HTML laid
@@ -170,9 +199,35 @@
   fill: transparent;
 }
 
-.cpj-block:focus-visible {
-  outline: 2px solid var(--sage);
-  outline-offset: 1px;
+/* ── Focus ──
+   Selection on this screen is the grey wash and NOTHING else, so no
+   focusable thing here may draw a ring. A pointer tap must leave no mark at
+   all; keyboard focus gets the SAME grey ground the selection uses, so the
+   two read as one idea rather than two competing frames.
+
+   The blanket `outline: none` on :focus is deliberate — Chrome's own
+   heuristics do not treat an SVG <g role="button"> the way they treat a
+   <button>, so a tap on a block was drawing the UA's dark ring. The
+   :focus-visible rules below put the keyboard affordance back. */
+.cpj-block:focus,
+.cpj-label:focus,
+.cpj-bubble-link:focus,
+.cpj-bubble-x:focus {
+  outline: none;
+}
+
+/* The <g> cannot take a background, so its own invisible hit rect becomes
+   the wash — already rounded via rx in the JSX, invisible until filled. */
+.cpj-block:focus-visible .cpj-hit {
+  fill: var(--bg-hover);
+}
+
+.cpj-label:focus-visible,
+.cpj-bubble-link:focus-visible,
+.cpj-bubble-x:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
 }
 
 .cpj-shadow {
@@ -316,10 +371,6 @@
   text-underline-offset: 3px;
 }
 
-.cpj-bubble-link:focus-visible {
-  outline: 2px solid var(--sage);
-  outline-offset: 2px;
-}
 
 /* inset-inline-end is the visual LEFT here — the far corner from the text,
    which starts on the right. */
@@ -339,7 +390,3 @@
   cursor: pointer;
 }
 
-.cpj-bubble-x:focus-visible {
-  outline: 2px solid var(--sage);
-  outline-offset: 1px;
-}

@@ -259,6 +259,14 @@
   flex: none;
 }
 
+/* Flush to the inline-start edge — the visual RIGHT here — rather than
+   anywhere near the middle. `start` rather than `right` so it follows the
+   direction instead of the physical box. The back button is untouched: it
+   stays the same static flex item it is on every other tab. */
+.cp-content--fixed .cp-screen-header-title {
+  text-align: start;
+}
+
 /* The project name beside the tab title, separated by a small filled dot.
    vertical-align:middle centres the dot on the text's x-height rather than
    sitting it on the baseline. */

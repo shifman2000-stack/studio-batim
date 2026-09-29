@@ -53,6 +53,16 @@ const MAX_BLOCK_W = 38
 const LABEL_TOP   = 18      // from the block's centre to the label's top edge
 const LABEL_LINE  = 11      // must match .cpj-label's line-height
 
+/* An arrow runs between two block CENTRES, but it must not be DRAWN between
+   them: the blocks paint after the edges, so a line ending at the target's
+   centre has its last ~15px — arrowhead included — buried under the block.
+   Both ends are therefore pulled back by the block's painted half-width plus
+   a gap, which puts the head's tip in clear air just short of the edge.
+   BLOCK_HALF_U is in the block's own units (its faces span ∓18), so it has
+   to be multiplied by the same scale the block is drawn at. */
+const BLOCK_HALF_U = 18
+const HEAD_GAP     = 4      // clear air between the head's tip and the block
+
 const STATUS_LABEL = { done: 'הושלם', current: 'בעבודה', future: 'בהמשך' }
 
 /* Hebrew list: "א" · "א וב" · "א, ב וג". The ו attaches to the LAST item
@@ -217,6 +227,7 @@ export default function ClientProgressJourney() {
   /* Labels are as wide as the track allows, less a gutter, so two labels in
      the same row cannot touch. */
   const labelW = Math.max(52, step - 6)
+  const edgeTrim = BLOCK_HALF_U * scale + HEAD_GAP
 
   /* BELOW the block, centred. The two side placements were built and
      photographed as well: at 390px a track is ~89px and the block ~38px, so
@@ -331,13 +342,19 @@ export default function ClientProgressJourney() {
                 {/* A marker is painted from its OWN subtree, not from the
                     line that references it, so a highlighted arrow needs a
                     second marker rather than a second class on the line. */}
-                <marker id="cpj-arrow" viewBox="0 0 6 6" refX={5} refY={3}
-                  markerWidth={7} markerHeight={7} markerUnits="userSpaceOnUse" orient="auto">
-                  <path className="cpj-arrow-head" d="M0 0 L6 3 L0 6 Z" />
+                {/* refX sits on the TIP (viewBox x = 7), so the head's point
+                    lands exactly on the trimmed end of the line rather than
+                    overshooting it. userSpaceOnUse keeps the head the same
+                    size whatever the line's stroke-width, and sized in user
+                    units it shrinks with the map inside the desktop
+                    overlay's scale(0.83) — 9 → ~7.5px, 11 → ~9px. */}
+                <marker id="cpj-arrow" viewBox="0 0 7 6" refX={7} refY={3}
+                  markerWidth={9} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
+                  <path className="cpj-arrow-head" d="M0 0 L7 3 L0 6 Z" />
                 </marker>
-                <marker id="cpj-arrow-on" viewBox="0 0 6 6" refX={5} refY={3}
-                  markerWidth={8} markerHeight={8} markerUnits="userSpaceOnUse" orient="auto">
-                  <path className="cpj-arrow-head cpj-arrow-head--on" d="M0 0 L6 3 L0 6 Z" />
+                <marker id="cpj-arrow-on" viewBox="0 0 7 6" refX={7} refY={3}
+                  markerWidth={11} markerHeight={11} markerUnits="userSpaceOnUse" orient="auto">
+                  <path className="cpj-arrow-head cpj-arrow-head--on" d="M0 0 L7 3 L0 6 Z" />
                 </marker>
               </defs>
 
@@ -350,11 +367,18 @@ export default function ClientProgressJourney() {
                 const a = journey.byId[edge.from]
                 const b = journey.byId[edge.to]
                 if (!a || !b) return null
+                /* Pull both ends back off the blocks. Written as a unit
+                   vector rather than "subtract from x", because the grid is
+                   free to grow an arrow that is not horizontal. */
+                const ax = xOf(a.trackIndex), ay = yOf(a.row)
+                const bx = xOf(b.trackIndex), by = yOf(b.row)
+                const len = Math.hypot(bx - ax, by - ay) || 1
+                const ux = (bx - ax) / len, uy = (by - ay) / len
                 return (
                   <line key={`${edge.from}->${edge.to}`}
                     className={'cpj-edge' + (edge.active ? ' cpj-edge--on' : '')}
-                    x1={xOf(a.trackIndex)} y1={yOf(a.row)}
-                    x2={xOf(b.trackIndex)} y2={yOf(b.row)}
+                    x1={ax + ux * edgeTrim} y1={ay + uy * edgeTrim}
+                    x2={bx - ux * edgeTrim} y2={by - uy * edgeTrim}
                     markerEnd={edge.active ? 'url(#cpj-arrow-on)' : 'url(#cpj-arrow)'} />
                 )
               })}

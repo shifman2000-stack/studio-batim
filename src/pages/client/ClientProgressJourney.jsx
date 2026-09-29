@@ -55,6 +55,14 @@ const LABEL_LINE  = 11      // must match .cpj-label's line-height
 
 const STATUS_LABEL = { done: 'הושלם', current: 'בעבודה', future: 'בהמשך' }
 
+/* Hebrew list: "א" · "א וב" · "א, ב וג". The ו attaches to the LAST item
+   only, and each item arrives carrying its own lead-in word ("בשלב …",
+   "על …"), so the same helper builds both levels of the sentence. */
+function joinHebrew(parts) {
+  if (parts.length <= 1) return parts[0] || ''
+  return `${parts.slice(0, -1).join(', ')} ו${parts[parts.length - 1]}`
+}
+
 /* One isometric block: three visible faces plus four hollow cells, the same
    construction as the mockup. Colour comes from the CSS classes on <g>, so
    every fill here is a token-backed CSS variable and never a literal. */
@@ -227,6 +235,33 @@ export default function ClientProgressJourney() {
     if (next) setSelectedId(next.pointId)
   }
 
+  /* EVERY step in progress, not just the first. gantt_state can legitimately
+     mark several 'current' at once — גד"ש נגבה does — and the headline is the
+     one place that should say so out loud.
+
+     Ordered by the SAME rule pickCurrentPoint() uses, grid row then track, so
+     the sentence and the screen's "current task" never disagree about what
+     comes first. pickCurrentPoint() still owns that single point: it drives
+     the initial selection and the "חזרה למשימה הנוכחית" button, and this list
+     feeds nothing but the sentence. */
+  const currentPoints = journey.points
+    .filter(p => statusOf(state, p.pointId) === 'current')
+    .sort((a, b) => a.row - b.row || a.trackIndex - b.trackIndex)
+
+  /* Two steps in one track name that track once — "בשלב תכנון על X ועל Y" —
+     so grouping is by track, keyed on first appearance to keep the order. */
+  const currentGroups = []
+  for (const p of currentPoints) {
+    const group = currentGroups.find(g => g.track === p.track)
+    if (group) group.labels.push(p.label)
+    else currentGroups.push({ track: p.track, trackLabel: p.trackLabel, labels: [p.label] })
+  }
+
+  const nowLine = currentGroups.length
+    ? 'על מה עובדים עכשיו: ' + joinHebrew(currentGroups.map(
+        g => `בשלב ${g.trackLabel} ${joinHebrew(g.labels.map(l => `על ${l}`))}`))
+    : null
+
   /* ALL cross-track arrows, always. The dependencies between tracks are the
      one thing the map says that a list cannot, so hiding them until a
      related block happens to be selected hid the point of the drawing.
@@ -257,11 +292,7 @@ export default function ClientProgressJourney() {
           <p className="cpj-pending-note">לוח ההתקדמות יתעדכן בקרוב</p>
         )}
 
-        {current && (
-          <div className="cpj-current">
-            עכשיו ב{current.trackLabel} · {current.label}
-          </div>
-        )}
+        {nowLine && <div className="cpj-current">{nowLine}</div>}
 
         {/* Track headings double as jumps into each track. */}
         <div className="cpj-headings" role="group" aria-label="בחירת מסלול">
@@ -384,6 +415,7 @@ export default function ClientProgressJourney() {
 
         {selected && (
           <section className="cpj-panel" aria-label="פרטי השלב הנבחר">
+            <p className="cpj-panel-hint">לחץ על אבן בנייה לקבלת פרוט ותלויות של השלב</p>
             <div className="cpj-panel-top">
               <span className="cpj-meta">{selected.trackLabel}</span>
               <span className="cpj-status" data-status={selStatus}>{STATUS_LABEL[selStatus]}</span>

@@ -55,15 +55,21 @@
   font-size: 12px;
 }
 
+/* The headline names EVERY step in progress, so on a project with two of
+   them it is a full sentence and has to be free to wrap. Nothing here
+   clamps or truncates: no nowrap, no line-clamp, no ellipsis. */
 .cpj-current {
   margin-block: 14px 8px;
   padding: 10px 12px;
   background: var(--bg-surface-deep);
   border-radius: var(--radius-lg);
   font-size: 13px;
+  line-height: 1.55;
   display: flex;
   gap: 8px;
-  align-items: center;
+  /* start, not center: on two lines the dot belongs beside the first line
+     rather than floating in the middle of the sentence. */
+  align-items: flex-start;
 }
 
 .cpj-current::before {
@@ -73,6 +79,8 @@
   background: var(--sage);
   border-radius: 50%;
   flex: none;
+  /* centres the dot on the first line's cap height */
+  margin-block-start: 7px;
 }
 
 /* ── Track headings ── */
@@ -294,6 +302,15 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 14px 12px 8px;
+}
+
+/* Tells the reader the map is interactive before they have to guess. */
+.cpj-panel-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .cpj-panel-top {

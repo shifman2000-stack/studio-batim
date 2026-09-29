@@ -177,6 +177,9 @@ export default function ClientPortal() {
      see the tile at all. Dev-only column for now; a prod row without
      the column reads back as undefined and safely stays false. */
   const [showProgrammingQuestionnaire, setShowProgrammingQuestionnaire] = useState(false)
+  /* The project's own name, shown ONCE on this shell: beside the tab title
+     on שלבי התקדמות, which is the only screen that asks for it. */
+  const [projectName, setProjectName] = useState('')
   useEffect(() => {
     let cancelled = false
     const loadProjectMeta = async () => {
@@ -184,7 +187,7 @@ export default function ClientPortal() {
       let row = null
       const tryBoth = await supabase
         .from('projects')
-        .select('client_visible_tabs, whatsapp_group_url, show_programming_questionnaire, parent_project_id')
+        .select('name, client_visible_tabs, whatsapp_group_url, show_programming_questionnaire, parent_project_id')
         .eq('id', project_id)
         .maybeSingle()
       if (tryBoth.error) {
@@ -197,7 +200,7 @@ export default function ClientPortal() {
            silently disappear on this path. */
         const fallback = await supabase
           .from('projects')
-          .select('client_visible_tabs, parent_project_id')
+          .select('name, client_visible_tabs, parent_project_id')
           .eq('id', project_id)
           .maybeSingle()
         row = fallback.data || null
@@ -209,6 +212,7 @@ export default function ClientPortal() {
       setWhatsappGroupUrl(row?.whatsapp_group_url ?? null)
       setShowProgrammingQuestionnaire(row?.show_programming_questionnaire === true)
       setParentProjectId(row?.parent_project_id ?? null)
+      setProjectName(row?.name || '')
     }
     loadProjectMeta()
     return () => { cancelled = true }
@@ -545,10 +549,27 @@ export default function ClientPortal() {
             When the wrapper renders a title, the cp-content--with-header
             modifier hides each screen's own .cp-screen-title to avoid
             duplication. ── */}
-      <main className={'cp-content' + (showBackArrow ? ' cp-content--with-header' : '')}>
+      <main className={
+        'cp-content'
+        + (showBackArrow ? ' cp-content--with-header' : '')
+        /* שלבי התקדמות scrolls its MAP, not the page: this frame becomes a
+           flex column and stops scrolling so the title, legend and track
+           headings stay put. See .cp-content--fixed in ClientPortal.css. */
+        + (activeKey === 'progress' ? ' cp-content--fixed' : '')
+      }>
         {showBackArrow && (
           <div className="cp-screen-header">
-            <h2 className="cp-screen-header-title">{activeItem.label}</h2>
+            <h2 className="cp-screen-header-title">
+              {activeItem.label}
+              {/* שלבי התקדמות alone names the project up here, because that
+                  screen no longer shows it anywhere in its own body. */}
+              {activeKey === 'progress' && projectName && (
+                <>
+                  <span className="cp-screen-header-dot" aria-hidden="true" />
+                  <span className="cp-screen-header-project">{projectName}</span>
+                </>
+              )}
+            </h2>
             <button
               type="button"
               className="cp-screen-back"

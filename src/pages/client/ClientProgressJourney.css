@@ -114,6 +114,9 @@
 .cpj-map-wrap {
   inline-size: 100%;
   min-inline-size: 0;
+  /* Positioning context for the step labels, which are HTML laid over the
+     SVG rather than SVG <text>. See the note at their JSX. */
+  position: relative;
 }
 
 .cpj-map {
@@ -127,13 +130,27 @@
   stroke-width: 1;
 }
 
+/* Every cross-track arrow is drawn at all times. The quiet style has to stay
+   legible on its own — it is the resting state of the map, not a hint. */
 .cpj-edge {
-  stroke: var(--sage-dark);
-  stroke-width: 1.2;
-  stroke-dasharray: 4 3;
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
 }
 
 .cpj-arrow-head {
+  fill: var(--border-strong);
+}
+
+/* …and an arrow touching the selected step steps forward: the accent, twice
+   the weight, solid rather than dashed. Painted last by the JSX ordering. */
+.cpj-edge--on {
+  stroke: var(--sage-dark);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.cpj-arrow-head--on {
   fill: var(--sage-dark);
 }
 
@@ -178,28 +195,76 @@
 .cpj-block--future .cpj-cell-edge   { stroke: var(--border-default); }
 .cpj-block--future .cpj-shadow      { opacity: 0.06; }
 
-/* הושלם — solid sand: finished, and deliberately quieter than the accent. */
+/* הושלם — solid sand: finished, and deliberately quieter than the accent.
+   The plain token is declared FIRST as a fallback: an engine without
+   color-mix() drops that declaration at parse time and keeps the solid
+   fill, so a block is never left hollow — it only loses the third shade. */
 .cpj-block--done .cpj-face--top   { fill: var(--sand); stroke: none; }
-.cpj-block--done .cpj-face--front { fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); stroke: none; }
-.cpj-block--done .cpj-face--side  { fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); stroke: none; }
-.cpj-block--done .cpj-cell        { fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
-.cpj-block--done .cpj-cell-lip    { fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); }
-.cpj-block--done .cpj-cell-edge   { stroke: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+.cpj-block--done .cpj-face--front { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-face--side  { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); stroke: none; }
+.cpj-block--done .cpj-cell        { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-lip    { fill: var(--sand); fill: color-mix(in srgb, var(--sand) 78%, var(--text-primary)); }
+.cpj-block--done .cpj-cell-edge   { stroke: var(--sand); stroke: color-mix(in srgb, var(--sand) 58%, var(--text-primary)); }
 
 /* בעבודה — the app's sage, the loudest thing on the map. */
 .cpj-block--current .cpj-face--top   { fill: var(--sage); stroke: none; }
 .cpj-block--current .cpj-face--front { fill: var(--sage-dark); stroke: none; }
-.cpj-block--current .cpj-face--side  { fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); stroke: none; }
-.cpj-block--current .cpj-cell        { fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+.cpj-block--current .cpj-face--side  { fill: var(--sage-dark); fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); stroke: none; }
+.cpj-block--current .cpj-cell        { fill: var(--sage-dark); fill: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
 .cpj-block--current .cpj-cell-lip    { fill: var(--sage-dark); }
-.cpj-block--current .cpj-cell-edge   { stroke: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
+.cpj-block--current .cpj-cell-edge   { stroke: var(--sage-dark); stroke: color-mix(in srgb, var(--sage-dark) 72%, var(--text-primary)); }
 
-/* The selected block keeps its own colour and gains a halo, so selection
-   never masquerades as a status. */
-.cpj-block--selected .cpj-shadow {
+/* The live dot — a step actually in progress, marked whatever is selected. */
+.cpj-live {
   fill: var(--sage);
-  opacity: 0.55;
+  stroke: var(--bg-page);
+  stroke-width: 1.2;
 }
+
+/* Selection is a FRAME, never a fill. Tinting the shadow sage was the old
+   signal, and on a project whose gantt_state holds no 'current' step the
+   auto-selected FUTURE block then read as an active block that had failed
+   to paint: hollow faces over a green smudge. A frame cannot be read as a
+   status, so the two never collide again. */
+.cpj-ring {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 1.5;
+}
+
+.cpj-block--selected .cpj-shadow {
+  opacity: 0.22;
+}
+
+/* ── Step names ──
+   HTML over the SVG. Two lines at most; a longer name is clipped rather
+   than allowed to push into the row below, because the row pitch is what
+   keeps labels off the next block. */
+.cpj-label {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+  cursor: pointer;
+
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* Hebrew labels that contain digits ("טופס 4 – תעודת גמר") otherwise get
+     their clamp ellipsis on the wrong side. */
+  unicode-bidi: plaintext;
+}
+
+.cpj-label--done    { color: var(--text-primary); }
+.cpj-label--future  { color: var(--text-secondary); }
+.cpj-label--current { color: var(--sage-dark); font-weight: 500; }
+.cpj-label--selected { text-decoration: underline; text-underline-offset: 2px; }
 
 /* ── Legend ── */
 .cpj-legend {

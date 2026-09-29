@@ -32,11 +32,26 @@ import './ClientProgressJourney.css'
 
 /* ── Map geometry ──────────────────────────────────────────────────────
    Row pitch and block size are fixed; only the width is measured, so the
-   four tracks stay evenly spaced from 360px up to the desktop overlay. */
-const ROW_PITCH   = 25
-const TOP_PAD     = 15
+   four tracks stay evenly spaced from 360px up to the desktop overlay.
+
+   ROW_PITCH went from 25 to 50 when the step NAMES moved onto the map: a
+   label sits directly under its block, wraps to at most two lines, and the
+   pitch is what guarantees it cannot reach the block on the row below.
+   Everything below is derived from the numbers in one place so the two
+   cannot drift:
+
+       block occupies   y − 9·scale  …  y + 19·scale     (top vertex … shadow)
+       label occupies   y + LABEL_TOP … + 2·LABEL_LINE
+       next block tops at y + ROW_PITCH − 9·scale
+
+   With scale ≈ 0.82 that is a clear ≈5px gap; the overlap audit in the
+   verification harness checks it rather than trusting the arithmetic. */
+const ROW_PITCH   = 50
+const TOP_PAD     = 16
 const BLOCK_UNIT  = 39      // the isometric block is drawn at this nominal size
-const MAX_BLOCK_W = 40
+const MAX_BLOCK_W = 38
+const LABEL_TOP   = 18      // from the block's centre to the label's top edge
+const LABEL_LINE  = 11      // must match .cpj-label's line-height
 
 const STATUS_LABEL = { done: 'הושלם', current: 'בעבודה', future: 'בהמשך' }
 
@@ -76,6 +91,16 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
       {/* Generous invisible hit area — the drawn block is ~36×26 CSS px and
           a finger is not. */}
       <rect className="cpj-hit" x={x - 22} y={y - 14} width={44} height={30} />
+
+      {/* The selection FRAME. Selection used to be signalled by tinting the
+          shadow ellipse sage — which on a project with no 'current' step at
+          all made the auto-selected FUTURE block read as a broken active
+          one: hollow faces with a green smudge under them. A frame cannot
+          be mistaken for a fill, so status and selection stay separable. */}
+      {selected && (
+        <rect className="cpj-ring" x={x - 22} y={y - 13} width={44} height={30} rx={7} />
+      )}
+
       <g transform={`translate(${x} ${y}) scale(${scale})`}>
         <ellipse className="cpj-shadow" cx={1} cy={17} rx={18} ry={2} />
         <polygon className="cpj-face cpj-face--side"  points="-18,-2 -8,6 -8,17 -18,9" />
@@ -89,6 +114,12 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
           </g>
         ))}
       </g>
+
+      {/* The live dot — only on a step actually in progress, so "where are
+          we right now" survives even when something else is selected. */}
+      {status === 'current' && (
+        <circle className="cpj-live" cx={x + 17} cy={y - 10} r={3.2} />
+      )}
     </g>
   )
 }
@@ -172,20 +203,41 @@ export default function ClientProgressJourney() {
   const step  = mapWidth / trackCount
   const xOf   = (trackIndex) => mapWidth - step * (trackIndex + 0.5)
   const yOf   = (row) => TOP_PAD + row * ROW_PITCH
-  const mapH  = TOP_PAD + (journey.rowCount - 1) * ROW_PITCH + 21
+  const mapH  = TOP_PAD + (journey.rowCount - 1) * ROW_PITCH + LABEL_TOP + 2 * LABEL_LINE
   const blockW = Math.min(MAX_BLOCK_W, step - 14)
-  const scale  = Math.min(1, blockW / BLOCK_UNIT) * 0.91
+  const scale  = Math.min(1, blockW / BLOCK_UNIT) * 0.82
+  /* Labels are as wide as the track allows, less a gutter, so two labels in
+     the same row cannot touch. */
+  const labelW = Math.max(52, step - 6)
+
+  /* BELOW the block, centred. The two side placements were built and
+     photographed as well: at 390px a track is ~89px and the block ~38px, so
+     a label beside it gets ~30px — every name longer than "תלת מימד" came
+     back clipped ("הכנת תוכניו…", "פיקוח עליון …"), and the outermost
+     track's labels ran off the container edge. Below the block the label
+     gets the full track width, which fits every name in at most two lines. */
+  const labelBox = (x, y) => ({
+    /* physical `left`, deliberately: the x above is measured from the SVG's
+       left edge in both directions. */
+    left: x - labelW / 2, top: y + LABEL_TOP, width: labelW,
+  })
 
   const goTo = (delta) => {
     const next = journey.points[flatIndex + delta]
     if (next) setSelectedId(next.pointId)
   }
 
-  /* Only the selected point's cross-track arrows are drawn: all six at once
-     is a thicket, and the panel below names them in words anyway. */
-  const visibleEdges = selected
-    ? journey.crossEdges.filter(e => e.from === selected.pointId || e.to === selected.pointId)
-    : []
+  /* ALL cross-track arrows, always. The dependencies between tracks are the
+     one thing the map says that a list cannot, so hiding them until a
+     related block happens to be selected hid the point of the drawing.
+     Sorted so the arrows touching the selection paint LAST, i.e. on top of
+     the quiet ones; the class does the rest. */
+  const edges = journey.crossEdges
+    .map(e => ({
+      ...e,
+      active: !!selected && (e.from === selected.pointId || e.to === selected.pointId),
+    }))
+    .sort((a, b) => Number(a.active) - Number(b.active))
 
   return (
     <div className="cp-page">
@@ -245,9 +297,16 @@ export default function ClientProgressJourney() {
               aria-label={`${journey.points.length} שלבי הפרויקט בארבעה מסלולים`}
             >
               <defs>
+                {/* A marker is painted from its OWN subtree, not from the
+                    line that references it, so a highlighted arrow needs a
+                    second marker rather than a second class on the line. */}
                 <marker id="cpj-arrow" viewBox="0 0 6 6" refX={5} refY={3}
                   markerWidth={7} markerHeight={7} markerUnits="userSpaceOnUse" orient="auto">
                   <path className="cpj-arrow-head" d="M0 0 L6 3 L0 6 Z" />
+                </marker>
+                <marker id="cpj-arrow-on" viewBox="0 0 6 6" refX={5} refY={3}
+                  markerWidth={8} markerHeight={8} markerUnits="userSpaceOnUse" orient="auto">
+                  <path className="cpj-arrow-head cpj-arrow-head--on" d="M0 0 L6 3 L0 6 Z" />
                 </marker>
               </defs>
 
@@ -256,15 +315,16 @@ export default function ClientProgressJourney() {
                   x1={xOf(track.index)} x2={xOf(track.index)} y1={3} y2={mapH - 8} />
               ))}
 
-              {visibleEdges.map(edge => {
+              {edges.map(edge => {
                 const a = journey.byId[edge.from]
                 const b = journey.byId[edge.to]
                 if (!a || !b) return null
                 return (
-                  <line key={`${edge.from}->${edge.to}`} className="cpj-edge"
+                  <line key={`${edge.from}->${edge.to}`}
+                    className={'cpj-edge' + (edge.active ? ' cpj-edge--on' : '')}
                     x1={xOf(a.trackIndex)} y1={yOf(a.row)}
                     x2={xOf(b.trackIndex)} y2={yOf(b.row)}
-                    markerEnd="url(#cpj-arrow)" />
+                    markerEnd={edge.active ? 'url(#cpj-arrow-on)' : 'url(#cpj-arrow)'} />
                 )
               })}
 
@@ -282,6 +342,38 @@ export default function ClientProgressJourney() {
               ))}
             </svg>
           )}
+
+          {/* Step names as HTML, positioned over the map, NOT as SVG <text>.
+              Three reasons: SVG text cannot wrap, so a name like "פיקוח
+              עליון + ליווי פרויקט" would run across its neighbours; WebKit
+              mis-orders spaced RTL runs in SVG text, which is the same trap
+              the logo fell into; and a real button is a real tap target.
+              The SVG is drawn 1:1 (viewBox width === measured width), so a
+              user unit is a CSS pixel and these coordinates line up exactly.
+
+              aria-hidden + tabIndex -1: the block already carries the
+              accessible name and the keyboard focus for this step, and two
+              controls per step would just double every announcement. */}
+          {mapWidth > 0 && journey.points.map(point => {
+            const st = statusOf(state, point.pointId)
+            return (
+              <button
+                key={point.pointId}
+                type="button"
+                aria-hidden="true"
+                tabIndex={-1}
+                className={
+                  'cpj-label' +
+                  ` cpj-label--${st}` +
+                  (point.pointId === selectedId ? ' cpj-label--selected' : '')
+                }
+                style={labelBox(xOf(point.trackIndex), yOf(point.row))}
+                onClick={() => setSelectedId(point.pointId)}
+              >
+                {point.label}
+              </button>
+            )
+          })}
         </div>
 
         <div className="cpj-legend">

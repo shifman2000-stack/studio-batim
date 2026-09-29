@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
-import logoUrl from './logo-A-stacked.svg'
+import LogoStacked from './components/LogoStacked'
 import './App.css'
 
 // ── Eye SVG icons ──
@@ -246,7 +246,7 @@ function App() {
 
   return (
     <div className="login-page">
-      <img src={logoUrl} alt="סטודיו בתים" style={{ height: '80px', width: 'auto', background: 'transparent' }} />
+      <LogoStacked height={80} />
 
       <div className="login-box" dir="rtl">
 

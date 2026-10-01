@@ -385,3 +385,22 @@
    see the note at its JSX. */
 .sq-stage-keep { break-inside: avoid; }
 .sq-raw .sq-stage-keep { break-inside: auto; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   EXPERIMENT — .sq-nogrid replaces the "label + text" grid rows with plain
+   block boxes and a float for the label.
+
+   Why: with .sq-stage-row as display:grid, Chromium carried only ONE line
+   of the paragraph past a page break even though an ancestor had
+   break-inside:avoid and the paragraph itself had orphans:3. Both were
+   ignored. The suspicion is that neither property survives fragmentation
+   inside a grid container.
+   ══════════════════════════════════════════════════════════════════════ */
+.sq-nogrid .sq-stage-row { display: block; }
+.sq-nogrid .sq-stage-k {
+  float: inline-start;
+  width: 42px;
+  padding-top: 0;
+}
+.sq-nogrid .sq-stage-v { margin: 0; }
+.sq-nogrid .sq-stage-row::after { content: ''; display: block; clear: both; }

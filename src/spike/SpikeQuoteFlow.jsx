@@ -180,6 +180,7 @@ export default function SpikeQuoteFlow() {
      with and without it is what separates "the rules worked" from "the
      content happened to land well". */
   const raw     = params.get('raw') === '1'
+  const nogrid  = params.get('nogrid') === '1'   // experiment: grid vs block rows
   const padQ    = params.get('pad')
   const blocks  = getBlocks(variant, padQ ? Number(padQ) : null)
 
@@ -204,7 +205,7 @@ export default function SpikeQuoteFlow() {
   const sign     = blocks[signIdx]
 
   return (
-    <div className={'sq-doc' + (hf === 'css' ? ' sq-mode-css' : '') + (raw ? ' sq-raw' : '')} dir="rtl">
+    <div className={'sq-doc' + (hf === 'css' ? ' sq-mode-css' : '') + (raw ? ' sq-raw' : '') + (nogrid ? ' sq-nogrid' : '')} dir="rtl">
       <style>{`
         /* THE SECOND LANDMINE. @page cannot be scoped by a selector, and the
            bundle carries four of them — from QuotePreview.css,

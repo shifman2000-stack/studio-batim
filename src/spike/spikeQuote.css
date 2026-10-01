@@ -43,6 +43,14 @@
    content needs breathing room now that it flows, and Puppeteer's
    displayHeaderFooter draws into the page margin boxes — with margin:0
    there is physically nowhere for a header or footer to go. */
+/* NOTE: this declaration is a documentation of intent only — it LOSES.
+   The app's single CSS bundle ends up holding four @page rules (this one,
+   QuotePreview.css's margin:0, FinishingReport.css's 15mm 12mm, and
+   QuoteBuilder.css's margin:0), and @page cannot be scoped by selector, so
+   the LAST one in the bundle wins for every route. The real @page for this
+   document is re-declared in the route's own inline <style>, which sits
+   after the bundle in document order. That is exactly why the three report
+   routes repeat their @page in JSX instead of trusting their stylesheet. */
 @page {
   size: A4 portrait;
   margin: 24mm 16mm 20mm;

@@ -190,6 +190,17 @@ export default function SpikeQuoteFlow() {
   return (
     <div className={'sq-doc' + (hf === 'css' ? ' sq-mode-css' : '')} dir="rtl">
       <style>{`
+        /* THE SECOND LANDMINE. @page cannot be scoped by a selector, and the
+           bundle carries four of them — from QuotePreview.css,
+           FinishingReport.css and QuoteBuilder.css as well as this spike's.
+           The last one in the bundle wins for every route, which here was
+           QuoteBuilder.css's zero-margin one: the body ignored its
+           24mm margins, ran to the paper edge and printed straight over the
+           Puppeteer header. Re-declaring @page in THIS inline style puts it
+           after the bundle in document order, so it wins. The three report
+           routes do the same thing for the same reason. */
+        @page { size: A4 portrait; margin: 24mm 16mm 20mm; }
+
         /* index.css pins html/body/#root to height:100% + overflow:hidden,
            which clips the document to one viewport and hides every page
            after the first from Puppeteer. Same release the three report

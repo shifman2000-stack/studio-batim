@@ -199,6 +199,20 @@ export default function SpikeQuoteFlow() {
           max-height: none !important; overflow: visible !important;
         }
         body, #root { display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+
+        /* THE LANDMINE. Three stylesheets in this app ship a global
+           @media print { * { visibility: hidden } } and then whitelist only
+           their own container — Hours.css, QuoteBuilder.css and
+           ReportTable.css. They are all in the one CSS bundle, so they
+           apply to EVERY route once Puppeteer switches to print media.
+           Without the counter-rule below the body of this document comes
+           out completely blank: three A4 pages carrying nothing but the
+           Puppeteer header and footer, which are immune because they render
+           in their own isolated context. The three report routes already
+           carry the identical workaround. */
+        @media print {
+          .sq-doc, .sq-doc * { visibility: visible !important; }
+        }
       `}</style>
 
       {/* Approach (b) — repeating elements. Hidden unless hf=css. */}

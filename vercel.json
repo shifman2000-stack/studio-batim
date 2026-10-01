@@ -24,6 +24,10 @@
     },
     "api/site-health.js": {
       "maxDuration": 15
+    },
+    "api/spike-pdf.js": {
+      "maxDuration": 60,
+      "memory": 2048
     }
   }
 }

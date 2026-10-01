@@ -33,6 +33,7 @@ import ProgrammingSummaryPage from './pages/ProgrammingSummaryPage'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
 import ChildInquiryForm from './pages/ChildInquiryForm'
+import SpikeQuoteFlow from './spike/SpikeQuoteFlow'   /* SPIKE — throwaway */
 import QuotePrintView from './pages/QuotePrintView'
 import QuotePrintSigned from './pages/QuotePrintSigned'
 import FinishingPrintView from './pages/FinishingPrintView'
@@ -95,6 +96,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />
+        {/* SPIKE — throwaway, branch spike/quote-flow-print */}
+        <Route path="/spike/quote-flow" element={<SpikeQuoteFlow />} />
         <Route path="/quote-print/:quoteId" element={<QuotePrintView />} />
         <Route path="/quote-print-signed/:token" element={<QuotePrintSigned />} />
         <Route path="/finishing-print/:projectId" element={<FinishingPrintView />} />

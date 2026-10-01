@@ -1,0 +1,353 @@
+/* ══════════════════════════════════════════════════════════════════════
+   SPIKE — THROWAWAY. Branch spike/quote-flow-print.
+
+   The whole point: ONE FLOWING DOCUMENT. No .page divs, no fixed 297mm
+   heights, no overflow:hidden. Chromium decides where the breaks fall and
+   the rules below tell it where it may NOT break. Same approach as
+   QuantitiesReport / FinishingReport / ContractorSpecReport, which already
+   do this successfully through the same Puppeteer pipeline.
+
+   Typography and palette are lifted from QuotePreview.css so the spike
+   looks like the real thing; the fonts are self-hosted from /public/fonts
+   instead of @import-ing Google Fonts at runtime.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Self-hosted fonts ──
+   Variable woff2, one file per subset. Weight comes from the variable axis,
+   hence `font-weight: 100 900` on the descriptor — a single file serves
+   every weight the document uses. */
+@font-face {
+  font-family: 'HeeboLocal';
+  src: url('/fonts/heebo-hebrew.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;      /* block, not swap: never paint a fallback face
+                               into a PDF that is about to be signed */
+  unicode-range: U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+@font-face {
+  font-family: 'HeeboLocal';
+  src: url('/fonts/heebo-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
+}
+@font-face {
+  font-family: 'PlayfairLocal';
+  src: url('/fonts/playfair-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+}
+
+/* ── Paper ──
+   REAL margins, unlike the current quote's `margin: 0`. Two reasons: the
+   content needs breathing room now that it flows, and Puppeteer's
+   displayHeaderFooter draws into the page margin boxes — with margin:0
+   there is physically nowhere for a header or footer to go. */
+@page {
+  size: A4 portrait;
+  margin: 24mm 16mm 20mm;
+}
+
+.sq-doc {
+  direction: rtl;
+  font-family: 'HeeboLocal', 'Heebo', sans-serif;
+  font-weight: 300;
+  font-size: 10.5px;
+  line-height: 1.72;
+  color: #1a1a18;
+  background: #fff;
+  counter-reset: sq-chapter;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Screen-only shell so the route is reviewable in a browser.
+   Nothing here survives into print. */
+@media screen {
+  .sq-doc {
+    width: 178mm;                 /* A4 minus the @page side margins */
+    margin: 0 auto;
+    padding: 24mm 0 20mm;
+    box-shadow: 0 2px 20px rgba(0,0,0,.14);
+  }
+}
+
+/* ── Orphans / widows ──
+   Chromium honours these on block containers. Three lines means a
+   paragraph can never leave one lonely line behind at a break. */
+.sq-doc p,
+.sq-doc li,
+.sq-doc td {
+  orphans: 3;
+  widows: 3;
+}
+
+/* ── Document head ── */
+.sq-dochead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgba(26,26,24,0.14);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  break-inside: avoid;
+  break-after: avoid;
+}
+.sq-dochead-eyebrow {
+  font-size: 7.5px;
+  letter-spacing: 0.34em;
+  color: #8a8680;
+  margin-bottom: 5px;
+}
+.sq-dochead-title {
+  font-family: 'PlayfairLocal', 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+}
+.sq-dochead-title small {
+  font-family: 'HeeboLocal', sans-serif;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: #6b6861;
+}
+.sq-dochead-date {
+  font-size: 9px;
+  color: #8a8680;
+  white-space: nowrap;
+}
+
+/* ── Parties — two cards ── */
+.sq-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+  break-inside: avoid;      /* two short cards; never worth splitting */
+}
+.sq-party {
+  background: #f4f2ee;
+  border: 1px solid rgba(26,26,24,0.07);
+  padding: 9px 12px 11px;
+}
+.sq-party-title {
+  font-size: 7.5px;
+  letter-spacing: 0.26em;
+  color: #8a8680;
+  border-bottom: 1px solid rgba(26,26,24,0.10);
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+}
+.sq-party-row { margin-bottom: 5px; }
+.sq-party-row:last-child { margin-bottom: 0; }
+.sq-party-k { font-size: 7px; letter-spacing: 0.16em; color: #a09c95; display: block; }
+.sq-party-v { font-size: 10px; font-weight: 400; }
+
+/* ── Chapter heading — auto-numbered 01, 02, … ──
+   The number is a CSS counter, so inserting, deleting or reordering a
+   chapter block renumbers the document with no data change. */
+.sq-chapter {
+  counter-increment: sq-chapter;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  border-bottom: 1px solid rgba(26,26,24,0.12);
+  padding-bottom: 5px;
+  margin: 20px 0 10px;
+  /* THE orphan-heading rule: a heading may never be the last thing on a
+     page. break-after: avoid moves it to the next page with its content. */
+  break-after: avoid;
+  break-inside: avoid;
+}
+.sq-chapter::before {
+  content: counter(sq-chapter, decimal-leading-zero);
+  font-family: 'PlayfairLocal', serif;
+  font-size: 15px;
+  color: #b9b2a6;
+  letter-spacing: 0.04em;
+}
+.sq-chapter-title {
+  font-family: 'PlayfairLocal', 'Playfair Display', serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.sq-text { margin: 0 0 10px; text-align: justify; }
+
+/* ── Fee box ── */
+.sq-fee {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #f0ede7;
+  border-inline-start: 3px solid #c8bfb0;
+  padding: 12px 16px;
+  margin: 10px 0 12px;
+  break-inside: avoid;
+}
+.sq-fee-label { font-size: 9px; color: #6b6861; letter-spacing: 0.04em; }
+.sq-fee-amount { font-family: 'PlayfairLocal', serif; font-size: 19px; letter-spacing: 0.03em; white-space: nowrap; }
+.sq-fee-note { font-size: 8px; color: #8a8680; margin-inline-start: 6px; }
+
+/* ── Payments table ──
+   The three rules that make a table survive a page break cleanly. Copied
+   in spirit from FinishingReport.css, which already proves them in prod. */
+.sq-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  margin: 4px 0 14px;
+  break-inside: auto;                       /* the table MAY split … */
+}
+.sq-table thead { display: table-header-group; }   /* … header repeats … */
+.sq-table tbody tr { break-inside: avoid; }        /* … rows may not be cut */
+.sq-table thead th {
+  background: #e8e3dc;
+  text-align: right;
+  font-weight: 500;
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  padding: 6px 7px;
+  border-bottom: 1.2px solid rgba(26,26,24,0.18);
+}
+.sq-table tbody td {
+  padding: 6px 7px;
+  border-bottom: 0.5px solid #ece8e1;
+  vertical-align: top;
+  line-height: 1.5;
+}
+.sq-table tbody tr:nth-child(even) td { background: #faf9f7; }
+.sq-col-n   { width: 5%;  text-align: center; }
+.sq-col-pct { width: 8%;  text-align: center; font-weight: 500; }
+.sq-col-when{ width: 22%; }
+.sq-col-what{ width: 22%; }
+
+/* ── Stages — "התהליך / התוצר" ──
+   A stage MAY split across pages (V2 depends on it), but its heading may
+   not be left behind, and the two labelled rows keep their label with the
+   first line of their text. */
+.sq-stage { margin-bottom: 14px; break-inside: auto; }
+.sq-stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+  break-after: avoid;
+  break-inside: avoid;
+}
+.sq-stage-num {
+  font-size: 7.5px;
+  letter-spacing: 0.3em;
+  color: #8a8680;
+  white-space: nowrap;
+}
+.sq-stage-title { font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em; }
+.sq-stage-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.sq-stage-k {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: #8a8680;
+  padding-top: 2px;
+  break-after: avoid;
+}
+.sq-stage-v { margin: 0; text-align: justify; }
+
+/* ── Optional-services box ── */
+.sq-optional {
+  background: #f7f5f2;
+  border: 1px dashed rgba(26,26,24,0.16);
+  padding: 11px 14px;
+  margin: 14px 0;
+  break-inside: avoid;
+}
+.sq-optional-label {
+  font-size: 7.5px; letter-spacing: 0.3em; color: #8a8680; margin-bottom: 4px;
+}
+.sq-optional-title { font-size: 11px; font-weight: 500; margin-bottom: 5px; }
+
+/* ── Terms ── */
+.sq-terms-group { margin-bottom: 12px; break-inside: avoid; }
+.sq-terms-title {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b6861;
+  margin-bottom: 5px;
+  break-after: avoid;
+}
+.sq-terms-title::before { content: '— '; color: #b9b2a6; }
+.sq-term { margin: 0 0 5px; text-align: justify; }
+.sq-term b { font-weight: 500; }
+
+/* ── Tail: last terms + approval + signatures, bound together ──
+   V5's answer. The signature block is not merely `break-inside: avoid`
+   (which would still let it start alone on a fresh page) — it is wrapped
+   WITH the preceding terms group, so whatever moves, moves together and
+   the signatures always land under some text. */
+.sq-tail { break-inside: avoid; }
+
+.sq-sign-title {
+  font-family: 'PlayfairLocal', serif;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(26,26,24,0.12);
+  padding-bottom: 5px;
+  margin: 16px 0 7px;
+  break-after: avoid;
+}
+.sq-sign-intro { font-size: 9.5px; color: #4a4843; margin: 0 0 9px; }
+.sq-sign-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+.sq-sign-table th {
+  font-size: 7.5px; letter-spacing: 0.2em; color: #8a8680;
+  font-weight: 400; text-align: right; padding-bottom: 4px;
+}
+.sq-sign-table td {
+  height: 34px;
+  border-bottom: 0.8px solid rgba(26,26,24,0.34);
+  padding: 2px 6px;
+}
+.sq-closing { text-align: center; margin-top: 18px; }
+.sq-closing-l1 { font-size: 9px; color: #8a8680; }
+.sq-closing-l2 { font-family: 'PlayfairLocal', serif; font-size: 13px; margin-top: 3px; }
+.sq-closing-l3 { font-size: 8px; letter-spacing: 0.22em; color: #8a8680; margin-top: 2px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   HEADER / FOOTER — APPROACH (b): repeating CSS elements
+   A position:fixed element repeats on every printed page in Chromium.
+   Only active under .sq-mode-css, so the two approaches can be compared
+   from the same route.
+   ══════════════════════════════════════════════════════════════════════ */
+.sq-fixed-head,
+.sq-fixed-foot { display: none; }
+
+@media print {
+  .sq-mode-css .sq-fixed-head,
+  .sq-mode-css .sq-fixed-foot {
+    display: block;
+    position: fixed;
+    inset-inline: 0;
+    text-align: center;
+    font-family: 'HeeboLocal', sans-serif;
+    color: #8a8680;
+  }
+  .sq-mode-css .sq-fixed-head {
+    top: -16mm;                       /* up into the page's top margin */
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: #1a1a18;
+  }
+  .sq-mode-css .sq-fixed-foot {
+    bottom: -14mm;                    /* down into the bottom margin */
+    font-size: 7.5px;
+    letter-spacing: 0.12em;
+  }
+}

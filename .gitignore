@@ -41,3 +41,8 @@ dist-ssr
 
 # Claude Code per-machine settings (never commit)
 .claude/settings.local.json
+
+# SPIKE — throwaway, never merged
+spike-output/
+__pdfview/
+docs/

@@ -359,3 +359,23 @@
     letter-spacing: 0.12em;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CONTROL — .sq-raw switches every pagination rule back off.
+   Same content, same fonts, same margins; only the break rules differ.
+   Running a variant with and without this is what proves the rules are
+   doing the work rather than the content happening to land well.
+   ══════════════════════════════════════════════════════════════════════ */
+.sq-raw .sq-chapter,
+.sq-raw .sq-stage-head,
+.sq-raw .sq-terms-title,
+.sq-raw .sq-sign-title,
+.sq-raw .sq-dochead { break-after: auto; break-inside: auto; }
+.sq-raw .sq-parties,
+.sq-raw .sq-fee,
+.sq-raw .sq-optional,
+.sq-raw .sq-terms-group,
+.sq-raw .sq-tail,
+.sq-raw .sq-table tbody tr { break-inside: auto; }
+.sq-raw .sq-table thead { display: table-row-group; }   /* header does NOT repeat */
+.sq-raw p, .sq-raw li, .sq-raw td { orphans: 1; widows: 1; }

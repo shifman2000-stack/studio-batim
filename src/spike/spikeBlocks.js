@@ -171,7 +171,7 @@ export function getBlocks(variant = 'v1') {
     // One stage description long enough to cross a page break.
     const i = blocks.findIndex(b => b.type === 'stages')
     const stages = blocks[i].stages.map((s, j) =>
-      j === 1 ? { ...s, process: s.process + ' ' + LOREM.repeat(7) } : s)
+      j === 1 ? { ...s, process: s.process + ' ' + LOREM.repeat(16) } : s)
     blocks[i] = { ...blocks[i], stages }
   }
 

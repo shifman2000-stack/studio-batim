@@ -165,6 +165,12 @@ export default function SpikeQuoteFlow() {
   const [params] = useSearchParams()
   const variant = params.get('v') || 'v1'
   const hf      = params.get('hf') || 'puppeteer'   // which header/footer approach
+  /* CONTROL. raw=1 switches off every pagination rule this spike is
+     testing — break-after on headings, break-inside on rows and groups,
+     orphans/widows, and the .sq-tail binding. Generating the same variant
+     with and without it is what separates "the rules worked" from "the
+     content happened to land well". */
+  const raw     = params.get('raw') === '1'
   const blocks  = getBlocks(variant)
 
   /* Signal readiness to Puppeteer only once the self-hosted fonts are in.
@@ -188,7 +194,7 @@ export default function SpikeQuoteFlow() {
   const sign     = blocks[signIdx]
 
   return (
-    <div className={'sq-doc' + (hf === 'css' ? ' sq-mode-css' : '')} dir="rtl">
+    <div className={'sq-doc' + (hf === 'css' ? ' sq-mode-css' : '') + (raw ? ' sq-raw' : '')} dir="rtl">
       <style>{`
         /* THE SECOND LANDMINE. @page cannot be scoped by a selector, and the
            bundle carries four of them — from QuotePreview.css,

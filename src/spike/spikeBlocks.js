@@ -164,14 +164,14 @@ const LOREM =
   'לביצוע בשטח. כל שינוי שיידרש בעקבות הבדיקה יוטמע בסט התוכניות ויוצג למזמין לאישור. ';
 
 /* ── Stress variants ──────────────────────────────────────────────────── */
-export function getBlocks(variant = 'v1') {
+export function getBlocks(variant = 'v1', pad = null) {
   const blocks = baseBlocks()
 
   if (variant === 'v2') {
     // One stage description long enough to cross a page break.
     const i = blocks.findIndex(b => b.type === 'stages')
     const stages = blocks[i].stages.map((s, j) =>
-      j === 1 ? { ...s, process: s.process + ' ' + LOREM.repeat(16) } : s)
+      j === 1 ? { ...s, process: s.process + ' ' + LOREM.repeat(pad ?? 16) } : s)
     blocks[i] = { ...blocks[i], stages }
   }
 
@@ -190,13 +190,13 @@ export function getBlocks(variant = 'v1') {
     // Pad the text before a chapter heading so the heading would otherwise
     // land at the very bottom of a page.
     const i = blocks.findIndex(b => b.type === 'chapter' && b.title === 'פירוט שלבי העבודה הכלולים בהצעה')
-    blocks.splice(i, 0, { type: 'text', text: LOREM.repeat(11) })
+    blocks.splice(i, 0, { type: 'text', text: LOREM.repeat(pad ?? 11) })
   }
 
   if (variant === 'v5') {
     // Pad so the signature block would fall alone onto a fresh page.
     const i = blocks.findIndex(b => b.type === 'terms')
-    blocks.splice(i, 0, { type: 'text', text: LOREM.repeat(13) })
+    blocks.splice(i, 0, { type: 'text', text: LOREM.repeat(pad ?? 13) })
   }
 
   return blocks

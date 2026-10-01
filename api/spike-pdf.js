@@ -62,7 +62,8 @@ export default async function handler(req, res) {
   const host     = req.headers.host
   const origin   = `${protocol}://${host}`
   const raw      = q.raw === '1' ? '&raw=1' : ''          // control: pagination rules off
-  const pageUrl  = `${origin}/spike/quote-flow?v=${variant}&hf=${mode === 'css' ? 'css' : 'puppeteer'}${raw}`
+  const pad      = q.pad ? `&pad=${encodeURIComponent(q.pad)}` : ''   // tune the stress length
+  const pageUrl  = `${origin}/spike/quote-flow?v=${variant}&hf=${mode === 'css' ? 'css' : 'puppeteer'}${raw}${pad}`
 
   let browser = null
   const t0 = Date.now()

@@ -171,7 +171,8 @@ export default function SpikeQuoteFlow() {
      with and without it is what separates "the rules worked" from "the
      content happened to land well". */
   const raw     = params.get('raw') === '1'
-  const blocks  = getBlocks(variant)
+  const padQ    = params.get('pad')
+  const blocks  = getBlocks(variant, padQ ? Number(padQ) : null)
 
   /* Signal readiness to Puppeteer only once the self-hosted fonts are in.
      With font-display:block the text is invisible until then, so a PDF taken

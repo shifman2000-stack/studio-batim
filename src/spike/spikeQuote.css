@@ -379,3 +379,9 @@
 .sq-raw .sq-table tbody tr { break-inside: auto; }
 .sq-raw .sq-table thead { display: table-row-group; }   /* header does NOT repeat */
 .sq-raw p, .sq-raw li, .sq-raw td { orphans: 1; widows: 1; }
+
+/* The stage heading plus its first row, as one unsplittable unit.
+   break-after: avoid on the heading alone was measured failing here —
+   see the note at its JSX. */
+.sq-stage-keep { break-inside: avoid; }
+.sq-raw .sq-stage-keep { break-inside: auto; }

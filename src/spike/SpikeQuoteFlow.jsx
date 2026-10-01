@@ -98,13 +98,22 @@ const Stages = ({ b }) => (
   <>
     {b.stages.map((s, i) => (
       <section className="sq-stage" key={i}>
-        <div className="sq-stage-head">
-          <span className="sq-stage-num">שלב {String(i + 1).padStart(2, '0')}</span>
-          <span className="sq-stage-title">{s.title}</span>
-        </div>
-        <div className="sq-stage-row">
-          <span className="sq-stage-k">התהליך</span>
-          <p className="sq-stage-v">{s.process}</p>
+        {/* The heading and the FIRST row are wrapped in one keep-together
+            unit. break-after:avoid on the heading alone was not enough:
+            Chromium honoured it for the chapter heading but left the stage
+            heading stranded 30pt from the bottom of a page, because the
+            box that follows it is a grid container. A wrapper that cannot
+            be split is unambiguous, and it carries the first two lines of
+            the process text over with the heading. */}
+        <div className="sq-stage-keep">
+          <div className="sq-stage-head">
+            <span className="sq-stage-num">שלב {String(i + 1).padStart(2, '0')}</span>
+            <span className="sq-stage-title">{s.title}</span>
+          </div>
+          <div className="sq-stage-row">
+            <span className="sq-stage-k">התהליך</span>
+            <p className="sq-stage-v">{s.process}</p>
+          </div>
         </div>
         <div className="sq-stage-row">
           <span className="sq-stage-k">התוצר</span>

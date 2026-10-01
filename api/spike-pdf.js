@@ -61,7 +61,8 @@ export default async function handler(req, res) {
   const protocol = req.headers['x-forwarded-proto'] || 'https'
   const host     = req.headers.host
   const origin   = `${protocol}://${host}`
-  const pageUrl  = `${origin}/spike/quote-flow?v=${variant}&hf=${mode === 'css' ? 'css' : 'puppeteer'}`
+  const raw      = q.raw === '1' ? '&raw=1' : ''          // control: pagination rules off
+  const pageUrl  = `${origin}/spike/quote-flow?v=${variant}&hf=${mode === 'css' ? 'css' : 'puppeteer'}${raw}`
 
   let browser = null
   const t0 = Date.now()

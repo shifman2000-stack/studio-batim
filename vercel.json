@@ -10,6 +10,10 @@
       "maxDuration": 30,
       "memory": 1024
     },
+    "api/finalize-quote.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
     "api/generate-finishing-pdf.js": {
       "maxDuration": 30,
       "memory": 1024

@@ -15,13 +15,53 @@
 //   6. Upload PDF to Supabase Storage bucket 'quotes-files'
 //   7. Mark quote_version as signed (is_signed, signed_at, signed_file_url)
 //   8. Update quotes.status = 'signed', viewed_by_admin = false
+//   9. Record signature evidence into quote_versions.signature_evidence —
+//      best-effort, never fatal (see the note at that step)
 //
 // On any error after step 3, the content is already written but the quote is
 // not yet marked signed — safe, the token still works, the client can retry.
 
+import crypto from 'node:crypto'
 import chromium from '@sparticuz/chromium'
 import puppeteer from 'puppeteer-core'
 import { createClient } from '@supabase/supabase-js'
+
+/* ── ראיות חתימה ────────────────────────────────────────────────────────
+   מה שנשמר היום על חתימה הוא תמונה, שם, ותאריך שהלקוח הקליד בעצמו —
+   כלומר שום דבר שעומד מול מחלוקת. זה אוסף את מה שהשרת יודע ושהלקוח לא
+   יכול לזייף.
+
+   כל שדה נאסף בנפרד ובתוך try/catch משלו: כותרת חסרה, גוף בקשה בצורה
+   לא צפויה או buffer ריק מחזירים null לשדה הזה בלבד. אוסף ראיות חלקי
+   עדיף על חתימה שנכשלת. */
+function collectEvidence(req, pdfBuffer, content) {
+  const safe = (fn) => { try { const v = fn(); return v === undefined ? null : v } catch { return null } }
+  const h = (req && req.headers) || {}
+
+  /* x-forwarded-for הוא רשימה; הראשון הוא הלקוח, השאר פרוקסים.
+     Vercel מספק גם x-vercel-forwarded-for כגיבוי. */
+  const ip = safe(() => {
+    const raw = h['x-forwarded-for'] || h['x-vercel-forwarded-for'] || h['x-real-ip'] || ''
+    const first = String(raw).split(',')[0].trim()
+    return first || null
+  })
+
+  return {
+    serverSignedAt: safe(() => new Date().toISOString()),
+    ip,
+    userAgent:      safe(() => h['user-agent'] || null),
+    pdfSha256:      safe(() => crypto.createHash('sha256').update(pdfBuffer).digest('hex')),
+    pdfBytes:       safe(() => pdfBuffer.length),
+    /* v1 אין לו צ׳קבוקס תנאים כלל — null, לא false. ההבדל חשוב:
+       false פירושו "נשאל ולא סימן", null פירושו "לא נשאל". */
+    consentChecked: safe(() => {
+      const c = content?.clientResponse?.consentChecked
+      return typeof c === 'boolean' ? c : null
+    }),
+    schema:         safe(() => content?.schema ?? 1),
+    recordedBy:     'finalize-quote',
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -183,6 +223,28 @@ export default async function handler(req, res) {
     if (quoteErr) {
       console.error('finalize-quote: quote update error:', quoteErr)
       return res.status(500).json({ error: 'Failed to update quote status' })
+    }
+
+    // ── 9. ראיות חתימה — כתיבה נפרדת ולא-קריטית ────────────────────────
+    // בכוונה אחרי שההצעה כבר מסומנת חתומה, ובכוונה לא בתוך אותו update:
+    //   · העמודה signature_evidence נוספת ב-phase0-quote-fixes.sql. אם
+    //     הקוד הזה עולה לייצור לפני שה-SQL הורץ, update שכולל אותה היה
+    //     מפיל כל חתימה. כאן הוא רק מדפיס אזהרה.
+    //   · ראיות הן תיעוד, לא תנאי. לקוח שחתם בהצלחה לא יראה שגיאה בגלל
+    //     כותרת חסרה או עמודה שלא קיימת עדיין.
+    try {
+      const evidence = collectEvidence(req, pdfBuffer, content)
+      const { error: evErr } = await supabase
+        .from('quote_versions')
+        .update({ signature_evidence: evidence })
+        .eq('id', version.id)
+      if (evErr) {
+        console.warn('finalize-quote: evidence not recorded:', evErr.message)
+      } else {
+        console.log('finalize-quote: evidence recorded for version', version.id)
+      }
+    } catch (evCatch) {
+      console.warn('finalize-quote: evidence collection failed:', evCatch?.message)
     }
 
     return res.status(200).json({ success: true, file_url: publicUrl })

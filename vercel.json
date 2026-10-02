@@ -12,7 +12,7 @@
     },
     "api/finalize-quote.js": {
       "maxDuration": 60,
-      "memory": 1024
+      "memory": 2048
     },
     "api/generate-finishing-pdf.js": {
       "maxDuration": 30,

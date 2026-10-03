@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Clock, Banknote, CalendarDays } from 'lucide-react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 
@@ -22,6 +23,16 @@ function layerForStage(index, total) {
   if (total <= 1) return 6
   return 1 + Math.round((index * 5) / (total - 1))
 }
+
+/* ── אייקוני צ׳יפי השלב ────────────────────────────────────────────
+   שלושתם מ-lucide-react, שכבר בפרויקט ומשמש אותו במקומות אחרים —
+   כך "אותה משפחה" מובטח מעצם המקור ולא מהקפדה ידנית. התכונות
+   המשותפות יושבות בקבוע אחד: אותו גודל, אותו עובי קו, ו-lucide
+   מצייר stroke=currentColor, כלומר הם לוקחים את צבע הצ׳יפ.
+
+   SVG ולא אמוג׳י: ⏱ מרונדר בגופן המערכת, משנה גודל וצבע בין
+   מכשירים, ובאנדרואיד יוצא צבעוני ושובר את הטיפוגרפיה האחידה. */
+const CHIP_ICON = { size: 13, strokeWidth: 1.75, className: 'qj-chip-icon', 'aria-hidden': true }
 
 /** מפריד את המילה האחרונה כדי להדגיש אותה, כמו "לכם <b>בית.</b>" במוקאפ. */
 function Greeting({ text }) {
@@ -299,14 +310,24 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
                   </div>
                 )}
                 <div className="qj-facts">
-                  {isFilled(st.duration) && <span>⏱ {t(st.duration).split('\n')[0]}</span>}
+                  {isFilled(st.duration) && (
+                    <span><Clock {...CHIP_ICON} />{t(st.duration).split('\n')[0]}</span>
+                  )}
                   {st.pct > 0 && (
                     <span>
-                      תשלום <b>{st.pct}%</b>
-                      {fee > 0 && ` · ${Math.round((fee * st.pct) / 100).toLocaleString('en-US')} ₪`}
+                      <Banknote {...CHIP_ICON} />
+                      <span>
+                        תשלום <b>{st.pct}%</b>
+                        {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
+                            "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
+                            מתווסף לאחוז. */}
+                        {fee > 0 && ` · ${Math.round((fee * st.pct) / 100).toLocaleString('en-US')} ₪ + מע״מ`}
+                      </span>
                     </span>
                   )}
-                  {isFilled(st.trigger) && <span>{t(st.trigger)}</span>}
+                  {isFilled(st.trigger) && (
+                    <span><CalendarDays {...CHIP_ICON} />{t(st.trigger)}</span>
+                  )}
                 </div>
               </section>
             ))}

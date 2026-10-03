@@ -178,11 +178,22 @@
 }
 .qj-got div { font-family: 'Frank Ruhl Libre', serif; font-size: 19px; line-height: 1.45; }
 .qj-facts { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-.qj-facts span {
+.qj-facts > span {
   font-size: 13px; padding: 7px 12px; border-radius: 99px;
   border: 1px solid var(--qj-line); color: #cfc7b8;
+  /* inline-flex עם align-items:center מיישר את האייקון לאמצע הטקסט
+     גם כשהצ׳יפ גולש לשתי שורות (משך הזמן של שלב 4 הוא משפט שלם).
+     max-width מונע מצ׳יפ ארוך לדחוף גלילה אופקית ב-390px. */
+  display: inline-flex; align-items: center; gap: 7px;
+  max-width: 100%; min-width: 0;
 }
+.qj-facts > span > span { min-width: 0; }
 .qj-facts span b { color: var(--qj-glow); font-weight: 500; }
+
+/* הגודל ועובי הקו מגיעים מ-CHIP_ICON ב-JSX, במקום אחד לשלושתם.
+   כאן נשאר רק מה ש-lucide לא נותן: flex:none כדי שהאייקון לא
+   יימעך כשהטקסט ארוך, ועמעום קל שיישב מתחת לטקסט ולא מעליו. */
+.qj-facts .qj-chip-icon { flex: none; opacity: .72; }
 
 @media (min-width: 900px) {
   .qj-story {

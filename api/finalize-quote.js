@@ -77,15 +77,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required fields: token, content' })
   }
 
-  // Admin client — service role key bypasses RLS for all DB operations
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { persistSession: false } }
-  )
-
   let browser = null
   try {
+    // ── 0. Admin client — service role key bypasses RLS for all DB ops ────
+    // Built INSIDE the try on purpose. supabase-js throws when the URL or
+    // the key is missing, and until now that throw happened before the try,
+    // so it escaped the handler entirely: Vercel answered a bare
+    // FUNCTION_INVOCATION_FAILED with nothing in the response to say why.
+    // That is exactly what every preview deployment does, because
+    // SUPABASE_SERVICE_ROLE_KEY is not set in the Preview environment.
+    // Inside the try it becomes a 500 that names the missing variable.
+    if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const missing = [
+        !process.env.VITE_SUPABASE_URL        && 'VITE_SUPABASE_URL',
+        !process.env.SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY',
+      ].filter(Boolean)
+      console.error('finalize-quote: missing env:', missing.join(', '))
+      return res.status(500).json({
+        error: 'Server not configured',
+        detail: `Missing environment variable(s): ${missing.join(', ')}`,
+      })
+    }
+
+    const supabase = createClient(
+      process.env.VITE_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { persistSession: false } }
+    )
+
     // ── 1. Find version by token ──────────────────────────────────────────
     const { data: version, error: versionError } = await supabase
       .from('quote_versions')

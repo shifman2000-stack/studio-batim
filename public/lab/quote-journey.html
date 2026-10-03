@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>דנה ויואב, בוא נבנה לך בית</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&family=Frank+Ruhl+Libre:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --night:#16201d; --panel:#1f2b27; --panel2:#26342f; --cream:#efe7d8; --muted:#97a49c;
+  --terra:#d9774a; --glow:#f4b860; --sage:#a9bf9f; --line:rgba(239,231,216,.14);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--night);color:var(--cream);font-family:'Heebo',sans-serif;-webkit-font-smoothing:antialiased}
+.serif{font-family:'Frank Ruhl Libre',serif}
+a{color:inherit}
+
+/* ---------- top bar ---------- */
+.bar{position:fixed;top:0;right:0;left:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:linear-gradient(var(--night),rgba(22,32,29,0));pointer-events:none}
+.bar .lg{font-weight:300;font-size:17px;letter-spacing:.06em}
+.bar .lg small{display:block;font-size:6.5px;letter-spacing:.6em;color:var(--muted)}
+.prog{display:flex;gap:4px;direction:rtl}
+.prog i{width:16px;height:6px;border-radius:2px;background:rgba(239,231,216,.16);transition:background .5s}
+.prog i.on{background:var(--terra)}
+
+/* ---------- hero ---------- */
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:90px 24px 40px;max-width:1100px;margin:0 auto;position:relative}
+.hero .to{font-size:15px;letter-spacing:.3em;color:var(--terra)}
+.hero h1{font-family:'Frank Ruhl Libre';font-weight:300;font-size:clamp(54px,13vw,128px);line-height:.98;margin:14px 0 0}
+.hero h1 b{font-weight:500;color:var(--glow)}
+.hero p{max-width:460px;margin:22px 0 0;font-size:17px;line-height:1.7;color:#cfc7b8}
+.hero .cue{margin-top:46px;display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
+.hero .cue span{width:1px;height:46px;background:linear-gradient(var(--terra),transparent);animation:cue 2s infinite}
+@keyframes cue{0%{transform:scaleY(.2);transform-origin:top}50%{transform:scaleY(1)}100%{transform:scaleY(.2);transform-origin:bottom}}
+.hero .groundline{position:absolute;bottom:34px;right:24px;left:24px;border-top:1px solid var(--line)}
+
+/* ---------- story: sticky house + chapters ---------- */
+.story{position:relative}
+.stick{position:sticky;top:0;z-index:5;height:44vh;background:radial-gradient(120% 90% at 50% 100%,#24332e 0%,var(--night) 70%);display:flex;align-items:flex-end;justify-content:center;padding:58px 16px 8px;border-bottom:1px solid var(--line)}
+.stick svg{width:100%;max-width:520px;height:100%}
+.chapters{position:relative;z-index:1}
+@media (min-width:900px){
+  .story{display:flex;flex-direction:row-reverse;align-items:flex-start;max-width:1200px;margin:0 auto}
+  .stick{width:52%;height:100vh;border-bottom:0;padding:80px 30px 60px;background:none}
+  .chapters{width:48%}
+}
+
+.chap{min-height:86vh;padding:60px 24px 40px;display:flex;flex-direction:column;justify-content:center;max-width:560px;margin:0 auto}
+.chap .num{font-family:'Frank Ruhl Libre';font-size:15px;color:var(--terra);letter-spacing:.18em}
+.chap .num b{font-size:64px;font-weight:300;letter-spacing:0;color:var(--cream);margin-inline-end:10px;line-height:1;vertical-align:-14px}
+.chap h2{font-family:'Frank Ruhl Libre';font-weight:400;font-size:clamp(30px,6vw,42px);line-height:1.15;margin:14px 0 14px}
+.chap p{margin:0;font-size:16px;line-height:1.8;color:#d6cfc1}
+.got{margin-top:20px;padding:16px 18px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.got small{display:block;font-size:11px;letter-spacing:.24em;color:var(--sage);margin-bottom:4px}
+.got div{font-family:'Frank Ruhl Libre';font-size:19px;line-height:1.45}
+.facts{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.facts span{font-size:13px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);color:#cfc7b8}
+.facts span b{color:var(--glow);font-weight:500}
+
+/* ---------- fee ---------- */
+.fee{padding:90px 24px;max-width:900px;margin:0 auto;text-align:center}
+.fee .q{font-size:14px;letter-spacing:.3em;color:var(--terra)}
+.fee .amt{font-family:'Frank Ruhl Libre';font-weight:300;font-size:clamp(68px,18vw,150px);line-height:1;margin:14px 0 4px;font-variant-numeric:tabular-nums}
+.fee .amt small{font-size:.32em;color:var(--muted)}
+.fee .vat{color:var(--muted);font-size:14px}
+.segs{display:flex;gap:4px;margin:40px auto 0;max-width:720px;height:54px}
+.segs div{border-radius:6px;position:relative;background:var(--panel2);overflow:hidden}
+.segs div:before{content:"";position:absolute;inset:0;background:var(--terra);transform:scaleX(0);transform-origin:right;transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+.fee.seen .segs div:before{transform:scaleX(1)}
+.segs div:nth-child(2):before{transition-delay:.12s;background:#e08a59}
+.segs div:nth-child(3):before{transition-delay:.24s;background:#e59d68}
+.segs div:nth-child(4):before{transition-delay:.36s;background:#ebb078}
+.segs div:nth-child(5):before{transition-delay:.48s;background:#f0c389}
+.segs div:nth-child(6):before{transition-delay:.6s;background:var(--sage)}
+.segs span{position:relative;z-index:1;display:flex;height:100%;align-items:center;justify-content:center;font-weight:500;color:var(--night);font-size:15px}
+.segl{display:flex;gap:4px;max-width:720px;margin:8px auto 0}
+.segl div{font-size:11.5px;color:var(--muted);line-height:1.35;text-align:center}
+.segl b{display:block;color:var(--cream);font-weight:400;font-size:12.5px}
+
+/* ---------- what if ---------- */
+.whatif{max-width:760px;margin:0 auto;padding:40px 24px 70px}
+.whatif h2,.extras h2,.sign h2{font-family:'Frank Ruhl Libre';font-weight:400;font-size:clamp(32px,7vw,48px);margin:0 0 6px}
+.whatif .sub,.extras .sub,.sign .sub{color:var(--muted);font-size:15px;margin:0 0 26px}
+details{border-top:1px solid var(--line)}
+details:last-of-type{border-bottom:1px solid var(--line)}
+summary{list-style:none;cursor:pointer;padding:20px 4px;display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:18px;font-family:'Frank Ruhl Libre'}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";font-family:'Heebo';font-weight:300;font-size:26px;color:var(--terra);transition:transform .3s}
+details[open] summary:after{transform:rotate(45deg)}
+details p{margin:0 4px 20px;font-size:15px;line-height:1.8;color:#d6cfc1;max-width:620px}
+details p b{color:var(--glow);font-weight:500}
+
+/* ---------- extras ---------- */
+.extras{max-width:760px;margin:0 auto;padding:30px 24px 60px}
+.extra{display:flex;gap:16px;align-items:center;padding:18px 20px;border-radius:16px;background:var(--panel);border:1px solid var(--line);margin-bottom:12px;cursor:pointer;transition:border-color .3s,background .3s}
+.extra .t{flex:1}
+.extra .t b{display:block;font-family:'Frank Ruhl Libre';font-weight:400;font-size:19px}
+.extra .t span{font-size:13.5px;color:var(--muted)}
+.tog{width:46px;height:26px;border-radius:99px;background:rgba(239,231,216,.18);position:relative;flex:none;transition:background .3s}
+.tog:after{content:"";position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:var(--cream);transition:right .3s}
+.extra.on{border-color:var(--terra);background:#2b2621}
+.extra.on .tog{background:var(--terra)}
+.extra.on .tog:after{right:23px}
+
+/* ---------- sign ---------- */
+.sign{max-width:760px;margin:0 auto;padding:40px 24px 70px}
+.card{background:var(--cream);color:var(--night);border-radius:22px;padding:26px 24px 24px}
+.card .row{display:flex;gap:14px;flex-wrap:wrap}
+.card label{flex:1;min-width:200px;display:block;font-size:12px;letter-spacing:.14em;color:#6f6a60}
+.card input{display:block;width:100%;margin-top:6px;border:0;border-bottom:1.5px solid var(--night);background:transparent;font:inherit;font-size:18px;letter-spacing:0;padding:6px 2px;color:var(--night);outline:none}
+.pad{margin-top:22px;position:relative}
+.pad canvas{width:100%;height:150px;display:block;background:#f8f3ea;border-radius:12px;border:1.5px dashed #c8bfb0;touch-action:none;cursor:crosshair}
+.pad .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#a39c90;font-size:15px;pointer-events:none;font-family:'Frank Ruhl Libre'}
+.pad .clr{position:absolute;top:8px;left:10px;font-size:12px;color:#8a8680;background:none;border:0;cursor:pointer}
+.go{margin-top:22px;width:100%;border:0;border-radius:14px;background:var(--night);color:var(--cream);font:inherit;font-size:18px;padding:16px;cursor:pointer;display:flex;justify-content:center;gap:10px;align-items:center}
+.go:disabled{opacity:.35;cursor:default}
+.legal{font-size:12px;color:#7a756b;margin-top:12px;line-height:1.6;text-align:center}
+
+.done{display:none;text-align:center;padding:30px 10px 10px}
+.done h3{font-family:'Frank Ruhl Libre';font-weight:400;font-size:34px;margin:0 0 6px}
+.done p{color:#6f6a60;margin:0}
+.signed .form{display:none}.signed .done{display:block}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line);padding:30px 24px 50px;max-width:1100px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--muted)}
+footer .lg{font-weight:300;font-size:22px;color:var(--cream)}
+.pdf{border:1px solid var(--line);border-radius:99px;padding:10px 18px;color:var(--cream);text-decoration:none;font-size:13.5px}
+
+/* ---------- house drawing ---------- */
+.house *{vector-effect:non-scaling-stroke}
+.lay{opacity:0;transition:opacity .9s}
+.lay.on{opacity:1}
+.lay .d{stroke-dasharray:1000;stroke-dashoffset:1000;transition:stroke-dashoffset 1.8s cubic-bezier(.3,.6,.2,1)}
+.lay.on .d{stroke-dashoffset:0}
+.ln{fill:none;stroke:var(--cream);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.thin{stroke-width:1;opacity:.6}
+.tr{stroke:var(--terra)}
+.lab{fill:var(--muted);font-family:Heebo;font-size:10px}
+.win{fill:#2a3833;transition:fill 1.4s}
+.lit .win{fill:var(--glow)}
+.lit .halo{opacity:.55}
+.halo{opacity:0;transition:opacity 1.6s}
+.stamp{transform-origin:72px 70px;transform:rotate(-14deg) scale(1.6);opacity:0;transition:all .5s cubic-bezier(.4,1.6,.5,1)}
+.lay.on .stamp{transform:rotate(-14deg) scale(1);opacity:1}
+.cap{font-family:Heebo;font-size:12px;fill:var(--sage);letter-spacing:.12em}
+</style>
+</head>
+<body>
+
+<div class="bar"><div class="lg">סטודיו בתים<small>BY EINAV SHIFMAN</small></div>
+  <div class="prog" id="prog"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="to">הצעה אישית · 29.9.26</div>
+  <h1>דנה ויואב,<br>בוא נבנה<br>לך <b>בית.</b></h1>
+  <p>בית מגורים דו-קומתי של כ-200 מ״ר בכפר ורדים, עם פיתוח מגרש של כ-490 מ״ר ובריכת שחייה. גללו למטה, והבית ייבנה מול העיניים, שלב אחרי שלב, בדיוק בסדר שבו נעבוד יחד.</p>
+  <div class="cue"><span></span>גללו כדי לבנות</div>
+  <div class="groundline"></div>
+</section>
+
+<!-- STORY -->
+<main class="story">
+  <div class="stick">
+    <svg class="house" id="house" viewBox="0 0 420 320" aria-label="הבית נבנה לפי השלבים">
+      <!-- 0: ground always -->
+      <path class="ln" d="M6 262 H414"/>
+      <!-- L1: site + sketch -->
+      <g class="lay" data-l="1">
+        <path class="ln d thin" pathLength="1000" d="M34 262 V232 M386 262 V232" stroke-dasharray="4 4"/>
+        <path class="ln d tr" pathLength="1000" d="M112 262 V176 L210 122 L308 176 V262" style="stroke-dasharray:6 6"/>
+        <path class="ln thin" d="M58 262 l6 -10 l6 10 M350 262 l6 -10 l6 10"/>
+        <text class="lab" x="210" y="282" text-anchor="middle">מגרש · כ-490 מ״ר</text>
+      </g>
+      <!-- L2: final plan, the mass -->
+      <g class="lay" data-l="2">
+        <path class="ln d" pathLength="1000" d="M108 262 V192 H316 V262"/>
+        <path class="ln d" pathLength="1000" d="M98 192 H326"/>
+        <path class="ln d" pathLength="1000" d="M150 192 V128 H306 V192"/>
+        <path class="ln d" pathLength="1000" d="M138 128 H318"/>
+        <path class="ln d thin" pathLength="1000" d="M240 128 V112 H288 V128"/>
+      </g>
+      <!-- L3: licensing file — dimensions -->
+      <g class="lay" data-l="3">
+        <path class="ln d thin" pathLength="1000" d="M344 128 V262 M338 128 H350 M338 262 H350"/>
+        <text class="lab" x="356" y="198">7.20+</text>
+        <path class="ln d thin" pathLength="1000" d="M108 296 H316 M108 290 V302 M316 290 V302"/>
+        <text class="lab" x="212" y="314" text-anchor="middle">20.00</text>
+      </g>
+      <!-- L4: permit stamp -->
+      <g class="lay" data-l="4">
+        <g class="stamp">
+          <circle cx="72" cy="70" r="36" fill="none" stroke="#d9774a" stroke-width="2"/>
+          <circle cx="72" cy="70" r="29" fill="none" stroke="#d9774a" stroke-width=".8"/>
+          <text x="72" y="66" text-anchor="middle" fill="#d9774a" font-family="Frank Ruhl Libre" font-size="17" font-weight="500">היתר</text>
+          <text x="72" y="83" text-anchor="middle" fill="#d9774a" font-family="Heebo" font-size="8" letter-spacing="1.5">מאושר</text>
+        </g>
+      </g>
+      <!-- L5: working drawings — openings, details -->
+      <g class="lay" data-l="5">
+        <rect class="win" x="128" y="212" width="36" height="30"/><rect class="win" x="256" y="212" width="40" height="30"/>
+        <rect class="win" x="168" y="146" width="112" height="22"/>
+        <path class="ln d thin" pathLength="1000" d="M128 212 h36 v30 h-36 z M146 212 v30 M256 212 h40 v30 h-40 z M276 212 v30 M168 146 h112 v22 h-112 z M196 146 v22 M224 146 v22 M252 146 v22"/>
+        <path class="ln d" pathLength="1000" d="M196 262 V206 H226 V262"/>
+        <path class="ln d thin" pathLength="1000" d="M108 222 l18 -18 M108 240 l36 -36 M298 262 l18 -18 M306 192 l10 -10"/>
+      </g>
+      <!-- L6: built — pool, tree, glow -->
+      <g class="lay" data-l="6">
+        <ellipse class="halo" cx="146" cy="227" rx="34" ry="24" fill="#f4b860" filter="url(#bl)"/>
+        <ellipse class="halo" cx="224" cy="157" rx="70" ry="22" fill="#f4b860" filter="url(#bl)"/>
+        <path class="ln d" pathLength="1000" d="M330 262 v9 h62 v-9"/>
+        <path d="M332 264 h58 v5 h-58 z" fill="#5f8f99" opacity=".8"/>
+        <path class="ln d" pathLength="1000" d="M62 262 V214"/>
+        <circle class="ln d" pathLength="1000" cx="62" cy="200" r="22"/>
+        <circle class="ln d thin" pathLength="1000" cx="48" cy="212" r="12"/>
+        <text class="cap" x="210" y="34" text-anchor="middle">הבית עומד</text>
+      </g>
+      <defs><filter id="bl"><feGaussianBlur stdDeviation="9"/></filter></defs>
+    </svg>
+  </div>
+
+  <div class="chapters">
+    <section class="chap" data-s="1">
+      <div class="num"><b>01</b>מתוך 06</div>
+      <h2>מקשיבים, ומשרטטים את הקו הראשון</h2>
+      <p>נשב יחד לפגישת פרוגרמה: מה אתם צריכים, איך אתם חיים, איזה בית אתם רואים בעיניים. במקביל נלמד את המגרש לעומק, את המדידה, את התב״ע ואת הזכויות, ונבקר בשטח. מכל זה ייצאו חלופות תכנון ראשונות, כולל מיקום מוקדם לבריכה.</p>
+      <div class="got"><small>מה תקבלו</small><div>סקיצות ראשונות לבחינה משותפת, עם חלוקת חללים פנים וחוץ והעמדת ריהוט.</div></div>
+      <div class="facts"><span>⏱ 30 ימי עבודה</span><span>תשלום <b>15%</b> · 18,000 ₪</span><span>בחתימת החוזה</span></div>
+    </section>
+    <section class="chap" data-s="2">
+      <div class="num"><b>02</b>מתוך 06</div>
+      <h2>הבית מקבל צורה</h2>
+      <p>את החלופה שבחרתם נפתח לתוכניות מפורטות: קומות, גג, חזיתות, ופיתוח המגרש לפרטיו, משבילי הגישה והחניה ועד המרפסות והבריכה. בסוף השלב תטיילו בבית עם משקפי VR, עוד לפני שהונחה בו לבנה אחת.</p>
+      <div class="got"><small>מה תקבלו</small><div>סט תוכניות אדריכליות סופיות ומודל תלת-ממדי של הבית.</div></div>
+      <div class="facts"><span>⏱ כ-90 יום</span><span>תשלום <b>20%</b> · 24,000 ₪</span><span>במסירת הסקיצות</span></div>
+    </section>
+    <section class="chap" data-s="3">
+      <div class="num"><b>03</b>מתוך 06</div>
+      <h2>מתרגמים את החלום לשפה של הוועדה</h2>
+      <p>נקבל מהוועדה את תיק המידע, ונהפוך את התוכניות לגרמושקה רשמית עם כל הטפסים והנספחים. נתאם את כל יועצי הרישוי, מהמודד ועד הקונסטרוקטור, ונטמיע את התכנון שלהם בבקשה.</p>
+      <div class="got"><small>מה תקבלו</small><div>תיק רישוי מלא ומסודר, מוכן להגשה.</div></div>
+      <div class="facts"><span>⏱ 30 ימי עבודה</span><span>תשלום <b>20%</b> · 24,000 ₪</span><span>באישור החלופה</span></div>
+    </section>
+    <section class="chap" data-s="4">
+      <div class="num"><b>04</b>מתוך 06</div>
+      <h2>החותמת</h2>
+      <p>נפתח את הבקשה ב״רישוי זמין״ ונלווה אותה לאורך כל הבקרות מול הוועדה, נענה לכל דרישה ונכוון אתכם במה שבאחריותכם, כמו חתימות היישוב והסכמים. זה השלב הארוך והסבלני.</p>
+      <div class="got"><small>מה תקבלו</small><div>היתר בנייה מאושר וחתום.</div></div>
+      <div class="facts"><span>⏱ כ-8-10 חודשים</span><span>תשלום <b>20%</b> · 24,000 ₪</span><span>בפתיחת הבקשה</span></div>
+    </section>
+    <section class="chap" data-s="5">
+      <div class="num"><b>05</b>מתוך 06</div>
+      <h2>כל פרט, כל חלון, כל שקע</h2>
+      <p>נפיק את סט תוכניות העבודה, שבו כל היועצים מסונכרנים לתוך הסט האדריכלי: חתכים, חשמל ותאורה, אינסטלציה, מיזוג, אלומיניום, מטבח וחדרי רחצה. בנוסף נכין מפרט כמויות לחיפויים, לריצופים ולכלים הסניטריים.</p>
+      <div class="got"><small>מה תקבלו</small><div>סט תוכניות מלא למכרז ולביצוע.</div></div>
+      <div class="facts"><span>⏱ 30+10 ימי עבודה</span><span>תשלום <b>20%</b> · 24,000 ₪</span><span>אחרי אישור הוועדה</span></div>
+    </section>
+    <section class="chap" data-s="6">
+      <div class="num"><b>06</b>מתוך 06</div>
+      <h2>ונשארים איתכם עד שנדלק האור</h2>
+      <p>נגיש את טופס 2 ונלווה את הבנייה: ארבעה ביקורי פיקוח עליון בנקודות המפתח, מענה שוטף מול הקבלנים, פגישת עיצוב פנים וסיור משותף באולם התצוגה. כשהבנייה תסתיים, נגיש את הטפסים לטופס 4.</p>
+      <div class="got"><small>מה תקבלו</small><div>ליווי אדריכלי עד המפתח, ותעודת גמר.</div></div>
+      <div class="facts"><span>⏱ עד סיום הבנייה</span><span>תשלום <b>5%</b> · 6,000 ₪</span><span>בסיום הבנייה</span></div>
+    </section>
+  </div>
+</main>
+
+<!-- FEE -->
+<section class="fee" id="fee">
+  <div class="q">אז כמה זה עולה?</div>
+  <div class="amt"><span id="cnt">0</span><small> ₪</small></div>
+  <div class="vat">על כל מה שראיתם למעלה · בתוספת מע״מ · בשישה תשלומים</div>
+  <div class="segs"><div style="flex:15"><span>15%</span></div><div style="flex:20"><span>20%</span></div><div style="flex:20"><span>20%</span></div><div style="flex:20"><span>20%</span></div><div style="flex:20"><span>20%</span></div><div style="flex:5"><span></span></div></div>
+  <div class="segl"><div style="flex:15"><b>1</b>מקשיבים</div><div style="flex:20"><b>2</b>צורה</div><div style="flex:20"><b>3</b>רישוי</div><div style="flex:20"><b>4</b>היתר</div><div style="flex:20"><b>5</b>פרטים</div><div style="flex:5"><b>6</b></div></div>
+</section>
+
+<!-- WHAT IF -->
+<section class="whatif">
+  <h2>ומה אם…?</h2>
+  <p class="sub">התנאים, בתור השאלות שאתם בטח כבר שואלים.</p>
+  <details><summary>…נרצה לשנות משהו שכבר אישרנו?</summary><p>שינוי שמחזיר אותנו לשלב שכבר הסתיים ואושר, או ייעוץ מעבר למה שמוגדר כאן, מתומחר לפי <b>350 ₪ לשעה</b> בתוספת מע״מ. אם נתוני הפרויקט עצמם ישתנו, נעדכן את ההצעה.</p></details>
+  <details><summary>…נצטרך היתר שינויים אחרי שיש היתר?</summary><p>היתר שינויים בסמכות מהנדס הוועדה: <b>8,500 ₪</b>. היתר שינויים מלא: <b>15,000 ₪</b>. שניהם בתוספת מע״מ. מקרים חריגים יתומחרו לפי היקף העבודה.</p></details>
+  <details><summary>…ניקח יותר זמן לבחור סקיצה?</summary><p>זה בסדר גמור. אם הסקיצה לא תאושר בתוך 4 חודשים מפגישת הפרוגרמה, יתווספו <b>500 ₪ לכל חודש נוסף</b>.</p></details>
+  <details><summary>…נעצור את הפרויקט לתקופה?</summary><p>השהיה של יותר מ-90 יום מבטלת את ההסכם, והמשך העבודה ייעשה בהתקשרות חדשה. סכומים ששולמו עד אז לא יוחזרו.</p></details>
+  <details><summary>…הרשויות יתעכבו?</summary><p>לוחות הזמנים הם הערכה. אנחנו מחויבים לקדם את הפרויקט ביעילות, אבל יש דברים שלא בשליטתנו, כמו זמני רשויות וכוח עליון.</p></details>
+  <details><summary>מי משלם אגרות, יועצים והדפסות?</summary><p>אגרות והיטלים (היטל השבחה, אגרות בנייה, ביוב) חלים עליכם. גם היועצים הנדרשים בחוק (מודד, קונסטרוקטור, יועץ קרקע ועוד) מתקשרים ישירות מולכם. הדפסות ושליחויות משולמות ישירות למכון ההעתקות.</p></details>
+  <details><summary>מה בדיוק כולל הפיקוח העליון?</summary><p>בקרה שהבנייה תואמת להיתר, ולפי החוק אנחנו מחויבים לדווח לוועדה על כל סטייה. את הקבלנים ואת המפקח אתם ממנים, והאחריות לטיב הביצוע עליהם. החתימה על טופס 4 תבוצע אחרי התשלום האחרון.</p></details>
+  <details><summary>של מי התוכניות?</summary><p>זכויות היוצרים שמורות לנו, ואתם רשאים להשתמש בתוכניות להקמת הבית הזה, ורק לו.</p></details>
+</section>
+
+<!-- EXTRAS -->
+<section class="extras">
+  <h2>רוצים עוד?</h2>
+  <p class="sub">שירותים שלא כלולים בהצעה. סמנו מה מעניין אתכם, ועינב תחזור אליכם עם הצעה נפרדת.</p>
+  <div class="extra" onclick="this.classList.toggle('on')"><div class="t"><b>פרטי נגרות בהתאמה אישית</b><span>ארונות, ספריות ומטבח, מתוכננים עד הבורג</span></div><div class="tog"></div></div>
+  <div class="extra" onclick="this.classList.toggle('on')"><div class="t"><b>ליווי רכישות ביבוא אישי</b><span>חיפויים, תאורה וכלים סניטריים מחו״ל</span></div><div class="tog"></div></div>
+</section>
+
+<!-- SIGN -->
+<section class="sign" id="sign">
+  <h2>אז, מתחילים?</h2>
+  <p class="sub">חתימה כאן מאשרת את ההצעה ואת התנאים שלמעלה, ומניחה את הלבנה הראשונה.</p>
+  <div class="card" id="card">
+    <div class="form">
+      <div class="row"><label>שם מלא<input id="nm" value="דנה ויואב"></label><label>תעודת זהות<input id="tz" inputmode="numeric" placeholder=""></label></div>
+      <div class="pad"><canvas id="cv"></canvas><div class="ph" id="ph">חתמו כאן באצבע</div><button class="clr" id="clr" type="button">ניקוי</button></div>
+      <button class="go" id="go" disabled>מניחים את הלבנה הראשונה ←</button>
+      <div class="legal">עם החתימה יישלח אליכם עותק PDF של ההצעה החתומה.</div>
+    </div>
+    <div class="done"><h3>הלבנה הראשונה הונחה.</h3><p>תודה, דנה ויואב. עינב תיצור איתך קשר בימים הקרובים לתיאום פגישת הפרוגרמה.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div><div class="lg">סטודיו בתים</div>עינב שיפמן · קיבוץ נגבה · 050-0000000 · lab@example.com</div>
+  <a class="pdf" href="#" onclick="return false">⇣ הורדת ההצעה כ-PDF</a>
+</footer>
+
+<script>
+(function(){
+  const layers=[...document.querySelectorAll('.lay')];
+  const prog=[...document.querySelectorAll('#prog i')];
+  const house=document.getElementById('house');
+  function setStage(n){
+    layers.forEach(l=>l.classList.toggle('on',+l.dataset.l<=n));
+    // the dashed sketch belongs only to stage 1
+    const sk=layers[0].querySelector('.tr'); if(sk) sk.style.opacity = n>1 ? .25 : 1;
+    prog.forEach((p,i)=>p.classList.toggle('on',i<n));
+    house.classList.toggle('lit',n>=6);
+  }
+  const io=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting) setStage(+e.target.dataset.s); });
+  },{rootMargin:'-45% 0px -45% 0px'});
+  document.querySelectorAll('.chap').forEach(c=>io.observe(c));
+
+  // fee count-up
+  const fee=document.getElementById('fee'), cnt=document.getElementById('cnt'); let ran=false;
+  new IntersectionObserver(es=>{ if(es[0].isIntersecting&&!ran){ ran=true; fee.classList.add('seen'); setStage(6);
+    const t0=performance.now(), T=1400;
+    (function tick(t){ const k=Math.min(1,(t-t0)/T), e=1-Math.pow(1-k,3);
+      cnt.textContent=Math.round(120000*e).toLocaleString('en-US'); if(k<1) requestAnimationFrame(tick);})(t0);
+  }},{threshold:.4}).observe(fee);
+
+  // signature pad
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d'), ph=document.getElementById('ph'), go=document.getElementById('go');
+  let drawing=false, inked=false;
+  function size(){ const r=cv.getBoundingClientRect(), d=window.devicePixelRatio||1; cv.width=r.width*d; cv.height=r.height*d; ctx.scale(d,d); ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.strokeStyle='#16201d'; }
+  size(); window.addEventListener('resize',()=>{ if(!inked) size(); });
+  const pos=e=>{const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top]};
+  cv.addEventListener('pointerdown',e=>{drawing=true;cv.setPointerCapture(e.pointerId);ctx.beginPath();ctx.moveTo(...pos(e));});
+  cv.addEventListener('pointermove',e=>{if(!drawing)return;ctx.lineTo(...pos(e));ctx.stroke();inked=true;ph.style.display='none';check();});
+  cv.addEventListener('pointerup',()=>drawing=false);
+  document.getElementById('clr').onclick=()=>{ctx.clearRect(0,0,cv.width,cv.height);inked=false;ph.style.display='';check();};
+  const nm=document.getElementById('nm'); nm.addEventListener('input',check);
+  function check(){ go.disabled=!(inked && nm.value.trim()); }
+  go.onclick=()=>{ document.getElementById('card').classList.add('signed'); setStage(6); };
+})();
+</script>
+</body>
+</html>

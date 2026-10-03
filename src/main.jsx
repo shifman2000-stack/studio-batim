@@ -41,6 +41,7 @@ import ContractorSpecPrintView from './pages/ContractorSpecPrintView'
 import QuotePublic from './pages/QuotePublic'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
+import QuoteV2Lab from './pages/lab/QuoteV2Lab'
 
 function Layout() {
   return (
@@ -102,6 +103,10 @@ createRoot(document.getElementById('root')).render(
         <Route path="/contractor-spec-print/:projectId" element={<ContractorSpecPrintView />} />
         <Route path="/quote/:token" element={<QuotePublic />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        {/* מעבדה להצעת מחיר v2 — admin בלבד, לא מקושר משום תפריט.
+            מחוץ ל-<Layout> בכוונה: המסע תופס את כל המסך, כמו שהלקוח
+            יראה אותו בטלפון. קריאה בלבד, בלי קשר להצעות הקיימות. */}
+        <Route path="/lab/quote-v2" element={<QuoteV2Lab />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

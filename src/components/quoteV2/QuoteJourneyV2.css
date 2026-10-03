@@ -120,21 +120,23 @@
   height: 44vh;
   background: radial-gradient(120% 90% at 50% 100%, #24332e 0%, var(--qj-night) 70%);
   display: flex; align-items: flex-end; justify-content: center;
-  /* padding-bottom עושה מקום לשורת תוויות השטח מתחת לציור.
-     padding-top מרחיק את הציור מהסרגל העליון, ששוכן מעליו sticky. */
-  padding: 58px 16px 30px;
+  /* padding-top מרחיק את הציור מהסרגל העליון, ששוכן מעליו sticky.
+     תוויות השטח כבר אינן צריכות מקום כאן — הן בתוך ה-SVG. */
+  padding: 58px 16px 8px;
   border-bottom: 1px solid var(--qj-line);
 }
 .qj-stick .qj-house { width: 100%; max-width: 520px; height: 100%; }
 .qj-chapters { position: relative; z-index: 1; }
 
-/* תוויות השטח — HTML ולא <text> בתוך ה-SVG. ב-WebKit טקסט עברי
-   מרווח בתוך SVG מתהפך, וזה בדיוק מה ששבר את הלוגו באייפון. */
+/* תוויות השטח. הן יושבות בתוך ה-SVG, ב-foreignObject שצמוד מתחת
+   לקו הקרקע, ולכן המידות כאן הן ביחידות ה-viewBox ולא בפיקסלים —
+   הן גדלות ומתכווצות יחד עם הציור, בדיוק כמו ב-<text> של המוקאפ.
+   HTML ולא <text>, כי עברית מרווחת ב-SVG מתהפכת ב-WebKit. */
 .qj-dims {
-  position: absolute; bottom: 8px; right: 0; left: 0;
   display: flex; justify-content: center; gap: 18px;
-  font-size: 11px; color: var(--qj-muted);
-  pointer-events: none;
+  font-family: 'Heebo', sans-serif; font-size: 10px; line-height: 1.4;
+  color: var(--qj-muted); direction: rtl; pointer-events: none;
+  white-space: nowrap;
 }
 .qj-dims span { opacity: 0; transition: opacity .9s; }
 .qj-dims span.qj-on { opacity: 1; }
@@ -225,20 +227,22 @@
   font-weight: 500; color: var(--qj-night); font-size: 15px;
 }
 .qj-segl { display: flex; gap: 4px; max-width: 720px; margin: 8px auto 0; }
+/* min-width: min-content הוא מה שמחזיק את זה יחד. הפלחים מחולקים
+   לפי אחוזים, ולשלב של 5% נשאר רוחב של פחות מ-20px — פחות ממילה
+   אחת. בלי הרצפה הזו הטקסט היה או נחתך (overflow:hidden) או גולש
+   אל מתחת לשכן. min-content = המילה הארוכה ביותר בתווית, ולכן
+   התווית תמיד נכנסת במלואה, גולשת לשתי שורות אם צריך, ולעולם לא
+   חופפת — פריטי flex לא יכולים לחפוף זה את זה.
+
+   הפסים עצמם (.qj-segs) נשארים בלי רצפה, כדי שרוחב הפס ימשיך לייצג
+   את האחוז נאמנה. התוצאה: תווית של פלח צר רחבה מהפס שמעליה. זה
+   מכוון — עדיף מתווית חתוכה. */
 .qj-segl > div {
-  font-size: 11.5px; color: var(--qj-muted); line-height: 1.35;
-  text-align: center; overflow: hidden;
+  font-size: 11.5px; color: var(--qj-muted); line-height: 1.3;
+  text-align: center; min-width: min-content;
 }
 .qj-segl b { display: block; color: var(--qj-cream); font-weight: 400; font-size: 12.5px; }
-/* בטלפון הפלחים צרים מכדי להכיל שם רשמי בן שלוש-ארבע מילים —
-   נשאר המספר בלבד, והשם חוזר כשיש רוחב. */
-.qj-segl .qj-seglabel { display: none; }
-@media (min-width: 600px) {
-  .qj-segl .qj-seglabel {
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-}
+.qj-segl .qj-seglabel { display: block; }
 
 /* ---------- what if ---------- */
 .qj-whatif { max-width: 760px; margin: 0 auto; padding: 40px 24px 70px; }

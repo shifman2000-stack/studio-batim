@@ -179,10 +179,6 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
       {total > 0 && (
         <main className="qj-story">
           <div className="qj-stick">
-            <div className="qj-dims">
-              {houseLabel && <span className={activeLayer >= 3 ? 'qj-on' : undefined}>{houseLabel}</span>}
-              {plotLabel && <span className={activeLayer >= 1 ? 'qj-on' : undefined}>{plotLabel}</span>}
-            </div>
             <div className={'qj-cap' + (lit ? ' qj-on' : '')}>הבית עומד</div>
 
             <svg
@@ -193,6 +189,21 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
             >
               {/* 0 — הקרקע, תמיד */}
               <path className="qj-ln" d="M6 262 H414" />
+
+              {/* תוויות השטח — HTML בתוך foreignObject, צמוד מתחת לקו
+                  הקרקע (y=262). foreignObject ולא מיקום absolute מעל
+                  ה-SVG, כי ה-SVG מרונדר ב-xMidYMid meet: הוא ממורכז
+                  בתוך הקופסה שלו ואין דרך אמינה לחשב מבחוץ איפה הקו
+                  נמצא בפיקסלים. בתוך ה-viewBox זה פשוט y=266.
+                  HTML ולא <text>, כי עברית מרווחת ב-SVG מתהפכת ב-WebKit. */}
+              {(houseLabel || plotLabel) && (
+                <foreignObject x="10" y="266" width="400" height="20">
+                  <div xmlns="http://www.w3.org/1999/xhtml" className="qj-dims">
+                    {houseLabel && <span className={activeLayer >= 3 ? 'qj-on' : undefined}>{houseLabel}</span>}
+                    {plotLabel && <span className={activeLayer >= 1 ? 'qj-on' : undefined}>{plotLabel}</span>}
+                  </div>
+                </foreignObject>
+              )}
 
               {/* 1 — מגרש, קווי בניין, סקיצה */}
               <g className={'qj-lay' + layerOn(1)}>
@@ -325,9 +336,12 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
                 {stages.map((st, i) => (
                   <div key={st.id ?? i} style={{ flex: st.pct || 1 }}>
                     <b>{i + 1}</b>
-                    {/* השם הרשמי ארוך מכדי להיכנס לרוחב של פלח בטלפון,
-                        ולכן הוא מוסתר ב-CSS מתחת ל-600px. */}
-                    <span className="qj-seglabel">{st.pct >= 10 ? t(st.formalName) : ''}</span>
+                    {/* shortLabel — השם הקצר של השלב, הצד השיווקי.
+                        ריק → המספר בלבד. השם הרשמי אינו בשימוש כאן:
+                        הוא ארוך מכדי להיכנס מתחת לפס. */}
+                    {isFilled(st.shortLabel) && (
+                      <span className="qj-seglabel">{t(st.shortLabel)}</span>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,0 +1,13 @@
+/* ראו את ההסבר המלא ב-Money.jsx. בקצרה: שתי שכבות בידוד — RTL
+   בחוץ כדי שהשקל ייפול שמאלה מהמספר, LTR בפנים כדי שהמספר עצמו
+   לא יתהפך. nowrap כדי שהשקל לא יישבר לשורה משלו. */
+.q-money {
+  direction: rtl;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.q-money-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}

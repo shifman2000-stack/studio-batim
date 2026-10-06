@@ -25,12 +25,24 @@
   direction: rtl;
   text-align: start;
   -webkit-font-smoothing: antialiased;
-  /* רוחב A4 פחות שולי @page. על המסך זו רק תצוגה; בהדפסה
-     @page קובע את השוליים והרוחב הזה הופך ל-100%. */
-  width: 170mm;
-  margin: 0 auto;
-  padding: 0;
+  /* ברירת המחדל היא "נייטרלית להדפסה": בלי רוחב ובלי ריפוד, כי
+     בהדפסה @page קובע את הגיליון ואת השוליים. מראה הדף על המסך
+     מתווסף ב-@media screen בלבד. */
   font-size: 13.5px;
+}
+
+@media screen {
+  /* על המסך המסמך נראה כמו גיליון A4 אמיתי: רוחב מלא של הדף,
+     ריפוד פנימי **זהה לשולי ה-@page** (18/16/20 מ״מ), ממורכז על
+     הרקע האפור עם צל קל. בלי זה הטקסט נוגע בקצה הנייר הלבן ואי
+     אפשר להעריך מהמסך איך ההדפסה תיראה. */
+  .qt-doc {
+    width: 210mm;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 18mm 16mm 20mm;
+    box-shadow: 0 3px 16px rgba(40, 30, 20, .18);
+  }
 }
 .qt-doc *, .qt-doc *::before, .qt-doc *::after { box-sizing: border-box; }
 .qt-doc p { margin: 0; }
@@ -87,8 +99,8 @@
 /* max-width: בלי זה justify-content:space-between מועך את תווית
    שכר הטרחה לעמודה צרה, ו"בתוספת מע״מ" נשבר באמצע המילה. */
 .qt-fee .qt-k { font-size: 12px; color: var(--qt-muted); line-height: 1.6; max-width: 240px; }
-.qt-fee .qt-amt { font-family: 'Playfair Display', serif; font-size: 60px; line-height: 1; direction: ltr; }
-.qt-fee .qt-amt small { font-size: 22px; color: var(--qt-muted); }
+.qt-fee .qt-amt { font-family: 'Playfair Display', serif; font-size: 60px; line-height: 1; }
+.qt-fee .qt-amt .q-money-sign { font-size: 22px; color: var(--qt-muted); }
 
 .qt-parties { display: flex; margin-top: 36px; font-size: 13px; line-height: 1.8; }
 .qt-parties .qt-pc { flex: 1; padding-inline-end: 24px; }
@@ -141,14 +153,22 @@
   color: var(--qt-muted); letter-spacing: .1em;
 }
 .qt-pay .qt-sum {
-  width: 92px; flex: none; text-align: start; direction: ltr;
+  width: 92px; flex: none; text-align: start;
   font-size: 13.5px; font-weight: 500;
+}
+/* "בתוספת מע״מ" מתחת לסכום בכל שורה — כדי שלא יצטרכו לחזור
+   לשורת הסיכום כדי לדעת אם המספר כולל מע״מ. */
+.qt-pay .qt-sum .qt-vat {
+  display: block; margin-top: 2px;
+  font-size: 10px; font-weight: 400; color: var(--qt-muted);
+  letter-spacing: .02em;
 }
 .qt-paytotal {
   display: flex; justify-content: space-between; align-items: baseline;
   padding: 12px 0 0; font-size: 13px; color: #4d4a45;
 }
-.qt-paytotal b { font-weight: 500; direction: ltr; }
+.qt-paytotal b { font-weight: 500; }
+.qt-pctnum { direction: ltr; unicode-bidi: isolate; }
 
 /* ---------- שלבים ---------- */
 .qt-stage {

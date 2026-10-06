@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Banknote, CalendarDays } from 'lucide-react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
-import { computePayments, formatMoney } from '../../lib/quoteV2/payments'
+import { computePayments } from '../../lib/quoteV2/payments'
+import Money from './Money'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteJourneyV2 — הפן השיווקי של הצעת מחיר v2
@@ -329,7 +330,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
                         {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
                             "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
                             מתווסף לאחוז. */}
-                        {fee > 0 && ` · ${formatMoney(amounts[i])} ₪ + מע״מ`}
+                        {fee > 0 && <> · <Money value={amounts[i]} /> + מע״מ</>}
                       </span>
                     </span>
                   )}
@@ -348,7 +349,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
         <section className={'qj-fee' + (feeSeen ? ' qj-seen' : '')} ref={feeRef}>
           <div className="qj-q">{t(S.fee.question)}</div>
           <div className="qj-amt qj-serif">
-            {formatMoney(feeShown)}<small> ₪</small>
+            <Money value={feeShown} />
           </div>
           <div className="qj-vat">{t(S.fee.note)}</div>
 

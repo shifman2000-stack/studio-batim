@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import './QuoteTowerV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
-import { computePayments, formatMoney } from '../../lib/quoteV2/payments'
+import { computePayments } from '../../lib/quoteV2/payments'
+import Money from './Money'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteTowerV2 — הפן הכתוב של הצעת מחיר v2 ("מגדל הבית")
@@ -177,7 +178,7 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
               {isFilled(S.fee?.feeLabel) ? t(S.fee.feeLabel) : 'שכר טרחה'}
               <br />{isFilled(S.fee?.vatNote) ? t(S.fee.vatNote) : 'בתוספת מע״מ'}
             </div>
-            <div className="qt-amt">{formatMoney(fee)}<small> ₪</small></div>
+            <div className="qt-amt"><Money value={fee} /></div>
           </div>
         )}
 
@@ -229,16 +230,21 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
                 <i>מועד התשלום</i>
                 {t(st.trigger)}
               </div>
-              {fee > 0 && <div className="qt-sum">{formatMoney(amounts[i])} ₪</div>}
+              {fee > 0 && (
+                <div className="qt-sum">
+                  <Money value={amounts[i]} />
+                  <span className="qt-vat">בתוספת מע״מ</span>
+                </div>
+              )}
             </div>
           ))}
 
           <div className="qt-paytotal">
             <span>סה״כ</span>
             <b>
-              {pctSum}%
-              {fee > 0 && ` · ${formatMoney(fee)} ₪`}
-              {isFilled(S.fee.vatNote) ? ` ${t(S.fee.vatNote)}` : ' בתוספת מע״מ'}
+              <bdi className="qt-pctnum">{pctSum}%</bdi>
+              {fee > 0 && <> · <Money value={fee} /></>}
+              {' '}{isFilled(S.fee.vatNote) ? t(S.fee.vatNote) : 'בתוספת מע״מ'}
             </b>
           </div>
         </>

@@ -213,9 +213,9 @@
 .qj-fee .qj-amt {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 300;
   font-size: clamp(68px, 18vw, 150px); line-height: 1; margin: 14px 0 4px;
-  font-variant-numeric: tabular-nums; direction: ltr;
+  font-variant-numeric: tabular-nums;
 }
-.qj-fee .qj-amt small { font-size: .32em; color: var(--qj-muted); }
+.qj-fee .qj-amt .q-money-sign { font-size: .32em; color: var(--qj-muted); }
 .qj-fee .qj-vat { color: var(--qj-muted); font-size: 14px; }
 
 .qj-segs { display: flex; gap: 4px; margin: 40px auto 0; max-width: 720px; height: 54px; }

@@ -42,6 +42,7 @@ import QuotePublic from './pages/QuotePublic'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
 import QuoteV2Lab from './pages/lab/QuoteV2Lab'
+import QuoteV2PrintLab from './pages/lab/QuoteV2PrintLab'
 
 function Layout() {
   return (
@@ -107,6 +108,7 @@ createRoot(document.getElementById('root')).render(
             מחוץ ל-<Layout> בכוונה: המסע תופס את כל המסך, כמו שהלקוח
             יראה אותו בטלפון. קריאה בלבד, בלי קשר להצעות הקיימות. */}
         <Route path="/lab/quote-v2" element={<QuoteV2Lab />} />
+        <Route path="/lab/quote-v2/print" element={<QuoteV2PrintLab />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

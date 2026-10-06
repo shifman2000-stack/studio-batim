@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../supabaseClient'
+import { useState } from 'react'
 import QuoteJourneyV2 from '../../components/quoteV2/QuoteJourneyV2'
-import { deriveFirstNames } from '../../lib/quoteV2/resolve'
+import QuoteTowerV2 from '../../components/quoteV2/QuoteTowerV2'
+import { useLabTemplate, useLabVars, LAB } from './useLabTemplate'
 
 /* ═══════════════════════════════════════════════════════════════════════
-   /lab/quote-v2 — מעבדה לפן השיווקי של הצעת מחיר v2
+   /lab/quote-v2 — מעבדה לשני הפנים של הצעת מחיר v2
 
    ⚠️ לא מקושר משום תפריט, ו-admin בלבד. הדף טוען את תבנית ברירת
-   המחדל מ-quote_templates ומרנדר אותה דרך QuoteJourneyV2 עם נתוני
-   לקוח **בדיוניים** שאפשר להחליף בלוח הבקרה המרחף.
+   המחדל מ-quote_templates ומרנדר אותה דרך QuoteJourneyV2 (📱 שיווקי)
+   או QuoteTowerV2 (📄 כתוב), עם נתוני לקוח **בדיוניים** שאפשר
+   להחליף בלוח הבקרה המרחף.
 
    קריאה בלבד. אין כאן שום כתיבה, ואין קשר להצעות הקיימות.
    ═══════════════════════════════════════════════════════════════════════ */
@@ -19,7 +19,7 @@ const PANEL = {
   background: 'rgba(20,20,20,.92)', color: '#fff', borderRadius: 12,
   padding: '12px 14px', font: '13px/1.5 Heebo, sans-serif',
   boxShadow: '0 8px 30px rgba(0,0,0,.45)', direction: 'rtl',
-  maxWidth: 260, backdropFilter: 'blur(6px)',
+  maxWidth: 270, backdropFilter: 'blur(6px)',
 }
 const ROW = { display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }
 const BTN = {
@@ -29,73 +29,35 @@ const BTN = {
 const BTN_ON = { ...BTN, background: '#d9774a', borderColor: '#d9774a' }
 const LABEL = { minWidth: 62, color: '#9aa', fontSize: 12 }
 
-/* נתוני דמה. שמות בדיוניים בלבד — אין כאן אף לקוח אמיתי. */
-const NAME_1 = 'דנה'
-const NAME_2 = 'יואב'
-const SETTLEMENT = 'כפר ורדים'
-const HOUSE_AREA = '200'
-const PLOT_AREA = '490'
-const FEE = 120000
+/* מסך לבן שגולל בעצמו — הפן הכתוב אינו חי בתוך מכל הגלילה האפל
+   של המסע, ו-#root הוא overflow:hidden (index.css:27). */
+const TOWER_SCREEN = {
+  flex: 1, minHeight: 0, overflow: 'auto',
+  background: '#e6e2db', padding: '24px 12px 60px',
+}
 
 export default function QuoteV2Lab() {
-  const navigate = useNavigate()
-  const [state, setState] = useState('checking')   // checking | loading | ready | error
-  const [error, setError] = useState('')
-  const [content, setContent] = useState(null)
+  const { state, error, content } = useLabTemplate()
 
+  const [face, setFace] = useState('journey')       // journey | tower
   const [twoClients, setTwoClients] = useState(true)
   const [hasHouse, setHasHouse] = useState(true)
   const [hasPlot, setHasPlot] = useState(true)
   const [hasSettlement, setHasSettlement] = useState(true)
   const [panelOpen, setPanelOpen] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { navigate('/'); return }
-      const { data: profile } = await supabase
-        .from('profiles').select('role').eq('id', session.user.id).single()
-      if (profile?.role !== 'admin') { navigate('/dashboard'); return }
-      if (cancelled) return
-
-      setState('loading')
-      const { data, error: err } = await supabase
-        .from('quote_templates')
-        .select('name, content')
-        .eq('is_default', true)
-        .maybeSingle()
-      if (cancelled) return
-      if (err) {
-        setError('שגיאה בטעינת התבנית: ' + err.message)
-        setState('error')
-        return
-      }
-      if (!data?.content) {
-        setError('לא נמצאה תבנית ברירת מחדל. הרצת את docs/sql/quote-v2-phaseA.sql על Dev?')
-        setState('error')
-        return
-      }
-      setContent(data.content)
-      setState('ready')
-    }
-    run()
-    return () => { cancelled = true }
-  }, [navigate])
-
   const clientCount = twoClients ? 2 : 1
-
-  const vars = useMemo(() => ({
-    firstNames: deriveFirstNames(twoClients ? [NAME_1, NAME_2] : [NAME_1]),
-    settlement: hasSettlement ? SETTLEMENT : '',
-    houseArea: hasHouse ? HOUSE_AREA : '',
-    plotArea: hasPlot ? PLOT_AREA : '',
-    fee: FEE,
-  }), [twoClients, hasHouse, hasPlot, hasSettlement])
+  const vars = useLabVars({ twoClients, hasHouse, hasPlot, hasSettlement })
 
   /* key מאלץ רינדור נקי בכל שינוי — כך הציור והספירה מתחילים מאפס
      ולא נשארים תקועים במצב של הגלילה הקודמת. */
-  const renderKey = `${clientCount}-${hasHouse}-${hasPlot}-${hasSettlement}`
+  const renderKey = `${face}-${clientCount}-${hasHouse}-${hasPlot}-${hasSettlement}`
+
+  const printUrl = '/lab/quote-v2/print'
+    + `?clients=${clientCount}`
+    + (hasHouse ? '' : '&nohouse=1')
+    + (hasPlot ? '' : '&noplot=1')
+    + (hasSettlement ? '' : '&nocity=1')
 
   if (state === 'checking' || state === 'loading') {
     return <div dir="rtl" style={{ padding: 40, fontFamily: 'Heebo, sans-serif' }}>טוען…</div>
@@ -110,12 +72,23 @@ export default function QuoteV2Lab() {
 
   return (
     <>
-      <QuoteJourneyV2
-        key={renderKey}
-        content={content}
-        vars={vars}
-        clientCount={clientCount}
-      />
+      {face === 'journey' ? (
+        <QuoteJourneyV2
+          key={renderKey}
+          content={content}
+          vars={vars}
+          clientCount={clientCount}
+        />
+      ) : (
+        <div style={TOWER_SCREEN}>
+          <QuoteTowerV2
+            key={renderKey}
+            content={content}
+            vars={vars}
+            clientCount={clientCount}
+          />
+        </div>
+      )}
 
       {panelOpen ? (
         <div style={PANEL}>
@@ -129,31 +102,43 @@ export default function QuoteV2Lab() {
           </div>
 
           <div style={ROW}>
+            <span style={LABEL}>פן</span>
+            <button type="button" style={face === 'journey' ? BTN_ON : BTN} onClick={() => setFace('journey')}>📱 שיווקי</button>
+            <button type="button" style={face === 'tower' ? BTN_ON : BTN} onClick={() => setFace('tower')}>📄 כתוב</button>
+          </div>
+
+          <div style={ROW}>
             <span style={LABEL}>לקוחות</span>
-            <button type="button" style={!twoClients ? BTN_ON : BTN} onClick={() => setTwoClients(false)}>דנה</button>
-            <button type="button" style={twoClients ? BTN_ON : BTN} onClick={() => setTwoClients(true)}>דנה ויואב</button>
+            <button type="button" style={!twoClients ? BTN_ON : BTN} onClick={() => setTwoClients(false)}>{LAB.name1}</button>
+            <button type="button" style={twoClients ? BTN_ON : BTN} onClick={() => setTwoClients(true)}>{LAB.name1} ו{LAB.name2}</button>
           </div>
 
           <div style={ROW}>
             <span style={LABEL}>שטח בית</span>
-            <button type="button" style={hasHouse ? BTN_ON : BTN} onClick={() => setHasHouse(true)}>200</button>
+            <button type="button" style={hasHouse ? BTN_ON : BTN} onClick={() => setHasHouse(true)}>{LAB.houseArea}</button>
             <button type="button" style={!hasHouse ? BTN_ON : BTN} onClick={() => setHasHouse(false)}>ריק</button>
           </div>
 
           <div style={ROW}>
             <span style={LABEL}>שטח מגרש</span>
-            <button type="button" style={hasPlot ? BTN_ON : BTN} onClick={() => setHasPlot(true)}>490</button>
+            <button type="button" style={hasPlot ? BTN_ON : BTN} onClick={() => setHasPlot(true)}>{LAB.plotArea}</button>
             <button type="button" style={!hasPlot ? BTN_ON : BTN} onClick={() => setHasPlot(false)}>ריק</button>
           </div>
 
           <div style={ROW}>
             <span style={LABEL}>יישוב</span>
-            <button type="button" style={hasSettlement ? BTN_ON : BTN} onClick={() => setHasSettlement(true)}>כפר ורדים</button>
+            <button type="button" style={hasSettlement ? BTN_ON : BTN} onClick={() => setHasSettlement(true)}>{LAB.settlement}</button>
             <button type="button" style={!hasSettlement ? BTN_ON : BTN} onClick={() => setHasSettlement(false)}>ריק</button>
           </div>
 
+          <div style={ROW}>
+            <a href={printUrl} target="_blank" rel="noreferrer" style={{ ...BTN, textAlign: 'center', textDecoration: 'none' }}>
+              ⎙ פתח דף הדפסה
+            </a>
+          </div>
+
           <div style={{ ...ROW, color: '#9aa', fontSize: 11, marginTop: 10 }}>
-            שכר טרחה: {FEE.toLocaleString('en-US')} ₪ · קריאה בלבד
+            שכר טרחה: {LAB.fee.toLocaleString('en-US')} ₪ · קריאה בלבד
           </div>
         </div>
       ) : (

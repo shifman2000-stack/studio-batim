@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Banknote, CalendarDays } from 'lucide-react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
+import { computePayments, formatMoney } from '../../lib/quoteV2/payments'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteJourneyV2 — הפן השיווקי של הצעת מחיר v2
@@ -84,6 +85,13 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
   const extras = useMemo(() => S.extras?.items ?? [], [S])
   const fee = Number(vars.fee) || 0
   const total = stages.length
+  /* אותה גזירה בדיוק כמו בפן הכתוב. קודם זה היה Math.round מקומי
+     כאן ו-floor+השלמה שם — זהה עבור התבנית הנוכחית, אבל בשכר טרחה
+     שלא מתחלק יפה הצ׳יפ בטלפון וה-PDF היו מציגים סכומים שונים. */
+  const amounts = useMemo(
+    () => computePayments(fee, stages.map(s => s.pct)),
+    [fee, stages]
+  )
 
   /* ── ההתקדמות: איזה פרק נמצא באמצע המסך ──────────────────────────
      root הוא מכל הגלילה שלנו ולא ה-viewport, כדי שהמסע יעבוד גם
@@ -321,7 +329,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
                         {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
                             "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
                             מתווסף לאחוז. */}
-                        {fee > 0 && ` · ${Math.round((fee * st.pct) / 100).toLocaleString('en-US')} ₪ + מע״מ`}
+                        {fee > 0 && ` · ${formatMoney(amounts[i])} ₪ + מע״מ`}
                       </span>
                     </span>
                   )}
@@ -340,7 +348,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
         <section className={'qj-fee' + (feeSeen ? ' qj-seen' : '')} ref={feeRef}>
           <div className="qj-q">{t(S.fee.question)}</div>
           <div className="qj-amt qj-serif">
-            {feeShown.toLocaleString('en-US')}<small> ₪</small>
+            {formatMoney(feeShown)}<small> ₪</small>
           </div>
           <div className="qj-vat">{t(S.fee.note)}</div>
 

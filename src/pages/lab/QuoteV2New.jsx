@@ -97,31 +97,60 @@ export default function QuoteV2New() {
     return buildQuoteV2Content(template, inquiry, { fee, houseArea, plotArea })
   }, [template, inquiry, fee, houseArea, plotArea])
 
-  /* ── שמירת טיוטה ── */
+  /* ── שמירת טיוטה ──────────────────────────────────────────────────
+     ⚠️ על quotes יש אילוץ ייחודיות (inquiry_id, quote_number).
+     QuoteBuilder של היום לעולם לא נתקל בו, כי הוא טוען תמיד את
+     ההצעה הראשונה של הפנייה ומעדכן אותה — ו-quote_number: 1 מופיע
+     שם רק כשאין לפנייה שום הצעה.
+
+     כאן זה שונה: לפנייה כבר יש הצעת v1 (למשל זו של שלב 0), ואסור
+     לדרוס אותה. לכן:
+       · יש כבר טיוטת v2 לפנייה → מעדכנים אותה, כך שלחיצות חוזרות
+         לא יוצרות כפילויות.
+       · אין → הצעה **חדשה** עם המספר הפנוי הבא, max+1, שנופל
+         חזרה ל-1 כשאין בכלל הצעות — בדיוק כמו ב-QuoteBuilder. */
   const saveDraft = async () => {
     if (!content) return
     setBusy('save'); setError('')
     try {
-      const { data: existing } = await supabase
-        .from('quotes').select('id, status').eq('inquiry_id', inquiryId)
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      const { data: v2rows, error: v2Err } = await supabase
+        .from('quotes').select('id')
+        .eq('inquiry_id', inquiryId)
+        .filter('draft_content->>schema', 'eq', '2')
+        .order('quote_number', { ascending: true })
+        .limit(1)
+      if (v2Err) throw v2Err
 
-      if (existing?.id && existing.status === 'draft') {
+      if (v2rows?.[0]?.id) {
         const { error: e } = await supabase.from('quotes')
           .update({ draft_content: content, updated_at: new Date().toISOString() })
-          .eq('id', existing.id)
+          .eq('id', v2rows[0].id)
         if (e) throw e
-        setQuoteId(existing.id)
-      } else {
-        const { data: created, error: e } = await supabase.from('quotes')
-          .insert([{ inquiry_id: inquiryId, quote_number: 1, status: 'draft', draft_content: content }])
-          .select('id').single()
-        if (e) throw e
-        setQuoteId(created.id)
+        setQuoteId(v2rows[0].id)
+        setLink('')
+        return
       }
+
+      const { data: all, error: numErr } = await supabase
+        .from('quotes').select('quote_number').eq('inquiry_id', inquiryId)
+      if (numErr) throw numErr
+      const nextNumber = (all ?? []).reduce((m, r) => Math.max(m, r.quote_number || 0), 0) + 1
+
+      const { data: created, error: e } = await supabase.from('quotes')
+        .insert([{ inquiry_id: inquiryId, quote_number: nextNumber, status: 'draft', draft_content: content }])
+        .select('id').single()
+      if (e) throw e
+      setQuoteId(created.id)
       setLink('')
     } catch (e) {
-      setError('שמירה נכשלה: ' + (e.message || e))
+      const raw = e?.message || String(e)
+      setError(
+        raw.includes('quotes_inquiry_id_quote_number_key')
+          ? 'שמירה נכשלה: כבר קיימת הצעה עם אותו מספר לפנייה הזו. רענני את הדף ונסי שוב — אם זה חוזר, יש הצעה שנוצרה במקביל.'
+          : raw.includes('row-level security') || raw.includes('permission')
+            ? 'שמירה נכשלה: אין הרשאה. צריך להיות מחובר כ-admin.'
+            : 'שמירה נכשלה: ' + raw
+      )
     } finally { setBusy('') }
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import './QuoteTowerV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
+import { varsOf, clientCountOf, signaturesOf } from '../../lib/quoteV2/content'
 import Money from './Money'
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -100,8 +101,14 @@ function Tower({ names }) {
   )
 }
 
-export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
-  const t = (raw) => resolveText(raw, vars, clientCount)
+export default function QuoteTowerV2({ content, vars, clientCount }) {
+  /* כמו בפן השיווקי: הערכים הקפואים שב-content הם מקור האמת, ו-prop
+     מפורש גובר עליהם רק במעבדה. */
+  const v = vars ?? varsOf(content)
+  const nClients = clientCount ?? clientCountOf(content)
+  const signatures = signaturesOf(content)
+  const isSigned = signatures.some(sg => sg?.image)
+  const t = (raw) => resolveText(raw, v, nClients)
 
   const S = useMemo(() => {
     const byType = {}
@@ -117,7 +124,7 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
     [S]
   )
   const groups = useMemo(() => S.terms?.groups ?? [], [S])
-  const fee = Number(vars.fee) || 0
+  const fee = Number(v.fee) || 0
   const amounts = useMemo(
     () => computePayments(fee, stages.map(s => s.pct)),
     [fee, stages]
@@ -140,9 +147,9 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
 
   if (!content) return null
 
-  const clientLine = isFilled(vars.firstNames) ? vars.firstNames : '—'
-  const dateLine = isFilled(vars.date) ? vars.date : ''
-  const metaLine = [clientLine, vars.settlement].filter(isFilled).join(' · ')
+  const clientLine = isFilled(v.firstNames) ? v.firstNames : '—'
+  const dateLine = isFilled(v.date) ? v.date : ''
+  const metaLine = [clientLine, v.settlement].filter(isFilled).join(' · ')
 
   const Logo = (
     <div className="qt-logo">
@@ -166,7 +173,7 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
             <div className="qt-over">תכנון אדריכלי · רישוי · ליווי</div>
             <h1>
               הבית של<br />{clientLine}
-              {isFilled(vars.settlement) && <><br /><em>ב{vars.settlement}</em></>}
+              {isFilled(v.settlement) && <><br /><em>ב{v.settlement}</em></>}
             </h1>
           </div>
           <Tower names={stages.map(s => t(s.formalName))} />
@@ -184,12 +191,12 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
 
         <div className="qt-parties">
           <div className="qt-pc">
-            <h5>{clientCount > 1 ? 'המזמינים' : 'המזמין'}</h5>
+            <h5>{nClients > 1 ? 'המזמינים' : 'המזמין'}</h5>
             {clientLine}<br />
             <span className="qt-m">ת.ז.</span> <span className="qt-idline" />
-            {isFilled(vars.clientPhone) && <><br /><span className="qt-m qt-ltr">{vars.clientPhone}</span></>}
-            {isFilled(vars.clientEmail) && <><br /><span className="qt-m qt-ltr">{vars.clientEmail}</span></>}
-            {isFilled(vars.settlement) && <><br /><span className="qt-m">כתובת הנכס: {vars.settlement}</span></>}
+            {isFilled(v.clientPhone) && <><br /><span className="qt-m qt-ltr">{v.clientPhone}</span></>}
+            {isFilled(v.clientEmail) && <><br /><span className="qt-m qt-ltr">{v.clientEmail}</span></>}
+            {isFilled(v.settlement) && <><br /><span className="qt-m">כתובת הנכס: {v.settlement}</span></>}
           </div>
           <div className="qt-pc">
             <h5>המתכנן</h5>
@@ -318,14 +325,32 @@ export default function QuoteTowerV2({ content, vars = {}, clientCount = 1 }) {
           <div className="qt-approve">
             <h2>{isFilled(S.signing.pdfTitle) ? t(S.signing.pdfTitle) : 'אישור ההצעה'}</h2>
             {isFilled(S.signing.pdfText) && <p className="qt-txt">{t(S.signing.pdfText)}</p>}
-            {Array.from({ length: Math.max(1, clientCount) }).map((_, i) => (
-              <div key={i}>
-                {clientCount > 1 && <div className="qt-signer">חותם {i + 1}</div>}
-                <div className="qt-sigrow">
-                  <div>שם</div><div>ת.ז.</div><div>חתימה</div><div>תאריך</div>
+            {/* לפני החתימה — שורות ריקות, כולל קו ת.ז. (החלטה 33).
+                אחרי החתימה — מה שהלקוח הקליד וצייר, באותן עמודות. */}
+            {Array.from({ length: nClients }).map((_, i) => {
+              const sg = signatures[i] ?? {}
+              const signedAt = sg.signedAtClient
+                ? new Date(sg.signedAtClient).toLocaleDateString('he-IL')
+                : ''
+              return (
+                <div key={i}>
+                  {nClients > 1 && <div className="qt-signer">חותם {i + 1}</div>}
+                  {isSigned && (
+                    <div className="qt-sigvals">
+                      <div>{sg.name || ''}</div>
+                      <div>{sg.idNumber || ''}</div>
+                      <div className="qt-sigimg">
+                        {sg.image && <img src={sg.image} alt="" />}
+                      </div>
+                      <div>{signedAt}</div>
+                    </div>
+                  )}
+                  <div className="qt-sigrow">
+                    <div>שם</div><div>ת.ז.</div><div>חתימה</div><div>תאריך</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="qt-closing">

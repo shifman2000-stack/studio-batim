@@ -229,6 +229,15 @@
   font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
   font-size: 28px; margin: 0 0 8px;
 }
+/* הערכים החתומים יושבים **מעל** שורת התוויות, כך שהקו התחתון של
+   .qt-sigrow משמש להם קו חתימה — בדיוק כמו במסמך שנחתם ביד. */
+.qt-sigvals {
+  display: flex; gap: 20px; margin-top: 30px; align-items: flex-end;
+  font-size: 14px; line-height: 1.2;
+}
+.qt-sigvals > div { flex: 1; min-width: 0; min-height: 34px; display: flex; align-items: flex-end; }
+.qt-sigvals .qt-sigimg img { max-height: 34px; max-width: 100%; object-fit: contain; display: block; }
+.qt-sigvals + .qt-sigrow { margin-top: 4px; }
 .qt-sigrow { display: flex; gap: 20px; margin-top: 36px; }
 .qt-sigrow > div {
   flex: 1; border-top: 1px solid var(--qt-ink); padding-top: 6px;

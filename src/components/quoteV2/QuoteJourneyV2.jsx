@@ -3,7 +3,9 @@ import { Clock, Banknote, CalendarDays } from 'lucide-react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
+import { varsOf, clientCountOf } from '../../lib/quoteV2/content'
 import Money from './Money'
+import SignCard from './SignCard'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteJourneyV2 — הפן השיווקי של הצעת מחיר v2
@@ -52,7 +54,14 @@ function Greeting({ text }) {
   )
 }
 
-export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) {
+/**
+ * @param {object} content      content_v2
+ * @param {object} [vars]       ברירת מחדל: content.vars (הערכים הקפואים)
+ * @param {number} [clientCount] ברירת מחדל: content.clients.length
+ * @param {object} [client]     מצב החתימה האמיתי. בלעדיו זו תצוגה בלבד:
+ *                              הטוגלים מקומיים והכפתורים מושבתים (מעבדה).
+ */
+export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
   const scrollRef = useRef(null)
   const feeRef = useRef(null)
   const feeRan = useRef(false)
@@ -61,12 +70,31 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
   const [stage, setStage] = useState(1)
   const [feeSeen, setFeeSeen] = useState(false)
   const [feeShown, setFeeShown] = useState(0)
-  const [extrasOn, setExtrasOn] = useState({})
-  const [signName, setSignName] = useState('')
-  const [signId, setSignId] = useState('')
-  const [consent, setConsent] = useState(false)
+  /* טוגלים מקומיים — משמשים רק כשאין client (מצב מעבדה). */
+  const [localExtras, setLocalExtras] = useState({})
 
-  const t = (raw) => resolveText(raw, vars, clientCount)
+  /* הערכים הקפואים שבתוך ה-content הם מקור האמת. prop מפורש גובר
+     עליהם רק במעבדה, שבה מחליפים לקוחות ושטחים בלי לגעת בנתונים. */
+  const v = vars ?? varsOf(content)
+  const nClients = clientCount ?? clientCountOf(content)
+  const live = !!client
+
+  const t = (raw) => resolveText(raw, v, nClients)
+
+  const selectedExtras = live
+    ? (client.response?.extrasSelected ?? [])
+    : Object.keys(localExtras).filter(k => localExtras[k])
+
+  const toggleExtra = (key) => {
+    if (!live) { setLocalExtras(p => ({ ...p, [key]: !p[key] })); return }
+    client.setResponse(prev => {
+      const cur = prev?.extrasSelected ?? []
+      return {
+        ...prev,
+        extrasSelected: cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key],
+      }
+    })
+  }
 
   /* ── הסעיפים, לפי טיפוס. כל טיפוס מופיע פעם אחת (A.2). ── */
   const S = useMemo(() => {
@@ -84,7 +112,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
     [S]
   )
   const extras = useMemo(() => S.extras?.items ?? [], [S])
-  const fee = Number(vars.fee) || 0
+  const fee = Number(v.fee) || 0
   const total = stages.length
   /* אותה גזירה בדיוק כמו בפן הכתוב. קודם זה היה Math.round מקומי
      כאן ו-floor+השלמה שם — זהה עבור התבנית הנוכחית, אבל בשכר טרחה
@@ -164,8 +192,8 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
   const lit = activeLayer >= 6
   const layerOn = n => (n <= activeLayer ? ' qj-on' : '')
 
-  const houseLabel = isFilled(vars.houseArea) ? `בית · כ-${vars.houseArea} מ״ר` : null
-  const plotLabel = isFilled(vars.plotArea) ? `מגרש · כ-${vars.plotArea} מ״ר` : null
+  const houseLabel = isFilled(v.houseArea) ? `בית · כ-${v.houseArea} מ״ר` : null
+  const plotLabel = isFilled(v.plotArea) ? `מגרש · כ-${v.plotArea} מ״ר` : null
 
   if (!content) return null
 
@@ -190,7 +218,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
           )}
           <h1 className="qj-serif"><Greeting text={t(S.opening.greeting)} /></h1>
           <p>{t(S.opening.intro)}</p>
-          <div className="qj-cue"><span />{clientCount > 1 ? 'גללו כדי לבנות' : 'גלול כדי לבנות'}</div>
+          <div className="qj-cue"><span />{nClients > 1 ? 'גללו כדי לבנות' : 'גלול כדי לבנות'}</div>
           <div className="qj-groundline" />
         </section>
       )}
@@ -314,7 +342,7 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
                 <p>{t(st.storyBody) || t(st.process)}</p>
                 {isFilled(st.storyDeliverable) && (
                   <div className="qj-got">
-                    <small>{clientCount > 1 ? 'מה תקבלו' : 'מה תקבל'}</small>
+                    <small>{nClients > 1 ? 'מה תקבלו' : 'מה תקבל'}</small>
                     <div>{t(st.storyDeliverable)}</div>
                   </div>
                 )}
@@ -402,14 +430,15 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
           <p className="qj-sub">{t(S.extras.subtitle)}</p>
           {extras.map((ex, i) => {
             const key = ex.id ?? String(i)
-            const on = !!extrasOn[key]
+            const on = selectedExtras.includes(key)
             return (
               <button
                 type="button"
                 key={key}
                 className={'qj-extra' + (on ? ' qj-on' : '')}
                 aria-pressed={on}
-                onClick={() => setExtrasOn(prev => ({ ...prev, [key]: !prev[key] }))}
+                disabled={live && client.submitted}
+                onClick={() => toggleExtra(key)}
               >
                 <div className="qj-t">
                   <b>{t(ex.title)}</b>
@@ -425,41 +454,27 @@ export default function QuoteJourneyV2({ content, vars = {}, clientCount = 1 }) 
       {/* ── ההצעה המלאה לפני החתימה (החלטה 25) ── */}
       {S.signing && isFilled(S.signing.pdfButtonLabel) && (
         <div className="qj-fullpdf">
-          <button type="button" disabled>⇣ {t(S.signing.pdfButtonLabel)}</button>
-          <span className="qj-soon">ה-PDF ייווצר בשלב הבא</span>
+          <button
+            type="button"
+            disabled={!live || client.pdfBusy}
+            onClick={() => client?.onDownloadPdf?.()}
+          >
+            {client?.pdfBusy ? 'מכינים את ה-PDF…' : `⇣ ${t(S.signing.pdfButtonLabel)}`}
+          </button>
+          {!live && <span className="qj-soon">בתצוגה מקדימה הכפתור מושבת</span>}
+          {live && client.pdfError && <span className="qj-soon qj-err">{client.pdfError}</span>}
         </div>
       )}
 
-      {/* ── חתימה — פריסה בלבד ── */}
+      {/* ── חתימה ── */}
       {S.signing && (
-        <section className="qj-sign">
-          <h2 className="qj-serif">{t(S.signing.headline)}</h2>
-          <p className="qj-sub">{t(S.signing.subtitle)}</p>
-          <div className="qj-card">
-            <div className="qj-row">
-              <label>
-                שם מלא
-                <input value={signName} onChange={e => setSignName(e.target.value)} />
-              </label>
-              <label>
-                תעודת זהות
-                <input value={signId} inputMode="numeric" onChange={e => setSignId(e.target.value)} />
-              </label>
-            </div>
-
-            <div className="qj-pad">
-              <div className="qj-padbox">{clientCount > 1 ? 'חתמו כאן באצבע' : 'חתום כאן באצבע'}</div>
-            </div>
-
-            <label className="qj-consent">
-              <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} />
-              <span>{t(S.signing.consentLabel)}</span>
-            </label>
-
-            <button className="qj-go" type="button" disabled>החתימה תחובר בשלב הבא</button>
-            <div className="qj-legal">{t(S.signing.legal)}</div>
-          </div>
-        </section>
+        <SignCard
+          section={S.signing}
+          t={t}
+          clientCount={nClients}
+          clients={content?.clients ?? []}
+          client={client}
+        />
       )}
 
       {/* ── כותרת תחתונה. פרטי הסטודיו קבועים בקוד (החלטה 32). ── */}

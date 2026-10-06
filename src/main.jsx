@@ -43,6 +43,8 @@ import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
 import QuoteV2Lab from './pages/lab/QuoteV2Lab'
 import QuoteV2PrintLab from './pages/lab/QuoteV2PrintLab'
+import QuoteV2New from './pages/lab/QuoteV2New'
+import QuoteTowerPrint from './pages/QuoteTowerPrint'
 
 function Layout() {
   return (
@@ -109,6 +111,11 @@ createRoot(document.getElementById('root')).render(
             יראה אותו בטלפון. קריאה בלבד, בלי קשר להצעות הקיימות. */}
         <Route path="/lab/quote-v2" element={<QuoteV2Lab />} />
         <Route path="/lab/quote-v2/print" element={<QuoteV2PrintLab />} />
+        <Route path="/lab/quote-v2/new" element={<QuoteV2New />} />
+        {/* הפן הכתוב לפי טוקן — אליו מנווט Puppeteer גם בהורדה
+            שלפני החתימה וגם ביצירת ה-PDF החתום. ציבורי, כמו
+            /quote-print-signed/:token של היום. */}
+        <Route path="/quote-tower-print/:token" element={<QuoteTowerPrint />} />
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/hours" element={<Hours />} />

@@ -39,6 +39,7 @@ import FinishingPrintView from './pages/FinishingPrintView'
 import QuantitiesPrintView from './pages/QuantitiesPrintView'
 import ContractorSpecPrintView from './pages/ContractorSpecPrintView'
 import QuotePublic from './pages/QuotePublic'
+import QuoteRouter from './pages/QuoteRouter'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
 import QuoteV2Lab from './pages/lab/QuoteV2Lab'
@@ -104,7 +105,10 @@ createRoot(document.getElementById('root')).render(
         <Route path="/finishing-print/:projectId" element={<FinishingPrintView />} />
         <Route path="/quantities-print/:projectId" element={<QuantitiesPrintView />} />
         <Route path="/contractor-spec-print/:projectId" element={<ContractorSpecPrintView />} />
-        <Route path="/quote/:token" element={<QuotePublic />} />
+        {/* ⚠️ נקודת ההסתעפות היחידה בין v1 ל-v2. QuoteRouter בודק
+            schema ומרנדר את QuotePublic ללא שינוי לכל מה שאינו 2 —
+            כולל שגיאה וטוקן שלא נמצא. ראו ההערה בראש הקובץ. */}
+        <Route path="/quote/:token" element={<QuoteRouter />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         {/* מעבדה להצעת מחיר v2 — admin בלבד, לא מקושר משום תפריט.
             מחוץ ל-<Layout> בכוונה: המסע תופס את כל המסך, כמו שהלקוח

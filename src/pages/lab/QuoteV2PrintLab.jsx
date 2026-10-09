@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import QuoteTowerV2 from '../../components/quoteV2/QuoteTowerV2'
-import { useLabTemplate, useLabVars, readLabQuery } from './useLabTemplate'
+import { useLabTemplate, useLabVars, readLabQuery, buildLabSignedResponse } from './useLabTemplate'
 
 /* ═══════════════════════════════════════════════════════════════════════
    /lab/quote-v2/print — הפן הכתוב בלבד, מוכן ל-Print → Save as PDF
@@ -12,6 +13,8 @@ import { useLabTemplate, useLabVars, readLabQuery } from './useLabTemplate'
      &nohouse=1   בלי שטח בית
      &noplot=1    בלי שטח מגרש
      &nocity=1    בלי יישוב
+     &signed=1    מדמה חתימה (שמות, ת.ז. וחתימות בדיוניים) כדי לבדוק
+                  את המסמך החתום בלי לחתום על שום הצעה אמיתית
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ⚠️ ה-<style> הזה חייב להיות inline במסלול ולא בקובץ CSS, משתי סיבות
@@ -73,6 +76,13 @@ export default function QuoteV2PrintLab() {
   const vars = useLabVars(opts)
   const clientCount = opts.twoClients ? 2 : 1
 
+  /* התבנית עצמה אין בה clients/clientResponse — היא תבנית ולא הצעה.
+     כדי לבדוק את המסמך החתום מרכיבים כאן content מדומה, בזיכרון בלבד. */
+  const shown = useMemo(() => {
+    if (!content || !opts.signed) return content
+    return { ...content, clientResponse: buildLabSignedResponse(clientCount) }
+  }, [content, opts.signed, clientCount])
+
   if (state === 'checking' || state === 'loading') {
     return <div dir="rtl" style={{ padding: 40, fontFamily: 'Heebo, sans-serif' }}>טוען…</div>
   }
@@ -88,7 +98,7 @@ export default function QuoteV2PrintLab() {
     <>
       <style>{PRINT_STYLE}</style>
       <div className="qtp-screen" style={SCREEN}>
-        <QuoteTowerV2 content={content} vars={vars} clientCount={clientCount} />
+        <QuoteTowerV2 content={shown} vars={vars} clientCount={clientCount} />
       </div>
       <div className="qtp-bar" style={BAR}>
         <span style={{ color: '#9aa', fontSize: 12 }}>
@@ -96,6 +106,7 @@ export default function QuoteV2PrintLab() {
           {opts.hasHouse ? '' : ' · בלי שטח בית'}
           {opts.hasPlot ? '' : ' · בלי שטח מגרש'}
           {opts.hasSettlement ? '' : ' · בלי יישוב'}
+          {opts.signed ? ' · חתום (מדומה)' : ''}
         </span>
         <button type="button" style={BTN} onClick={() => window.print()}>⎙ הדפסה</button>
       </div>

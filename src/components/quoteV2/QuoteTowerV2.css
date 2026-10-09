@@ -119,6 +119,9 @@
   display: inline-block; width: 120px; border-bottom: 1px solid var(--qt-sand);
   height: 14px; vertical-align: middle;
 }
+/* אחרי החתימה — שורה לכל מזמין, עם מה שהוא הקליד. */
+.qt-psigner + .qt-psigner { margin-top: 8px; }
+.qt-idval { direction: ltr; unicode-bidi: isolate; display: inline-block; }
 
 /* ---------- כותרת פרק ---------- */
 .qt-ch { display: flex; align-items: flex-end; gap: 16px; margin: 32px 0 18px; }

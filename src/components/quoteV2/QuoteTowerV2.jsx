@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import './QuoteTowerV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
-import { varsOf, clientCountOf, signaturesOf } from '../../lib/quoteV2/content'
+import { varsOf, clientCountOf, signersOf, isSignedContent } from '../../lib/quoteV2/content'
 import Money from './Money'
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -106,8 +106,8 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
      מפורש גובר עליהם רק במעבדה. */
   const v = vars ?? varsOf(content)
   const nClients = clientCount ?? clientCountOf(content)
-  const signatures = signaturesOf(content)
-  const isSigned = signatures.some(sg => sg?.image)
+  const signers = signersOf(content, nClients)
+  const isSigned = isSignedContent(content)
   const t = (raw) => resolveText(raw, v, nClients)
 
   const S = useMemo(() => {
@@ -192,8 +192,23 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
         <div className="qt-parties">
           <div className="qt-pc">
             <h5>{nClients > 1 ? 'המזמינים' : 'המזמין'}</h5>
-            {clientLine}<br />
-            <span className="qt-m">ת.ז.</span> <span className="qt-idline" />
+            {/* אחרי החתימה — השם והת.ז. שהלקוח הקליד, שורה לכל מזמין.
+                לפני כן בדיוק כמו קודם: שורת השמות מהפנייה וקו ת.ז. ריק.
+                אותו signersOf שמזין את בלוק אישור ההצעה (החלטה 33). */}
+            {isSigned ? signers.map((sg, i) => (
+              <div className="qt-psigner" key={i}>
+                {sg.name || '—'}<br />
+                <span className="qt-m">ת.ז.</span>{' '}
+                {sg.idNumber
+                  ? <span className="qt-idval">{sg.idNumber}</span>
+                  : <span className="qt-idline" />}
+              </div>
+            )) : (
+              <>
+                {clientLine}<br />
+                <span className="qt-m">ת.ז.</span> <span className="qt-idline" />
+              </>
+            )}
             {isFilled(v.clientPhone) && <><br /><span className="qt-m qt-ltr">{v.clientPhone}</span></>}
             {isFilled(v.clientEmail) && <><br /><span className="qt-m qt-ltr">{v.clientEmail}</span></>}
             {isFilled(v.settlement) && <><br /><span className="qt-m">כתובת הנכס: {v.settlement}</span></>}
@@ -327,8 +342,7 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
             {isFilled(S.signing.pdfText) && <p className="qt-txt">{t(S.signing.pdfText)}</p>}
             {/* לפני החתימה — שורות ריקות, כולל קו ת.ז. (החלטה 33).
                 אחרי החתימה — מה שהלקוח הקליד וצייר, באותן עמודות. */}
-            {Array.from({ length: nClients }).map((_, i) => {
-              const sg = signatures[i] ?? {}
+            {signers.map((sg, i) => {
               const signedAt = sg.signedAtClient
                 ? new Date(sg.signedAtClient).toLocaleDateString('he-IL')
                 : ''

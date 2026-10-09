@@ -123,7 +123,11 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
     () => (S.stages?.items ?? []).filter(s => s?.enabled !== false),
     [S]
   )
-  const groups = useMemo(() => S.terms?.groups ?? [], [S])
+  /* כמו השלבים למעלה: פריט מכובה נשאר במסמך ולא מרונדר (C.2). */
+  const groups = useMemo(
+    () => (S.terms?.groups ?? []).map(g => ({ ...g, items: (g.items ?? []).filter(i => i?.enabled !== false) })),
+    [S]
+  )
   const fee = Number(v.fee) || 0
   const amounts = useMemo(
     () => computePayments(fee, stages.map(s => s.pct)),

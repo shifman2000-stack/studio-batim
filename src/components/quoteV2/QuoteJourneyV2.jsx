@@ -106,12 +106,15 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
     return byType
   }, [content])
 
-  const stages = useMemo(() => S.stages?.items ?? [], [S])
+  /* `enabled: false` על פריט = נשאר במסמך ולא מרונדר (C.2). קודם
+     הסינון היה רק ברמת הסעיף, ולכן טוגל שמכבה תוספת בעורך לא היה
+     מכבה אותה כאן. הפן הכתוב כבר סינן שלבים ככה. */
+  const stages = useMemo(() => (S.stages?.items ?? []).filter(s => s?.enabled !== false), [S])
   const terms = useMemo(
-    () => (S.terms?.groups ?? []).flatMap(g => g.items ?? []),
+    () => (S.terms?.groups ?? []).flatMap(g => (g.items ?? []).filter(i => i?.enabled !== false)),
     [S]
   )
-  const extras = useMemo(() => S.extras?.items ?? [], [S])
+  const extras = useMemo(() => (S.extras?.items ?? []).filter(x => x?.enabled !== false), [S])
   const fee = Number(v.fee) || 0
   const total = stages.length
   /* אותה גזירה בדיוק כמו בפן הכתוב. קודם זה היה Math.round מקומי

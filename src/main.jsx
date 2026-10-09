@@ -46,6 +46,7 @@ import QuoteV2Lab from './pages/lab/QuoteV2Lab'
 import QuoteV2PrintLab from './pages/lab/QuoteV2PrintLab'
 import QuoteV2New from './pages/lab/QuoteV2New'
 import QuoteTowerPrint from './pages/QuoteTowerPrint'
+import QuoteEditorV2 from './pages/QuoteEditorV2'
 
 function Layout() {
   return (
@@ -116,6 +117,10 @@ createRoot(document.getElementById('root')).render(
         <Route path="/lab/quote-v2" element={<QuoteV2Lab />} />
         <Route path="/lab/quote-v2/print" element={<QuoteV2PrintLab />} />
         <Route path="/lab/quote-v2/new" element={<QuoteV2New />} />
+        {/* עורך ההצעות (שלב E) — admin בלבד, מחוץ ל-<Layout> כי הוא
+            תופס את כל המסך. בשלב הזה מגיעים אליו רק דרך המעבדה;
+            החיבור למסך הפנייה הוא שלב F. */}
+        <Route path="/quotes-v2/:quoteId" element={<QuoteEditorV2 />} />
         {/* הפן הכתוב לפי טוקן — אליו מנווט Puppeteer גם בהורדה
             שלפני החתימה וגם ביצירת ה-PDF החתום. ציבורי, כמו
             /quote-print-signed/:token של היום. */}

@@ -21,6 +21,13 @@
   -webkit-overflow-scrolling: touch;
   position: relative;
 
+  /* ── הטיפוגרפיה נמדדת לפי **רוחב המכל ולא לפי החלון** ──────────
+     הכותרות גדלות עם הרוחב (cqw למטה). אצל הלקוח המכל הוא כל
+     המסך ולכן שום דבר לא משתנה; בתצוגה המקדימה של העורך הוא מסגרת
+     טלפון של 375px בתוך חלון רחב, ובלי זה הכותרת הייתה נמדדת לפי
+     החלון וגולשת מהמסגרת פי שלושה. */
+  container-type: inline-size;
+
   --qj-night: #16201d;
   --qj-panel: #1f2b27;
   --qj-panel2: #26342f;
@@ -86,7 +93,7 @@
 .qj-hero .qj-to { font-size: 15px; letter-spacing: .3em; color: var(--qj-terra); }
 .qj-hero h1 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 300;
-  font-size: clamp(54px, 13vw, 128px); line-height: .98; margin: 14px 0 0;
+  font-size: clamp(54px, 13cqw, 128px); line-height: .98; margin: 14px 0 0;
   white-space: pre-line;
 }
 .qj-hero h1 b { font-weight: 500; color: var(--qj-glow); }
@@ -165,7 +172,7 @@
 }
 .qj-chap h2 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
-  font-size: clamp(30px, 6vw, 42px); line-height: 1.15; margin: 14px 0;
+  font-size: clamp(30px, 6cqw, 42px); line-height: 1.15; margin: 14px 0;
 }
 .qj-chap p { margin: 0; font-size: 16px; line-height: 1.8; color: #d6cfc1; }
 .qj-got {
@@ -212,7 +219,7 @@
 .qj-fee .qj-q { font-size: 14px; letter-spacing: .3em; color: var(--qj-terra); }
 .qj-fee .qj-amt {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 300;
-  font-size: clamp(68px, 18vw, 150px); line-height: 1; margin: 14px 0 4px;
+  font-size: clamp(68px, 18cqw, 150px); line-height: 1; margin: 14px 0 4px;
   font-variant-numeric: tabular-nums;
 }
 .qj-fee .qj-amt .q-money-sign { font-size: .32em; color: var(--qj-muted); }
@@ -259,7 +266,7 @@
 .qj-whatif { max-width: 760px; margin: 0 auto; padding: 40px 24px 70px; }
 .qj-whatif h2, .qj-extras h2, .qj-sign h2 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
-  font-size: clamp(32px, 7vw, 48px); margin: 0 0 6px;
+  font-size: clamp(32px, 7cqw, 48px); margin: 0 0 6px;
 }
 .qj-sub { color: var(--qj-muted); font-size: 15px; margin: 0 0 26px; }
 

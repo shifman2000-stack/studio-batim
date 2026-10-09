@@ -1,4 +1,6 @@
-import { deriveFirstNames, isFilled } from './resolve'
+/* סיומת מפורשת: Vite לא צריך אותה, אבל node כן, וה-content.test.js
+   לידו רץ ב-node רגיל בלי bundler. */
+import { deriveFirstNames, isFilled } from './resolve.js'
 
 /* ═══════════════════════════════════════════════════════════════════════
    content_v2 — בנייה והקפאה
@@ -109,4 +111,42 @@ export function isV2(content) {
 export function signaturesOf(content) {
   const list = content?.clientResponse?.signatures
   return Array.isArray(list) ? list : []
+}
+
+/** האם ההצעה חתומה — לפחות חותם אחד עם תמונת חתימה. */
+export function isSignedContent(content) {
+  return signaturesOf(content).some(sg => isFilled(sg?.image))
+}
+
+/**
+ * שורת חותם אחת לכל מזמין, באורך clientCountOf.
+ *
+ * ⚠️ זה המקור היחיד לשמות ולת.ז. במסמך הכתוב — גם בבלוק "המזמינים"
+ * שבשער וגם בבלוק אישור ההצעה. שניהם חייבים להראות בדיוק אותו דבר:
+ * מסמך חתום שבשער שלו שם אחד ובחתימה שם אחר הוא מסמך שבור.
+ *
+ * מה שהלקוח הקליד בחתימה גובר על שם הפנייה — הוא זה שחתם, והשם
+ * שהוא הקליד הוא מה שמחייב. לפני החתימה חוזר שם הפנייה ות.ז. ריקה.
+ *
+ * @param {number} [count] דריסה מפורשת למספר המזמינים (המעבדה מעבירה
+ *   clientCount ב-prop על תבנית שאין בה clients בכלל).
+ */
+export function signersOf(content, count) {
+  const clients = Array.isArray(content?.clients) ? content.clients : []
+  const sigs = signaturesOf(content)
+  const n = Math.max(1, Number(count) || clientCountOf(content))
+  return Array.from({ length: n }, (_, i) => {
+    /* התאמה לפי clientIndex ולא לפי מקום במערך — השרת כותב אותו
+       במפורש, ומערך חלקי לא יזיז חותם למקום של אחר. */
+    const sg = sigs.find(s => Number(s?.clientIndex) === i) ?? sigs[i] ?? {}
+    const fromQuote = [clients[i]?.firstName, clients[i]?.lastName]
+      .filter(isFilled).join(' ')
+    return {
+      name: isFilled(sg.name) ? String(sg.name).trim() : fromQuote,
+      idNumber: isFilled(sg.idNumber) ? String(sg.idNumber).trim() : '',
+      image: isFilled(sg.image) ? sg.image : '',
+      signedAtClient: sg.signedAtClient ?? '',
+      signed: isFilled(sg.image),
+    }
+  })
 }

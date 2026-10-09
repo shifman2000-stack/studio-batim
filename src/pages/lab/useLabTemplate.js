@@ -95,6 +95,39 @@ export function readLabQuery(search) {
     hasHouse: p.get('nohouse') !== '1',
     hasPlot: p.get('noplot') !== '1',
     hasSettlement: p.get('nocity') !== '1',
+    signed: p.get('signed') === '1',
+  }
+}
+
+/* חתימה מדומה למעבדה. SVG ולא PNG כדי שלא יהיה כאן בלוק base64
+   ענק בקוד; שניהם data:image ושניהם מציירים זהה ב-Chromium. */
+const scribble = (seed) =>
+  'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="190" height="70" viewBox="0 0 190 70">` +
+    `<path d="M8 ${46 + seed * 4} C30 14,46 58,62 34 S90 6,98 ${40 + seed * 3} S120 60,136 24 S170 12,182 20" ` +
+    `fill="none" stroke="#2c3f73" stroke-width="1.7" stroke-linecap="round"/></svg>`
+  )
+
+/**
+ * clientResponse מדומה — רק למעבדה, לבדיקת הפן הכתוב אחרי חתימה.
+ * ⚠️ לא נשלח לשום מקום ולא נשמר. הנתונים בדיוניים.
+ */
+export function buildLabSignedResponse(count) {
+  const people = [
+    { name: 'דנה כהן לוי', idNumber: '039182746' },
+    { name: 'יואב כהן לוי', idNumber: '027465183' },
+  ]
+  return {
+    extrasSelected: [],
+    consentChecked: true,
+    consentCheckedAt: new Date().toISOString(),
+    signatures: Array.from({ length: count }, (_, i) => ({
+      clientIndex: i,
+      name: people[i]?.name ?? `חותם ${i + 1}`,
+      idNumber: people[i]?.idNumber ?? '',
+      image: scribble(i),
+      signedAtClient: new Date().toISOString(),
+    })),
   }
 }
 

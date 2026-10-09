@@ -28,6 +28,14 @@
     },
     "api/site-health.js": {
       "maxDuration": 15
+    },
+    "api/quote-pdf.js": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/finalize-quote-v2.js": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }

@@ -105,10 +105,16 @@ export default function QuoteV2New() {
 
      כאן זה שונה: לפנייה כבר יש הצעת v1 (למשל זו של שלב 0), ואסור
      לדרוס אותה. לכן:
-       · יש כבר טיוטת v2 לפנייה → מעדכנים אותה, כך שלחיצות חוזרות
+       · יש כבר **טיוטת** v2 לפנייה → מעדכנים אותה, כך שלחיצות חוזרות
          לא יוצרות כפילויות.
        · אין → הצעה **חדשה** עם המספר הפנוי הבא, max+1, שנופל
-         חזרה ל-1 כשאין בכלל הצעות — בדיוק כמו ב-QuoteBuilder. */
+         חזרה ל-1 כשאין בכלל הצעות — בדיוק כמו ב-QuoteBuilder.
+
+     ⚠️ status='draft' הוא חלק מהתנאי ולא קישוט. בלעדיו, פנייה שכבר
+     יש לה הצעת v2 **חתומה** (draft_content שלה נשאר schema=2) הייתה
+     נבחרת לעדכון, וה-draft_content של מסמך חתום היה נדרס — ו"שלח"
+     היה תולה גרסה שנייה על הצעה חתומה. בדיקה שנייה על אותה פנייה
+     חייבת לקבל הצעה חדשה משלה. */
   const saveDraft = async () => {
     if (!content) return
     setBusy('save'); setError('')
@@ -116,6 +122,7 @@ export default function QuoteV2New() {
       const { data: v2rows, error: v2Err } = await supabase
         .from('quotes').select('id')
         .eq('inquiry_id', inquiryId)
+        .eq('status', 'draft')
         .filter('draft_content->>schema', 'eq', '2')
         .order('quote_number', { ascending: true })
         .limit(1)

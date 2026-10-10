@@ -62,16 +62,12 @@
   top: 0;
   z-index: 20;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  padding: 14px 20px;
+  gap: 9px;
+  padding: 14px 20px 12px;
   background: linear-gradient(var(--qj-night), rgba(22, 32, 29, 0));
   pointer-events: none;
-}
-.qj-bar .qj-lg { font-weight: 300; font-size: 17px; letter-spacing: .06em; }
-.qj-bar .qj-lg small {
-  display: block; font-size: 6.5px; letter-spacing: .6em;
-  color: var(--qj-muted); direction: ltr; text-align: start;
 }
 .qj-prog { display: flex; gap: 4px; direction: rtl; }
 .qj-prog i {
@@ -166,8 +162,12 @@
   color: var(--qj-terra); letter-spacing: .18em;
 }
 .qj-chap .qj-num b {
-  font-size: 64px; font-weight: 300; letter-spacing: 0;
-  color: var(--qj-cream); margin-inline-end: 10px;
+  /* אותו מספר חלול של כותרות הפרקים בפן הכתוב: Playfair, מילוי
+     שקוף וקו מתאר בטרקוטה. זה מה שמחבר חזותית בין שני הפנים. */
+  font-family: 'Playfair Display', serif;
+  font-size: 64px; font-weight: 400; letter-spacing: 0;
+  color: transparent; -webkit-text-stroke: 1.1px var(--qj-terra);
+  margin-inline-end: 10px;
   line-height: 1; vertical-align: -14px;
 }
 .qj-chap h2 {
@@ -218,7 +218,9 @@
 .qj-fee { padding: 90px 24px; max-width: 900px; margin: 0 auto; text-align: center; }
 .qj-fee .qj-q { font-size: 14px; letter-spacing: .3em; color: var(--qj-terra); }
 .qj-fee .qj-amt {
-  font-family: 'Frank Ruhl Libre', serif; font-weight: 300;
+  /* Playfair — אותו פונט של המספרים בפן הכתוב. מספרים בשני הפנים
+     מדברים באותה שפה, וגם הספרות עצמן זהות בצורתן. */
+  font-family: 'Playfair Display', serif; font-weight: 400;
   font-size: clamp(68px, 18cqw, 150px); line-height: 1; margin: 14px 0 4px;
   font-variant-numeric: tabular-nums;
 }
@@ -422,8 +424,7 @@
   justify-content: space-between; align-items: center;
   flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--qj-muted);
 }
-.qj-foot .qj-lg { font-weight: 300; font-size: 22px; color: var(--qj-cream); }
-.qj-foot .qj-contact { direction: ltr; text-align: start; }
+.qj-foot .qj-contact { direction: ltr; text-align: start; display: block; margin-top: 10px; }
 
 /* ---------- house drawing ---------- */
 .qj-house * { vector-effect: non-scaling-stroke; }

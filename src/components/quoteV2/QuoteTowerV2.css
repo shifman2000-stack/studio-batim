@@ -11,15 +11,20 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 .qt-doc {
-  --qt-bg: #f7f5f2;
-  --qt-ink: #1a1a18;
-  --qt-muted: #8a8680;
-  --qt-sage: #7a9478;
-  --qt-sage-d: #4a6e48;
+  /* הפלטה של אתר התדמית, כדי שהמסמך וההצעה ידברו באותה שפה.
+     הערכים זהים ל-:root של studio-batim-index.html. */
+  --qt-bg: #f7f5f1;
+  --qt-ink: #1c1a18;
+  --qt-muted: #9a9590;
+  --qt-line: #e8e5df;
   --qt-sand: #c8bfb0;
-  --qt-line: #e4dfd7;
 
-  background: #fff;
+  /* הטרקוטה של המסע — אותו אקסנט בשני הפנים. הכהה הוא לטקסט
+     קטן: #d9774a על רקע בהיר יורד מתחת ליחס הניגודיות הקריא. */
+  --qt-terra: #d9774a;
+  --qt-terra-d: #c2602f;
+
+  background: var(--qt-bg);
   color: var(--qt-ink);
   font-family: 'Heebo', sans-serif;
   direction: rtl;
@@ -56,14 +61,6 @@
   display: flex; justify-content: space-between; align-items: center;
   padding-bottom: 14px; border-bottom: 1px solid var(--qt-line);
 }
-.qt-logo .qt-lg-he {
-  font-family: 'Rubik', sans-serif; font-weight: 300;
-  font-size: 22px; letter-spacing: .04em; line-height: 1.1;
-}
-.qt-logo .qt-lg-en {
-  font-size: 6px; letter-spacing: .62em; color: var(--qt-muted);
-  margin-top: 3px; direction: ltr; text-align: start;
-}
 .qt-run .qt-meta { font-size: 11px; color: var(--qt-muted); letter-spacing: .14em; }
 
 /* ---------- עמוד השער ---------- */
@@ -72,7 +69,7 @@
 
 .qt-hero { display: flex; gap: 26px; margin-top: 54px; align-items: flex-end; }
 .qt-hero-col { flex: 1; min-width: 0; }
-.qt-over { font-size: 12px; letter-spacing: .24em; color: var(--qt-sage-d); }
+.qt-over { font-size: 12px; letter-spacing: .24em; color: var(--qt-terra-d); }
 .qt-cover h1 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 300;
   font-size: 58px; line-height: 1.04; margin: 12px 0 0;
@@ -89,7 +86,7 @@
 }
 .qt-tower .qt-tl b {
   display: block; font-family: 'Frank Ruhl Libre', serif; font-weight: 500;
-  color: var(--qt-sage-d); font-size: 14px; line-height: 1.1;
+  color: var(--qt-terra-d); font-size: 14px; line-height: 1.1;
 }
 
 .qt-fee {
@@ -110,7 +107,7 @@
 }
 .qt-parties h5 {
   margin: 0 0 6px; font-size: 11px; letter-spacing: .24em;
-  color: var(--qt-sage-d); font-weight: 500;
+  color: var(--qt-terra-d); font-weight: 500;
 }
 .qt-parties .qt-m { color: var(--qt-muted); }
 .qt-parties .qt-ltr { direction: ltr; display: inline-block; }
@@ -127,7 +124,7 @@
 .qt-ch { display: flex; align-items: flex-end; gap: 16px; margin: 32px 0 18px; }
 .qt-ch .qt-big {
   font-family: 'Playfair Display', serif; font-size: 80px; line-height: .78;
-  color: transparent; -webkit-text-stroke: 1.2px var(--qt-sage);
+  color: transparent; -webkit-text-stroke: 1.2px var(--qt-terra);
 }
 .qt-ch h2 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
@@ -142,7 +139,7 @@
 }
 .qt-pay .qt-pc {
   font-family: 'Playfair Display', serif; font-size: 30px;
-  width: 64px; flex: none; color: var(--qt-sage-d); direction: ltr; text-align: start;
+  width: 64px; flex: none; color: var(--qt-terra-d); direction: ltr; text-align: start;
 }
 .qt-pay .qt-mid { flex: 1; min-width: 0; }
 .qt-pay .qt-mid small {
@@ -182,7 +179,7 @@
 .qt-stage .qt-side { width: 136px; flex: none; }
 .qt-stage .qt-side .qt-no {
   font-family: 'Frank Ruhl Libre', serif; font-size: 15px;
-  color: var(--qt-sage-d); margin-top: 6px;
+  color: var(--qt-terra-d); margin-top: 6px;
 }
 .qt-stage .qt-side h3 {
   font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
@@ -192,10 +189,10 @@
 .qt-lbl { font-size: 10.5px; letter-spacing: .18em; color: var(--qt-muted); margin-bottom: 3px; }
 .qt-pull {
   margin-top: 12px; font-family: 'Frank Ruhl Libre', serif;
-  font-size: 15.5px; line-height: 1.55; color: var(--qt-sage-d);
-  border-inline-start: 2px solid var(--qt-sage); padding-inline-start: 14px;
+  font-size: 15.5px; line-height: 1.55; color: var(--qt-terra-d);
+  border-inline-start: 2px solid var(--qt-terra); padding-inline-start: 14px;
 }
-.qt-pull .qt-lbl { font-family: 'Heebo', sans-serif; color: var(--qt-sage); display: inline; }
+.qt-pull .qt-lbl { font-family: 'Heebo', sans-serif; color: var(--qt-terra); display: inline; }
 
 /* ---------- שירותים משלימים ---------- */
 .qt-optional {
@@ -219,7 +216,7 @@
 .qt-term:last-child { border-bottom: 0; }
 .qt-term .qt-k {
   width: 120px; flex: none; font-weight: 500; font-size: 13px;
-  color: var(--qt-sage-d); line-height: 1.6;
+  color: var(--qt-terra-d); line-height: 1.6;
 }
 .qt-term .qt-v { flex: 1; min-width: 0; font-size: 13px; line-height: 1.75; color: #3a3936; }
 /* formalTitle ריק הוא מצב חוקי (A.2): הפסקה פשוט תופסת את כל הרוחב,
@@ -246,7 +243,7 @@
   flex: 1; border-top: 1px solid var(--qt-ink); padding-top: 6px;
   font-size: 11px; color: var(--qt-muted); letter-spacing: .12em;
 }
-.qt-signer { font-size: 11px; letter-spacing: .16em; color: var(--qt-sage-d); margin-top: 26px; }
+.qt-signer { font-size: 11px; letter-spacing: .16em; color: var(--qt-terra-d); margin-top: 26px; }
 .qt-closing {
   margin-top: 36px; display: flex;
   justify-content: space-between; align-items: flex-end; gap: 20px;

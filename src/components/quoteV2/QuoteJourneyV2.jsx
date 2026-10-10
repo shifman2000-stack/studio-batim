@@ -6,6 +6,7 @@ import { computePayments } from '../../lib/quoteV2/payments'
 import { varsOf, clientCountOf } from '../../lib/quoteV2/content'
 import Money from './Money'
 import SignCard from './SignCard'
+import Logo from '../Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteJourneyV2 — הפן השיווקי של הצעת מחיר v2
@@ -186,7 +187,7 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
     const link = document.createElement('link')
     link.id = id
     link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&family=Frank+Ruhl+Libre:wght@300;400;500;700&display=swap'
+    link.href = 'https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&family=Frank+Ruhl+Libre:wght@300;400;500;700&family=Playfair+Display:wght@400;500&family=Rubik:wght@300&display=swap'
     document.head.appendChild(link)
     return () => { document.getElementById(id)?.remove() }
   }, [])
@@ -205,7 +206,7 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
 
       {/* ── סרגל עליון ── */}
       <div className="qj-bar">
-        <div className="qj-lg">סטודיו בתים<small>BY EINAV SHIFMAN</small></div>
+        <Logo height={20} tone="light" />
         <div className="qj-prog">
           {stages.map((_, i) => (
             <i key={i} className={i < stage ? 'qj-on' : undefined} />
@@ -379,7 +380,7 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
       {S.fee && (
         <section className={'qj-fee' + (feeSeen ? ' qj-seen' : '')} ref={feeRef}>
           <div className="qj-q">{t(S.fee.question)}</div>
-          <div className="qj-amt qj-serif">
+          <div className="qj-amt">
             <Money value={feeShown} />
           </div>
           <div className="qj-vat">{t(S.fee.note)}</div>
@@ -483,7 +484,7 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
       {/* ── כותרת תחתונה. פרטי הסטודיו קבועים בקוד (החלטה 32). ── */}
       <footer className="qj-foot">
         <div>
-          <div className="qj-lg">סטודיו בתים</div>
+          <Logo height={18} tone="light" />
           <span className="qj-contact">עינב שיפמן · קיבוץ נגבה · 052-9593927 · einav.studiob@gmail.com</span>
         </div>
       </footer>

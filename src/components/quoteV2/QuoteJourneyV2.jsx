@@ -155,6 +155,12 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
     const root = scrollRef.current
     const el = feeRef.current
     if (!root || !el || fee <= 0) return
+    /* שכר טרחה חדש = ספירה חדשה. בלי האיפוס הזה ה-ref נשאר דלוק
+       מהריצה הראשונה, הקולבק יוצא מיד, והמספר נתקע על הסכום הישן.
+       אצל הלקוח זה אף פעם לא קרה כי שכר הטרחה לא משתנה באמצע
+       הצפייה — זה צף רק בתצוגה המקדימה של העורך, שבה עינב משנה
+       אותו והמסע חי מתחתיה. */
+    feeRan.current = false
     let raf = 0
     const io = new IntersectionObserver(
       entries => {

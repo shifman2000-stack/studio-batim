@@ -12,7 +12,7 @@ import LibraryDrawer from '../components/quoteV2/editor/LibraryDrawer'
 import PreviewModal from '../components/quoteV2/editor/PreviewModal'
 import SendDialog from '../components/quoteV2/editor/SendDialog'
 
-import { clientCountOf, varsOf } from '../lib/quoteV2/content'
+import { clientCountOf, varsOf, buildQuoteV2Content } from '../lib/quoteV2/content'
 import { isFrozen, freeze, unfreeze, templateRawOf } from '../lib/quoteV2/linked'
 import { buildTemplateUpdate } from '../lib/quoteV2/templateSync'
 import { stagesOf, termGroupsOf } from '../lib/quoteV2/validate'
@@ -82,6 +82,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   /* ── מצב תבנית בלבד ── */
   const [twoClients, setTwoClients] = useState(true)
   const [undo, setUndo] = useState(null)        // { previous } אחרי שמירה
+  const [inquiry, setInquiry] = useState(null) // רק למצב הצעה
   const [tplRow, setTplRow] = useState(null)
   const [backups, setBackups] = useState([])
   const [tplDirty, setTplDirty] = useState(false)
@@ -144,6 +145,13 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         .select('version_number, sent_at, is_signed, form_token, is_archived')
         .eq('quote_id', quoteId)
         .order('version_number', { ascending: false })
+
+      /* נטען רק כדי לאפשר "התחלה מחדש מהתבנית" — בנייה מחדש חייבת
+         את נתוני הפנייה, בדיוק כמו ביצירת הטיוטה. */
+      const { data: inq } = await supabase.from('inquiries')
+        .select('id, first_name, last_name, phone, email, city, contact2_name, contact2_phone, contact2_email')
+        .eq('id', q.data.inquiry_id).maybeSingle()
+      setInquiry(inq ?? null)
 
       setQuote(q.data)
       setTemplate(tpl.data?.content ?? null)
@@ -319,43 +327,64 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     setDialog({ kind: 'tplConfirm', next, warnings, changes: describeTemplateDiff(pristine.current, next) })
   }
 
+  /* ⚠️ כל כתיבה כאן מאומתת בקריאה חוזרת לפני שמוצגת הצלחה.
+     update בלי select מחזיר "בלי שגיאה" גם כשלא עודכנה אף שורה —
+     למשל כשמדיניות RLS חוסמת בשקט — וזה בדיוק המצב שבו המשתמשת
+     רואה "נשמר" ולא נשמר כלום. */
+  const writeTemplate = async (nextContent) => {
+    const stamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
+
+    const { data: bRows, error: bErr } = await supabase.from('quote_templates')
+      .insert([{ name: `גיבוי · ${stamp}`, is_default: false, content: pristine.current }])
+      .select('id')
+    if (bErr) throw new Error('יצירת הגיבוי נכשלה: ' + bErr.message)
+    if (!bRows?.length) throw new Error('הגיבוי לא נוצר — ככל הנראה אין הרשאה לכתוב לתבניות.')
+
+    const { data: uRows, error: uErr } = await supabase.from('quote_templates')
+      .update({ content: nextContent, updated_at: new Date().toISOString() })
+      .eq('id', tplRow.id)
+      .select('id, content')
+    if (uErr) throw new Error('שמירת התבנית נכשלה: ' + uErr.message)
+    if (!uRows?.length) throw new Error('לא עודכנה אף שורה. ייתכן שאין הרשאה, או שהתבנית נמחקה.')
+    if (JSON.stringify(uRows[0].content) !== JSON.stringify(nextContent)) {
+      throw new Error('מה שנשמר במסד שונה ממה שנשלח. לא בוצע שינוי.')
+    }
+
+    /* סיבוב גיבויים — אחרי שהשמירה הצליחה, ולא לפניה. */
+    const { data: all } = await supabase.from('quote_templates')
+      .select('id, updated_at').eq('is_default', false)
+      .order('updated_at', { ascending: false })
+    for (const extra of (all ?? []).slice(5)) {
+      await supabase.from('quote_templates').delete().eq('id', extra.id)
+    }
+
+    const { data: bks } = await supabase.from('quote_templates')
+      .select('id, name, content, updated_at').eq('is_default', false)
+      .order('updated_at', { ascending: false }).limit(5)
+    return bks ?? []
+  }
+
+  const adoptTemplate = (nextContent, bks) => {
+    pristine.current = nextContent
+    origRaw.current = {}; plural.current = {}; edited.current = new Set()
+    setTemplate(nextContent)
+    setContent(asEditable(nextContent, twoClients))
+    setTplDirty(false)
+    setBackups(bks)
+  }
+
   const doSaveTemplate = async (next) => {
     setBusy('save')
     try {
-      const stamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
-      const { error: bErr } = await supabase.from('quote_templates')
-        .insert([{ name: `גיבוי · ${stamp}`, is_default: false, content: pristine.current }])
-      if (bErr) throw bErr
-
-      const { data: all } = await supabase.from('quote_templates')
-        .select('id, updated_at').eq('is_default', false)
-        .order('updated_at', { ascending: false })
-      for (const old of (all ?? []).slice(5)) {
-        await supabase.from('quote_templates').delete().eq('id', old.id)
-      }
-
-      const { error: uErr } = await supabase.from('quote_templates')
-        .update({ content: next, updated_at: new Date().toISOString() })
-        .eq('id', tplRow.id)
-      if (uErr) throw uErr
-
       const previous = pristine.current
-      pristine.current = next
-      origRaw.current = {}; plural.current = {}; edited.current = new Set()
-      setTemplate(next)
-      setContent(asEditable(next, twoClients))
-      setTplDirty(false)
+      const bks = await writeTemplate(next)
+      adoptTemplate(next, bks)
       setDialog(null)
       setUndo({ previous })
       flash('התבנית נשמרה')
-
-      const { data: bks } = await supabase.from('quote_templates')
-        .select('id, name, content, updated_at').eq('is_default', false)
-        .order('updated_at', { ascending: false }).limit(5)
-      setBackups(bks ?? [])
     } catch (e) {
-      setDialog(null)
-      flash('השמירה נכשלה: ' + (e.message || e))
+      /* השגיאה נשארת **בתוך הדיאלוג**, כדי שלא תיעלם עם טוסט חולף. */
+      setDialog(d => (d ? { ...d, error: e.message || String(e) } : d))
     } finally { setBusy('') }
   }
 
@@ -363,28 +392,13 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const restoreTemplate = async (contentToRestore) => {
     setBusy('restore')
     try {
-      const stamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
-      await supabase.from('quote_templates')
-        .insert([{ name: `גיבוי · ${stamp}`, is_default: false, content: pristine.current }])
-      const { error } = await supabase.from('quote_templates')
-        .update({ content: contentToRestore, updated_at: new Date().toISOString() })
-        .eq('id', tplRow.id)
-      if (error) throw error
-      pristine.current = contentToRestore
-      origRaw.current = {}; plural.current = {}; edited.current = new Set()
-      setTemplate(contentToRestore)
-      setContent(asEditable(contentToRestore, twoClients))
-      setTplDirty(false)
+      const bks = await writeTemplate(contentToRestore)
+      adoptTemplate(contentToRestore, bks)
       setDialog(null)
       setUndo(null)
       flash('הגרסה שוחזרה')
-      const { data: bks } = await supabase.from('quote_templates')
-        .select('id, name, content, updated_at').eq('is_default', false)
-        .order('updated_at', { ascending: false }).limit(5)
-      setBackups(bks ?? [])
     } catch (e) {
-      setDialog(null)
-      flash('השחזור נכשל: ' + (e.message || e))
+      setDialog(d => (d ? { ...d, error: e.message || String(e) } : d))
     } finally { setBusy('') }
   }
 
@@ -442,6 +456,12 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
             </span>
             <span className="qe-sp" />
             <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
+            {!readOnly && template && inquiry && (
+              <button type="button" className="qe-b" title="בונה מחדש את ההצעה מנוסח הטופס העדכני"
+                onClick={() => setDialog({ kind: 'reset' })}>
+                ↺ התחלה מחדש מהתבנית
+              </button>
+            )}
             {!readOnly && (
               <button type="button" className="qe-b pri" onClick={() => { setLink(''); setSendError(''); setDialog({ kind: 'send' }) }}>
                 שליחה ללקוח
@@ -631,6 +651,30 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         />
       )}
 
+      {dialog?.kind === 'reset' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>להתחיל מחדש מנוסח הטופס?</h3>
+          <p>
+            כל הטקסטים, השלבים והתנאים בהצעה הזו יוחלפו בנוסח העדכני של טופס הצעת המחיר,
+            עם הפרטים של {[inquiry?.first_name, inquiry?.last_name].filter(Boolean).join(' ')}.
+            שכר הטרחה והשטחים יישמרו. אי אפשר לבטל.
+          </p>
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" onClick={() => {
+              update(buildQuoteV2Content(template, inquiry, {
+                fee: content?.totals?.fee,
+                houseArea: content?.property?.houseArea,
+                plotArea: content?.property?.plotArea,
+              }))
+              setOpen(null)
+              setDialog(null)
+              flash('ההצעה נבנתה מחדש מהטופס')
+            }}>בנייה מחדש</button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>ביטול</button>
+          </div>
+        </Modal>
+      )}
+
       {dialog?.kind === 'tplConfirm' && (
         <Modal onClose={() => setDialog(null)}>
           <h3>שמירת התבנית</h3>
@@ -654,6 +698,8 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
               {dialog.warnings.map((w, i) => <div key={i}>⚠️ {w}</div>)}
             </div>
           )}
+
+          {dialog.error && <div className="qe-warn" style={{ background: '#fae3da' }}>❌ {dialog.error}</div>}
 
           <div className="qe-row">
             <button type="button" className="qe-b pri" disabled={busy === 'save'}
@@ -694,6 +740,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         <Modal onClose={() => setDialog(null)}>
           <h3>לשחזר את "{dialog.backup.name}"?</h3>
           <p>הנוסח הנוכחי יישמר קודם כגיבוי, כך שאפשר יהיה לחזור אליו.</p>
+          {dialog.error && <div className="qe-warn" style={{ background: '#fae3da' }}>❌ {dialog.error}</div>}
           <div className="qe-row">
             <button type="button" className="qe-b pri" disabled={busy === 'restore'}
               onClick={() => restoreTemplate(dialog.backup.content)}>
@@ -704,15 +751,37 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         </Modal>
       )}
 
+      {/* ⚠️ פעם אחת היה כאן כפתור "ביטול" שמשחזר מיד את הנוסח הקודם.
+          בעברית "ביטול" נקרא כ"סגירה", והוא נלחץ מיד אחרי שמירה
+          מוצלחת והחזיר את התבנית לאחור בלי אישור ובלי דרך לדעת.
+          עכשיו הניסוח אומר מה שיקרה, ויש אישור לפני. */}
       {undo && (
         <div className="qe-toast show" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <span>התבנית נשמרה</span>
-          <button type="button" className="qe-undo" style={{ color: '#a9bf9f' }}
-            onClick={() => { const prev = undo.previous; setUndo(null); restoreTemplate(prev) }}>
-            ביטול
+          <span>✓ התבנית נשמרה</span>
+          <button type="button" className="qe-undo" style={{ color: '#f0b38a' }}
+            onClick={() => setDialog({ kind: 'tplUndo' })}>
+            החזרת הנוסח הקודם
           </button>
-          <button type="button" className="qe-undo" style={{ color: '#8a8680' }} onClick={() => setUndo(null)}>✕</button>
+          <button type="button" className="qe-undo" style={{ color: '#9aa' }} onClick={() => setUndo(null)}>סגירה</button>
         </div>
+      )}
+
+      {dialog?.kind === 'tplUndo' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>להחזיר את הנוסח שהיה לפני השמירה?</h3>
+          <p>
+            הנוסח שנשמר עכשיו יישמר כגיבוי, והתבנית תחזור למה שהיה לפניו.
+            אפשר תמיד לחזור קדימה דרך "גרסאות קודמות".
+          </p>
+          {dialog.error && <div className="qe-warn">{dialog.error}</div>}
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" disabled={busy === 'restore'}
+              onClick={() => { const prev = undo?.previous; if (prev) restoreTemplate(prev) }}>
+              {busy === 'restore' ? 'מחזיר…' : 'החזרה'}
+            </button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>השארת הנוסח החדש</button>
+          </div>
+        </Modal>
       )}
 
       <Toast text={undo ? '' : toast} />

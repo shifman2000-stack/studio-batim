@@ -11,12 +11,14 @@ import SectionTerms from '../components/quoteV2/editor/SectionTerms'
 import LibraryDrawer from '../components/quoteV2/editor/LibraryDrawer'
 import PreviewModal from '../components/quoteV2/editor/PreviewModal'
 import SendDialog from '../components/quoteV2/editor/SendDialog'
+import AssistantPanel from '../components/quoteV2/editor/AssistantPanel'
 
 import { clientCountOf, varsOf, buildQuoteV2Content } from '../lib/quoteV2/content'
 import { isFrozen, freeze, unfreeze, templateRawOf } from '../lib/quoteV2/linked'
 import { buildTemplateUpdate } from '../lib/quoteV2/templateSync'
 import { stagesOf, termGroupsOf } from '../lib/quoteV2/validate'
 import * as ops from '../lib/quoteV2/editorOps'
+import { applyEdits } from '../lib/quoteV2/templateAssist'
 import {
   sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes,
   buildTemplateFromEditor, describeTemplateDiff,
@@ -83,6 +85,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const [twoClients, setTwoClients] = useState(true)
   const [undo, setUndo] = useState(null)        // { previous } אחרי שמירה
   const [inquiry, setInquiry] = useState(null) // רק למצב הצעה
+  const [chatOpen, setChatOpen] = useState(false)
   const [tplRow, setTplRow] = useState(null)
   const [backups, setBackups] = useState([])
   const [tplDirty, setTplDirty] = useState(false)
@@ -313,6 +316,21 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     } finally { setSending(false) }
   }
 
+  /* ── הצעות העוזר ─────────────────────────────────────────────
+     מוחלות על המצב המקומי בלבד. כל שדה שנגעו בו נרשם כ"נערך" עם
+     הנוסח שקדם לו — בדיוק כמו הקלדה ידנית — וכך השמירה תמיר אותו
+     חזרה לנוסח תבנית עם המשתנים והחלופות שלו. */
+  const applyAssistantEdits = (edits) => {
+    const r = applyEdits(content, edits)
+    for (const t of r.touched) {
+      const path = `${t.ownerId}.${t.field}`
+      if (!(path in origRaw.current)) origRaw.current[path] = t.before
+      edited.current.add(path)
+    }
+    update(r.content)
+    if (r.skipped.length) flash(`${r.skipped.length} הצעות כבר לא תקפות ודולגו`)
+  }
+
   /* ── שמירת תבנית ──────────────────────────────────────────────
      הגיבוי נוצר **לפני** הדריסה, ונשמרים חמישה אחרונים. זו הרשת
      היחידה שיש כאן: ההצעות הבאות כולן ייוולדו מהנוסח הזה. */
@@ -442,6 +460,9 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
             {tplDirty && <span className="qe-saved err">יש שינויים שלא נשמרו</span>}
             <span className="qe-sp" />
             <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
+            <button type="button" className={'qe-b' + (chatOpen ? ' pri' : '')} onClick={() => setChatOpen(v => !v)}>
+              ✨ עוזר העריכה
+            </button>
             <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'tplVersions' })}>גרסאות קודמות</button>
             <button type="button" className="qe-b" onClick={leave}>יציאה</button>
             <button type="button" className="qe-b pri" disabled={!tplDirty || busy === 'save'} onClick={openSaveConfirm}>
@@ -471,6 +492,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         )}
       </div>
 
+      <div className={isTpl && chatOpen ? 'qe-withchat' : undefined}>
       <div className="qe-wrap">
         {isTpl && (
           <div className="qe-sample">
@@ -562,6 +584,16 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
           onTermUp={id => update(c => ops.moveTerm(c, id, -1))}
           onTermDown={id => update(c => ops.moveTerm(c, id, 1))}
         />
+      </div>
+
+      {isTpl && chatOpen && (
+        <AssistantPanel
+          content={content}
+          twoClients={twoClients}
+          onApply={applyAssistantEdits}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
       </div>
 
       {/* ── דיאלוגים ── */}

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@sparticuz/chromium": "^147.0.2",
     "@supabase/supabase-js": "^2.49.1",
     "@tiptap/pm": "^3.27.1",

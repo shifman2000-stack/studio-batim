@@ -73,13 +73,22 @@ term.question/marketingAnswer · opening.greeting/intro · extras.title/sub.
 · ענה/י תמיד בעברית, קצר וענייני.
 · כשיש עריכות להציע, קרא/י לכלי propose_edits. אחרת ענה/י בטקסט בלבד.`
 
-const TOOL = {
+/* ⚠️ בלי strict: true, בכוונה.
+   strict מהדר את הסכימה לדקדוק, ובמצב הזה `additionalProperties`
+   חייב להיות false בכל אובייקט. השדה `fields` כאן הוא פתוח מטבעו —
+   הוא נושא את שדות הפריט החדש, שהם אחרים לשלב, לתנאי ולתוספת —
+   ולכן הסכימה לא ניתנת להידור ו-Anthropic מחזיר 400.
+   לסגור אותו היה אפשר, אבל 16 שדות הרשות של שלושת הסוגים יחד עם
+   שדות העריכה חוצים את תקרת 24 פרמטרי הרשות של strict.
+
+   וממילא strict לא נחוץ כאן: **כל הצעה עוברת אימות מלא** ב-
+   templateAssist לפני שהיא מוצגת, ושם נבדקים דברים שסכימה לא
+   יכולה לתפוס בכלל — משתנה שאבד, דקדוק ששוטח, id שלא קיים. */
+export const TOOL = {
   name: 'propose_edits',
   description: 'מציע עריכות ממוקדות לטופס הצעת המחיר. כל עריכה מצביעה על id קיים.',
-  strict: true,
   input_schema: {
     type: 'object',
-    additionalProperties: false,
     required: ['edits'],
     properties: {
       edits: {
@@ -87,7 +96,6 @@ const TOOL = {
         description: 'רשימת העריכות המוצעות, לפי הסדר שבו יש להחיל אותן.',
         items: {
           type: 'object',
-          additionalProperties: false,
           required: ['kind', 'sectionId', 'reason'],
           properties: {
             kind: {
@@ -104,8 +112,7 @@ const TOOL = {
             direction: { type: 'number', description: '1- למעלה, 1 למטה, ל-move_item' },
             fields: {
               type: 'object',
-              additionalProperties: true,
-              description: 'שדות הפריט החדש ל-add_item',
+              description: 'שדות הפריט החדש ל-add_item, לפי סוג הסעיף',
             },
             reason: { type: 'string', description: 'שורה אחת בעברית: למה השינוי הזה' },
           },
@@ -167,8 +174,8 @@ export default async function handler(req, res) {
        שני breakpoints של מטמון: הפרומפט הקבוע, ואחריו התוכן. התוכן
        משתנה רק כשעינב עורכת, ולכן ברצף שאלות על אותו נוסח שתיהן
        נקראות מהמטמון. ⚠️ tool_choice "any"/"tool" מוחזר כ-400
-       בדגם הזה — ולכן auto, עם ההנחיה לקרוא לכלי בתוך הפרומפט
-       ו-strict שמבטיח ארגומנטים תקינים לסכימה. */
+       בדגם הזה — ולכן auto, עם ההנחיה לקרוא לכלי בתוך הפרומפט.
+       האימות של הארגומנטים נעשה אצל הלקוח, ב-templateAssist. */
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -212,9 +219,11 @@ export default async function handler(req, res) {
       },
     })
   } catch (err) {
-    /* לעולם לא מחזירים את גוף השגיאה של הספק — הוא עלול להכיל
-       פרטי בקשה. ללוג נכנסת רק הכותרת. */
-    console.error('template-assistant:', err?.name, err?.status)
+    /* ⚠️ ההודעה של ה-SDK נכנסת ללוג במפורש. בלעדיה 400 נראה בלוג
+       כמו "Error 400" ואי אפשר לדעת איזה שדה בבקשה נפסל — בדיוק
+       מה שקרה כאן. ההודעה מתארת את הבקשה ולא מכילה את המפתח;
+       ללקוח עדיין חוזר נוסח כללי בעברית. */
+    console.error('template-assistant:', err?.name, err?.status, err?.message)
     if (err instanceof Anthropic.AuthenticationError) return bad(res, 503, 'העוזר לא מוגדר נכון.')
     if (err instanceof Anthropic.RateLimitError) return bad(res, 429, 'העוזר עמוס כרגע. כדאי לנסות שוב בעוד רגע.')
     if (err instanceof Anthropic.APIError) return bad(res, 502, 'העוזר לא זמין כרגע.')

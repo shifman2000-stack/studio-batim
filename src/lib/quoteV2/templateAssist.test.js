@@ -17,7 +17,7 @@ import { resolveText } from './resolve.js'
 import * as ops from './editorOps.js'
 import {
   syntaxOk, validateEdit, partitionEdits, applyEdit, applyEdits,
-  isBindingField, previewOf, findOwner,
+  isBindingField, previewOf, findOwner, EDIT_KINDS,
 } from './templateAssist.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -310,6 +310,55 @@ test('כל שדות התבנית עוברים אימות כשהם מוצעים �
       if (!r.ok) bad.push(`${sec.id}.${k}: ${r.reason}`)
     }
   }
+  assert.deepEqual(bad, [])
+})
+
+console.log('')
+console.log(' סכימת הכלי')
+
+const { TOOL } = await import('../../../api/template-assistant.js')
+
+/* ⚠️ הבדיקה הזו נולדה מ-400 אמיתי: הסכימה הכילה
+   additionalProperties: true תחת strict, ו-Anthropic דחה את הבקשה
+   כולה. בלוג של Vercel זה נראה רק כ-"Error 400". */
+test('כל פעולה בסכימה מוכרת גם ל-validateEdit', () => {
+  const kinds = TOOL.input_schema.properties.edits.items.properties.kind.enum
+  assert.deepEqual([...kinds].sort(), [...EDIT_KINDS].sort())
+})
+
+test('הסכימה היא JSON תקין ויש לה edits', () => {
+  assert.ok(JSON.stringify(TOOL))
+  assert.equal(TOOL.input_schema.type, 'object')
+  assert.deepEqual(TOOL.input_schema.required, ['edits'])
+})
+
+test('additionalProperties לא מופיע עם ערך שאינו false', () => {
+  const bad = []
+  const walk = (node, path) => {
+    if (!node || typeof node !== 'object') return
+    if (node.additionalProperties !== undefined && node.additionalProperties !== false) {
+      bad.push(path + ' = ' + node.additionalProperties)
+    }
+    for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walk(v, path + '.' + k)
+  }
+  walk(TOOL.input_schema, 'schema')
+  assert.deepEqual(bad, [])
+})
+
+test('אם strict יידלק — הסכימה חייבת לקיים את תת-הקבוצה שלו', () => {
+  if (!TOOL.strict) return                 // כרגע כבוי במכוון
+  const bad = []
+  const walk = (node, path) => {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'object' && node.additionalProperties !== false) {
+      bad.push(path + ': additionalProperties חייב להיות false')
+    }
+    if (node.type === 'object' && !node.properties) {
+      bad.push(path + ': אובייקט בלי properties אינו ניתן להידור')
+    }
+    for (const [k, v] of Object.entries(node)) if (v && typeof v === 'object') walk(v, path + '.' + k)
+  }
+  walk(TOOL.input_schema, 'schema')
   assert.deepEqual(bad, [])
 })
 

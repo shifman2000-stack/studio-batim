@@ -125,6 +125,8 @@ createRoot(document.getElementById('root')).render(
             נבלע כ-quoteId. התצוגה המקדימה של העורך נטענת לכאן
             ב-iframe, כדי שלמסע יהיה viewport אמיתי. */}
         <Route path="/quotes-v2/preview-frame" element={<QuoteV2PreviewFrame />} />
+        {/* עריכת טופס הצעת המחיר — אותו עורך, על התבנית. */}
+        <Route path="/quotes-v2/template" element={<QuoteEditorV2 mode="template" />} />
         <Route path="/quotes-v2/:quoteId" element={<QuoteEditorV2 />} />
         {/* הפן הכתוב לפי טוקן — אליו מנווט Puppeteer גם בהורדה
             שלפני החתימה וגם ביצירת ה-PDF החתום. ציבורי, כמו

@@ -7,7 +7,7 @@ import { pctSum } from '../../../lib/quoteV2/validate'
    הפן השיווקי ואת ה-PDF. חישוב מקומי כאן היה המקום הקלאסי שבו
    העורך מראה 18,000 וה-PDF מראה 17,999. */
 
-export default function SectionPrice({ stages, fee, readOnly, onFee, onPct }) {
+export default function SectionPrice({ stages, fee, readOnly, onFee, onPct, feeNote }) {
   const sum = pctSum(stages)
   const amounts = computePayments(fee, stages.map(s => s.pct))
 
@@ -26,6 +26,7 @@ export default function SectionPrice({ stages, fee, readOnly, onFee, onPct }) {
           />
           <span>₪ בתוספת מע״מ</span>
         </div>
+        {feeNote && <div className="qe-opt" style={{ marginTop: 6 }}>{feeNote}</div>}
 
         {stages.length > 0 && (
           <table className="qe-split">

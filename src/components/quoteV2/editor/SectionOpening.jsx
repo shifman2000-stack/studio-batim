@@ -5,7 +5,7 @@ import { displayValue } from '../../../lib/quoteV2/linked'
 /* 1 · פתיחה — מי הלקוח, איפה, ואיך ההצעה נפתחת אצלו בטלפון. */
 
 export default function SectionOpening({
-  content, opening, scope, extras, vars, nClients, readOnly,
+  content, opening, scope, extras, vars, nClients, readOnly, hideClientFields,
   f, onClient, onRemoveSecond, onProperty,
   onToggleExtra, onAddExtra, onRemoveExtra, onPatch,
 }) {
@@ -18,6 +18,9 @@ export default function SectionOpening({
       <h2><span className="qe-n">1</span>פתיחה</h2>
 
       <div className="qe-pad">
+        {/* בעריכת התבנית אין לקוח אמיתי לערוך — רק דוגמה שמוצגת
+            בשורה שמעל, ולכן השדות האלה פשוט לא קיימים כאן. */}
+        {hideClientFields ? null : <>
         <div className="qe-two">
           <Field label="שם פרטי" value={c0.firstName} disabled={readOnly}
             onChange={v => onClient(0, { firstName: v })} />
@@ -59,6 +62,7 @@ export default function SectionOpening({
         <div className="qe-opt" style={{ margin: '-4px 0 14px' }}>
           מופיעים בשרטוט הבית בטלפון. אם ריקים — פשוט לא יופיעו.
         </div>
+        </>}
 
         {opening && (
           <>

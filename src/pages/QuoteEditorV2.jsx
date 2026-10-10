@@ -17,6 +17,10 @@ import { isFrozen, freeze, unfreeze, templateRawOf } from '../lib/quoteV2/linked
 import { buildTemplateUpdate } from '../lib/quoteV2/templateSync'
 import { stagesOf, termGroupsOf } from '../lib/quoteV2/validate'
 import * as ops from '../lib/quoteV2/editorOps'
+import {
+  sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes,
+  buildTemplateFromEditor, describeTemplateDiff,
+} from '../lib/quoteV2/templateEdit'
 
 /* ═══════════════════════════════════════════════════════════════════════
    /quotes-v2/:quoteId — עורך ההצעות של עינב (שלב E)
@@ -35,9 +39,26 @@ import * as ops from '../lib/quoteV2/editorOps'
 
 const AUTOSAVE_MS = 800
 
-export default function QuoteEditorV2() {
+/* עוטף תוכן תבנית כ-content_v2 מלא עם נתוני דוגמה, כדי שכל רכיבי
+   הסעיפים והתצוגה המקדימה יעבדו בלי שום תנאי מיוחד. */
+function asEditable(tplContent, twoClients) {
+  return {
+    ...tplContent,
+    clients: sampleClients(twoClients),
+    property: { settlement: SAMPLE.settlement, houseArea: SAMPLE.houseArea, plotArea: SAMPLE.plotArea },
+    vars: sampleVars(twoClients),
+    totals: { fee: SAMPLE.fee, currency: 'ILS', vatIncluded: false },
+    clientResponse: { extrasSelected: [], consentChecked: false, signatures: [] },
+    meta: { ...(tplContent.meta ?? {}), frozen: [] },
+  }
+}
+
+export default function QuoteEditorV2({ mode = 'quote' }) {
   const { quoteId } = useParams()
   const navigate = useNavigate()
+  /* מצב תבנית: אותו עורך בדיוק, אבל על שורת quote_templates
+     במקום על הצעה, ועם לקוח לדוגמה. ההבדלים מרוכזים ב-isTpl. */
+  const isTpl = mode === 'template'
 
   const [state, setState] = useState('checking')   // checking | loading | ready | error
   const [error, setError] = useState('')
@@ -58,6 +79,18 @@ export default function QuoteEditorV2() {
   const dirty = useRef(false)
   const timer = useRef(null)
 
+  /* ── מצב תבנית בלבד ── */
+  const [twoClients, setTwoClients] = useState(true)
+  const [undo, setUndo] = useState(null)        // { previous } אחרי שמירה
+  const [tplRow, setTplRow] = useState(null)
+  const [backups, setBackups] = useState([])
+  const [tplDirty, setTplDirty] = useState(false)
+  const [busy, setBusy] = useState('')
+  const pristine = useRef(null)        // תוכן התבנית כפי שנטען
+  const origRaw = useRef({})           // נוסח מקורי לכל שדה שנערך
+  const plural = useRef({})            // הניסוח ברבים לשדות דקדוקיים
+  const edited = useRef(new Set())     // נתיבי השדות שנערכו
+
   /* ── טעינה ───────────────────────────────────────────────────── */
   useEffect(() => {
     let cancelled = false
@@ -69,6 +102,27 @@ export default function QuoteEditorV2() {
       if (profile?.role !== 'admin') { navigate('/dashboard'); return }
       if (cancelled) return
       setState('loading')
+
+      if (isTpl) {
+        const [tpl, lib, bks] = await Promise.all([
+          supabase.from('quote_templates').select('id, name, content').eq('is_default', true).maybeSingle(),
+          supabase.from('quote_library_items').select('id, type, title, payload, tags, archived'),
+          supabase.from('quote_templates').select('id, name, content, updated_at')
+            .eq('is_default', false).order('updated_at', { ascending: false }).limit(5),
+        ])
+        if (cancelled) return
+        if (tpl.error || !tpl.data?.content?.sections) {
+          setError('לא נמצאה תבנית ברירת מחדל.'); setState('error'); return
+        }
+        pristine.current = tpl.data.content
+        setTplRow({ id: tpl.data.id, name: tpl.data.name })
+        setLibrary(lib.data ?? [])
+        setBackups(bks.data ?? [])
+        setTemplate(tpl.data.content)
+        setContent(asEditable(tpl.data.content, true))
+        setState('ready')
+        return
+      }
 
       const [q, tpl, lib] = await Promise.all([
         supabase.from('quotes')
@@ -100,15 +154,15 @@ export default function QuoteEditorV2() {
     }
     run()
     return () => { cancelled = true }
-  }, [quoteId, navigate])
+  }, [quoteId, navigate, isTpl])
 
   /* ── נעילה ───────────────────────────────────────────────────── */
-  const signed = !!lastSent?.is_signed
+  const signed = !isTpl && !!lastSent?.is_signed
   const readOnly = signed
 
   /* ── שמירה אוטומטית ──────────────────────────────────────────── */
   useEffect(() => {
-    if (state !== 'ready' || !dirty.current || readOnly) return
+    if (isTpl || state !== 'ready' || !dirty.current || readOnly) return
     setSaved('שומר…')
     clearTimeout(timer.current)
     timer.current = setTimeout(async () => {
@@ -119,18 +173,21 @@ export default function QuoteEditorV2() {
       if (e) console.error('autosave:', e)
     }, AUTOSAVE_MS)
     return () => clearTimeout(timer.current)
-  }, [content, state, quoteId, readOnly])
+  }, [content, state, quoteId, readOnly, isTpl])
 
   const update = useCallback(fn => {
     dirty.current = true
+    setTplDirty(true)
     setContent(prev => (typeof fn === 'function' ? fn(prev) : fn))
   }, [])
 
   const flash = t => { setToast(t); setTimeout(() => setToast(''), 1800) }
 
   /* ── נגזרות ──────────────────────────────────────────────────── */
-  const vars = useMemo(() => varsOf(content), [content])
-  const nClients = useMemo(() => clientCountOf(content), [content])
+  const vars = useMemo(
+    () => (isTpl ? sampleVars(twoClients) : varsOf(content)), [content, isTpl, twoClients])
+  const nClients = useMemo(
+    () => (isTpl ? (twoClients ? 2 : 1) : clientCountOf(content)), [content, isTpl, twoClients])
   const opening = ops.sectionByType(content, 'opening')
   const scope = ops.sectionByType(content, 'scope')
   const extras = ops.sectionByType(content, 'extras')
@@ -142,19 +199,64 @@ export default function QuoteEditorV2() {
   /* ── גשר השדות המקושרים ──────────────────────────────────────── */
   const f = useMemo(() => ({
     frozen: (id, field) => isFrozen(content, id, field),
-    bind: (id, field, raw) => ({
-      value: raw,
-      frozen: isFrozen(content, id, field),
-      templateRaw: templateRawOf(template, id, field),
-      vars,
-      clientCount: nClients,
-      onChange: v => update(c => freeze(ops.patchById(c, id, { [field]: v }), id, field)),
-      onRestore: () => update(c => {
-        const back = templateRawOf(template, id, field) ?? ''
-        return unfreeze(ops.patchById(c, id, { [field]: back }), id, field)
-      }),
-    }),
-  }), [content, template, vars, nClients, update])
+
+    bind: (id, field, raw) => {
+      const path = `${id}.${field}`
+
+      /* ── מצב תבנית ───────────────────────────────────────────────
+         כאן אין "מקושר/קפוא": כל שדה מוצג פתור עם נתוני הדוגמה,
+         וההמרה חזרה לנוסח תבנית קורית בשמירה. מה שצריך לזכור הוא
+         (א) מי נערך, ו-(ב) מה היה הנוסח לפני — בלעדיו אי אפשר
+         לדעת אילו משתנים וחלופות היו בשדה. */
+      if (isTpl) {
+        const remember = () => {
+          if (!(path in origRaw.current)) origRaw.current[path] = raw ?? ''
+          edited.current.add(path)
+        }
+
+        if (hasAlternates(origRaw.current[path] ?? raw)) {
+          const stored = plural.current[path]
+          const boxes = grammarBoxes(origRaw.current[path] ?? raw ?? '')
+          return {
+            value: raw,
+            vars, clientCount: nClients,
+            grammar: {
+              singular: edited.current.has(path) ? raw : boxes.singular,
+              plural: stored ?? boxes.plural,
+              onChange: (which, v) => {
+                remember()
+                if (plural.current[path] === undefined) plural.current[path] = boxes.plural
+                if (which === 'plural') { plural.current[path] = v; update(c => ({ ...c })) }
+                else update(c => ops.patchById(c, id, { [field]: v }))
+                if (which === 'singular' && !edited.current.has(path)) edited.current.add(path)
+              },
+            },
+            onChange: () => {},
+          }
+        }
+
+        return {
+          value: raw,
+          vars, clientCount: nClients,
+          onChange: v => { remember(); update(c => ops.patchById(c, id, { [field]: v })) },
+        }
+      }
+
+      /* ── מצב הצעה — ללא שינוי ── */
+      return {
+        value: raw,
+        frozen: isFrozen(content, id, field),
+        templateRaw: templateRawOf(template, id, field),
+        vars,
+        clientCount: nClients,
+        onChange: v => update(c => freeze(ops.patchById(c, id, { [field]: v }), id, field)),
+        onRestore: () => update(c => {
+          const back = templateRawOf(template, id, field) ?? ''
+          return unfreeze(ops.patchById(c, id, { [field]: back }), id, field)
+        }),
+      }
+    },
+  }), [content, template, vars, nClients, update, isTpl])
 
   /* ── שליחה ───────────────────────────────────────────────────── */
   const doSend = async ({ alsoTemplate }) => {
@@ -203,9 +305,105 @@ export default function QuoteEditorV2() {
     } finally { setSending(false) }
   }
 
+  /* ── שמירת תבנית ──────────────────────────────────────────────
+     הגיבוי נוצר **לפני** הדריסה, ונשמרים חמישה אחרונים. זו הרשת
+     היחידה שיש כאן: ההצעות הבאות כולן ייוולדו מהנוסח הזה. */
+  const buildNext = () => buildTemplateFromEditor(content, {
+    edited: [...edited.current],
+    origRaw: origRaw.current,
+    plural: plural.current,
+  })
+
+  const openSaveConfirm = () => {
+    const { content: next, warnings } = buildNext()
+    setDialog({ kind: 'tplConfirm', next, warnings, changes: describeTemplateDiff(pristine.current, next) })
+  }
+
+  const doSaveTemplate = async (next) => {
+    setBusy('save')
+    try {
+      const stamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
+      const { error: bErr } = await supabase.from('quote_templates')
+        .insert([{ name: `גיבוי · ${stamp}`, is_default: false, content: pristine.current }])
+      if (bErr) throw bErr
+
+      const { data: all } = await supabase.from('quote_templates')
+        .select('id, updated_at').eq('is_default', false)
+        .order('updated_at', { ascending: false })
+      for (const old of (all ?? []).slice(5)) {
+        await supabase.from('quote_templates').delete().eq('id', old.id)
+      }
+
+      const { error: uErr } = await supabase.from('quote_templates')
+        .update({ content: next, updated_at: new Date().toISOString() })
+        .eq('id', tplRow.id)
+      if (uErr) throw uErr
+
+      const previous = pristine.current
+      pristine.current = next
+      origRaw.current = {}; plural.current = {}; edited.current = new Set()
+      setTemplate(next)
+      setContent(asEditable(next, twoClients))
+      setTplDirty(false)
+      setDialog(null)
+      setUndo({ previous })
+      flash('התבנית נשמרה')
+
+      const { data: bks } = await supabase.from('quote_templates')
+        .select('id, name, content, updated_at').eq('is_default', false)
+        .order('updated_at', { ascending: false }).limit(5)
+      setBackups(bks ?? [])
+    } catch (e) {
+      setDialog(null)
+      flash('השמירה נכשלה: ' + (e.message || e))
+    } finally { setBusy('') }
+  }
+
+  /** שחזור גרסה — יוצר גיבוי של הנוכחית לפני שהוא דורס אותה. */
+  const restoreTemplate = async (contentToRestore) => {
+    setBusy('restore')
+    try {
+      const stamp = new Date().toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
+      await supabase.from('quote_templates')
+        .insert([{ name: `גיבוי · ${stamp}`, is_default: false, content: pristine.current }])
+      const { error } = await supabase.from('quote_templates')
+        .update({ content: contentToRestore, updated_at: new Date().toISOString() })
+        .eq('id', tplRow.id)
+      if (error) throw error
+      pristine.current = contentToRestore
+      origRaw.current = {}; plural.current = {}; edited.current = new Set()
+      setTemplate(contentToRestore)
+      setContent(asEditable(contentToRestore, twoClients))
+      setTplDirty(false)
+      setDialog(null)
+      setUndo(null)
+      flash('הגרסה שוחזרה')
+      const { data: bks } = await supabase.from('quote_templates')
+        .select('id, name, content, updated_at').eq('is_default', false)
+        .order('updated_at', { ascending: false }).limit(5)
+      setBackups(bks ?? [])
+    } catch (e) {
+      setDialog(null)
+      flash('השחזור נכשל: ' + (e.message || e))
+    } finally { setBusy('') }
+  }
+
   const copy = async (text) => {
     try { await navigator.clipboard.writeText(text); flash('הקישור הועתק') }
     catch { flash('לא הצלחתי להעתיק — אפשר לסמן ולהעתיק ידנית') }
+  }
+
+  /* ── אזהרה על יציאה עם שינויים שלא נשמרו ───────────────────── */
+  useEffect(() => {
+    if (!isTpl || !tplDirty) return
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isTpl, tplDirty])
+
+  const leave = () => {
+    if (tplDirty && !window.confirm('יש שינויים שלא נשמרו. לצאת בלי לשמור?')) return
+    navigate('/reports')
   }
 
   /* ── מצבי טעינה ──────────────────────────────────────────────── */
@@ -224,21 +422,64 @@ export default function QuoteEditorV2() {
   return (
     <div className="qe">
       <div className="qe-top">
-        <h1>הצעת מחיר <small>{who ? '· ' + who : ''}</small></h1>
-        <span className={'qe-saved' + (saved === 'השמירה נכשלה' ? ' err' : '')}>
-          {readOnly ? 'הצעה חתומה — קריאה בלבד' : saved}
-        </span>
-        <span className="qe-sp" />
-        <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
-        {!readOnly && (
-          <button type="button" className="qe-b pri" onClick={() => { setLink(''); setSendError(''); setDialog({ kind: 'send' }) }}>
-            שליחה ללקוח
-          </button>
+        {isTpl ? (
+          <>
+            <h1>טופס הצעת מחיר <small>· תבנית</small></h1>
+            {tplDirty && <span className="qe-saved err">יש שינויים שלא נשמרו</span>}
+            <span className="qe-sp" />
+            <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
+            <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'tplVersions' })}>גרסאות קודמות</button>
+            <button type="button" className="qe-b" onClick={leave}>יציאה</button>
+            <button type="button" className="qe-b pri" disabled={!tplDirty || busy === 'save'} onClick={openSaveConfirm}>
+              {busy === 'save' ? 'שומר…' : 'שמירת תבנית'}
+            </button>
+          </>
+        ) : (
+          <>
+            <h1>הצעת מחיר <small>{who ? '· ' + who : ''}</small></h1>
+            <span className={'qe-saved' + (saved === 'השמירה נכשלה' ? ' err' : '')}>
+              {readOnly ? 'הצעה חתומה — קריאה בלבד' : saved}
+            </span>
+            <span className="qe-sp" />
+            <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
+            {!readOnly && (
+              <button type="button" className="qe-b pri" onClick={() => { setLink(''); setSendError(''); setDialog({ kind: 'send' }) }}>
+                שליחה ללקוח
+              </button>
+            )}
+          </>
         )}
       </div>
 
       <div className="qe-wrap">
-        {readOnly ? (
+        {isTpl && (
+          <div className="qe-sample">
+            <span>תצוגה עם לקוח לדוגמה</span>
+            <span style={{ color: '#6b8a68' }}>
+              {twoClients ? `${SAMPLE.name1} ו${SAMPLE.name2}` : SAMPLE.name1} · {SAMPLE.settlement} ·
+              {' '}{SAMPLE.houseArea}/{SAMPLE.plotArea} מ״ר · {SAMPLE.fee.toLocaleString('en-US')} ₪
+            </span>
+            <span className="qe-sp" />
+            <div className="qe-seg qe-seg--sm">
+              <button type="button" className={!twoClients ? 'on' : ''}
+                onClick={() => { setTwoClients(false); setContent(c => ({ ...c, clients: sampleClients(false), vars: sampleVars(false) })) }}>
+                לקוח אחד
+              </button>
+              <button type="button" className={twoClients ? 'on' : ''}
+                onClick={() => { setTwoClients(true); setContent(c => ({ ...c, clients: sampleClients(true), vars: sampleVars(true) })) }}>
+                שני לקוחות
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isTpl ? (
+          <div className="qe-tip">
+            💡 כאן עורכים את <b>הטופס עצמו</b>. מה שיישמר כאן ייפתח בכל הצעה חדשה.
+            שם הלקוח, היישוב, השטחים וסכום שכר הטרחה שמוצגים כאן הם דוגמה בלבד ואינם נשמרים —
+            חלוקת האחוזים בין השלבים כן נשמרת.
+          </div>
+        ) : readOnly ? (
           <div className="qe-tip ro">
             ההצעה נחתמה. מסמך חתום לא נערך ולא מרונדר מחדש — ה-PDF השמור הוא המסמך.
           </div>
@@ -254,6 +495,7 @@ export default function QuoteEditorV2() {
         <SectionOpening
           content={content} opening={opening} scope={scope} extras={extras}
           vars={vars} nClients={nClients} readOnly={readOnly} f={f}
+          hideClientFields={isTpl}
           onClient={(i, patch) => update(c => ops.setClient(c, i, patch))}
           onRemoveSecond={() => update(ops.removeSecondClient)}
           onProperty={patch => update(c => ops.setProperty(c, patch))}
@@ -265,7 +507,10 @@ export default function QuoteEditorV2() {
 
         <SectionPrice
           stages={stages} fee={Number(content?.totals?.fee) || 0} readOnly={readOnly}
-          onFee={v => update(c => ops.setFee(c, v))}
+          feeNote={isTpl ? 'סכום לדוגמה — אינו נשמר בתבנית. האחוזים כן נשמרים.' : null}
+          onFee={v => (isTpl
+            ? setContent(c => ops.setFee(c, v))        /* לא מסמן dirty: לא נשמר */
+            : update(c => ops.setFee(c, v)))}
           onPct={(id, v) => update(c => ops.setStagePct(c, id, v))}
         />
 
@@ -386,7 +631,91 @@ export default function QuoteEditorV2() {
         />
       )}
 
-      <Toast text={toast} />
+      {dialog?.kind === 'tplConfirm' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>שמירת התבנית</h3>
+          <p>הצעות חדשות ייפתחו מעכשיו עם הנוסח הזה. הצעות שכבר נשלחו לא ישתנו.</p>
+
+          {dialog.changes.length === 0
+            ? <p style={{ color: '#8a8680' }}>לא זוהו שינויים לעומת הנוסח השמור.</p>
+            : (
+              <>
+                <p style={{ margin: '14px 0 6px', fontWeight: 500 }}>
+                  {dialog.changes.length === 1 ? 'שינוי אחד:' : `${dialog.changes.length} שינויים:`}
+                </p>
+                <div className="qe-vers">
+                  {dialog.changes.map((c, i) => <div className="qe-ck" key={i}><span>·</span><span>{c}</span></div>)}
+                </div>
+              </>
+            )}
+
+          {dialog.warnings.length > 0 && (
+            <div className="qe-warn">
+              {dialog.warnings.map((w, i) => <div key={i}>⚠️ {w}</div>)}
+            </div>
+          )}
+
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" disabled={busy === 'save'}
+              onClick={() => doSaveTemplate(dialog.next)}>
+              {busy === 'save' ? 'שומר…' : 'שמירה'}
+            </button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>ביטול</button>
+          </div>
+        </Modal>
+      )}
+
+      {dialog?.kind === 'tplVersions' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>גרסאות קודמות</h3>
+          {backups.length === 0
+            ? <p style={{ color: '#8a8680' }}>עדיין אין גיבויים. גיבוי נוצר אוטומטית בכל שמירה.</p>
+            : (
+              <div className="qe-vers">
+                {backups.map(b => (
+                  <button key={b.id} type="button" className="qe-li"
+                    onClick={() => setDialog({ kind: 'tplRestore', backup: b })}>
+                    <div>
+                      <b>{b.name}</b>
+                      <span>{new Date(b.updated_at).toLocaleString('he-IL')}</span>
+                    </div>
+                    <span>שחזור</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          <div className="qe-row">
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>סגירה</button>
+          </div>
+        </Modal>
+      )}
+
+      {dialog?.kind === 'tplRestore' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>לשחזר את "{dialog.backup.name}"?</h3>
+          <p>הנוסח הנוכחי יישמר קודם כגיבוי, כך שאפשר יהיה לחזור אליו.</p>
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" disabled={busy === 'restore'}
+              onClick={() => restoreTemplate(dialog.backup.content)}>
+              {busy === 'restore' ? 'משחזר…' : 'שחזור'}
+            </button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>ביטול</button>
+          </div>
+        </Modal>
+      )}
+
+      {undo && (
+        <div className="qe-toast show" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+          <span>התבנית נשמרה</span>
+          <button type="button" className="qe-undo" style={{ color: '#a9bf9f' }}
+            onClick={() => { const prev = undo.previous; setUndo(null); restoreTemplate(prev) }}>
+            ביטול
+          </button>
+          <button type="button" className="qe-undo" style={{ color: '#8a8680' }} onClick={() => setUndo(null)}>✕</button>
+        </div>
+      )}
+
+      <Toast text={undo ? '' : toast} />
     </div>
   )
 }

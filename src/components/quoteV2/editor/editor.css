@@ -1,0 +1,347 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   עורך ההצעות — מתוך docs/mockups/quote-editor.html
+
+   ⚠️ כל כלל כאן מתחיל ב-.qe. Vite מאחד את כל ה-CSS לגיליון אחד
+   גלובלי, ולכן סלקטור כמו `.card` או `button` היה נוחת על כל
+   האפליקציה. המוקאפ הוא עמוד עצמאי ויכול להרשות לעצמו שמות קצרים;
+   כאן זה היה שובר מסכים קיימים.
+
+   אין כאן @media print בכוונה: העורך לא מודפס. ההדפסה היא של
+   QuoteTowerV2 דרך /quote-tower-print/:token.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qe {
+  --qe-bg: #f7f5f2; --qe-card: #fff; --qe-ink: #1a1a18; --qe-muted: #8a8680;
+  --qe-line: #e4dfd7; --qe-line2: #eeebe6; --qe-sage: #7a9478; --qe-sage-d: #4a6e48;
+  --qe-sage-l: #eef2ec; --qe-sand: #c8bfb0; --qe-warn: #c0653a; --qe-night: #16201d;
+
+  position: fixed; inset: 0; overflow: auto;
+  background: var(--qe-bg); color: var(--qe-ink);
+  font-family: 'Heebo', sans-serif; font-size: 15px;
+  direction: rtl; text-align: right;
+}
+.qe *, .qe *::before, .qe *::after { box-sizing: border-box; }
+.qe button { font: inherit; cursor: pointer; }
+.qe input, .qe textarea { font: inherit; color: inherit; }
+
+/* ---------- סרגל עליון ---------- */
+.qe-top {
+  position: sticky; top: 0; z-index: 10; background: var(--qe-card);
+  border-bottom: 1px solid var(--qe-line);
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+}
+.qe-top h1 { margin: 0; font-size: 17px; font-weight: 500; }
+.qe-top h1 small { color: var(--qe-muted); font-weight: 400; }
+.qe-saved { font-size: 12.5px; color: var(--qe-muted); white-space: nowrap; }
+.qe-saved.err { color: var(--qe-warn); }
+.qe-sp { flex: 1; }
+.qe-b {
+  border: 1px solid var(--qe-line); background: var(--qe-card);
+  border-radius: 10px; padding: 9px 16px; color: inherit; white-space: nowrap;
+}
+.qe-b:disabled { opacity: .5; cursor: default; }
+.qe-b.pri { background: var(--qe-sage-d); border-color: var(--qe-sage-d); color: #fff; font-weight: 500; }
+.qe-b.wa { background: #1f8a4c; border-color: #1f8a4c; color: #fff; font-weight: 500; }
+
+/* ---------- פריסה ---------- */
+.qe-wrap { max-width: 780px; margin: 0 auto; padding: 26px 18px 120px; }
+.qe-tip {
+  background: var(--qe-sage-l); border-radius: 12px; padding: 12px 16px;
+  font-size: 14px; color: #3d5a3b; margin-bottom: 22px;
+}
+.qe-tip.ro { background: #fbeee6; color: #8a4a28; }
+.qe-sec {
+  background: var(--qe-card); border: 1px solid var(--qe-line);
+  border-radius: 16px; margin-bottom: 18px; overflow: hidden;
+}
+.qe-sec > h2 {
+  margin: 0; padding: 16px 20px; font-size: 18px; font-weight: 500;
+  display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--qe-line2);
+}
+.qe-sec > h2 .qe-n {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--qe-sage-l);
+  color: var(--qe-sage-d); font-size: 14px;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.qe-sec > h2 small { font-size: 13px; color: var(--qe-muted); font-weight: 400; margin-inline-start: auto; }
+.qe-pad { padding: 16px 20px; }
+.qe-note { font-size: 12.5px; color: var(--qe-muted); padding: 0 20px 14px; }
+
+/* ---------- שדות ---------- */
+.qe-f { margin-bottom: 10px; }
+.qe-f > label { display: block; font-size: 12.5px; color: var(--qe-muted); margin-bottom: 3px; }
+.qe-f input, .qe-f textarea {
+  width: 100%; border: 1px solid var(--qe-line); border-radius: 8px;
+  padding: 7px 9px; outline: 0; background: #fff; resize: vertical; line-height: 1.55;
+}
+.qe-f input:focus, .qe-f textarea:focus { border-color: var(--qe-sage); }
+.qe-f textarea { min-height: 70px; }
+.qe-f input:disabled, .qe-f textarea:disabled { background: #f6f4f1; color: #6b6762; }
+.qe-opt { font-size: 11.5px; color: var(--qe-muted); margin-top: 3px; }
+.qe-lab { display: flex; align-items: baseline; gap: 8px; }
+.qe-lab .qe-sp { flex: 1; }
+.qe-undo {
+  border: 0; background: none; color: var(--qe-sage-d); font-size: 11.5px;
+  padding: 0; text-decoration: underline;
+}
+.qe-manual { font-size: 11.5px; color: var(--qe-sand); }
+.qe-two { display: flex; gap: 12px; }
+.qe-two > * { flex: 1; min-width: 0; }
+
+/* ---------- המחיר ---------- */
+.qe-fee { display: flex; align-items: center; gap: 10px; }
+.qe-fee input {
+  font-family: 'Playfair Display', serif; font-size: 34px; border: 0;
+  border-bottom: 2px solid var(--qe-line); width: 220px; outline: 0;
+  padding: 2px 4px; direction: ltr; text-align: right; background: none;
+}
+.qe-fee input:focus { border-color: var(--qe-sage); }
+.qe-fee span { font-size: 15px; color: var(--qe-muted); }
+.qe-split { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+.qe-split td { padding: 8px 4px; border-bottom: 1px solid var(--qe-line2); }
+.qe-split td.pc input {
+  width: 58px; border: 1px solid var(--qe-line); border-radius: 8px;
+  padding: 5px 7px; text-align: center; direction: ltr;
+}
+.qe-split td.amt { color: var(--qe-muted); text-align: left; white-space: nowrap; }
+.qe-sum { margin-top: 10px; font-size: 14px; font-weight: 500; color: var(--qe-sage-d); }
+.qe-sum.bad { color: var(--qe-warn); }
+
+/* ---------- כרטיסים ---------- */
+.qe-card { border-bottom: 1px solid var(--qe-line2); }
+.qe-card:last-of-type { border-bottom: 0; }
+.qe-ch { display: flex; align-items: center; gap: 10px; padding: 13px 20px; cursor: pointer; }
+.qe-ch:hover { background: #fbfaf8; }
+.qe-ch .qe-num { width: 24px; color: var(--qe-muted); font-size: 13px; flex: none; }
+.qe-ch .qe-t { flex: 1; min-width: 0; }
+.qe-ch .qe-t b { font-weight: 500; display: block; }
+.qe-ch .qe-t span { font-size: 13px; color: var(--qe-muted); }
+.qe-act { display: flex; gap: 2px; flex: none; }
+.qe-ic {
+  border: 0; background: none; width: 30px; height: 30px; border-radius: 8px;
+  color: var(--qe-muted); font-size: 14px; line-height: 1;
+}
+.qe-ic:hover { background: var(--qe-line2); color: var(--qe-ink); }
+.qe-ic:disabled { opacity: .3; cursor: default; }
+.qe-ic:disabled:hover { background: none; }
+.qe-edit {
+  border: 1px solid var(--qe-line); background: var(--qe-card); border-radius: 8px;
+  padding: 5px 12px; font-size: 13px; color: var(--qe-sage-d); flex: none;
+}
+.qe-card.open .qe-edit { background: var(--qe-sage-d); color: #fff; border-color: var(--qe-sage-d); }
+.qe-body { padding: 4px 20px 18px; background: #fbfaf8; }
+.qe-faces { display: flex; gap: 14px; }
+.qe-face { flex: 1; min-width: 0; border-radius: 12px; padding: 12px 14px; border: 1px solid var(--qe-line); background: #fff; }
+.qe-face h4 {
+  margin: 0 0 10px; font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 7px; color: #5f5b55;
+}
+.qe-face h4 i { font-style: normal; font-size: 15px; }
+
+/* ---------- כפתורי הוספה ---------- */
+.qe-add {
+  display: block; width: calc(100% - 40px); margin: 12px 20px 16px;
+  border: 1.5px dashed var(--qe-sand); background: none; border-radius: 10px;
+  padding: 10px; color: var(--qe-sage-d); font-size: 14px;
+}
+.qe-add:hover { background: var(--qe-sage-l); }
+.qe-addrow { display: flex; gap: 10px; margin: 12px 20px 16px; }
+.qe-addrow .qe-add { margin: 0; width: auto; flex: 1; }
+.qe-grp {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px 4px; font-size: 13px; color: var(--qe-muted); letter-spacing: .06em;
+}
+.qe-grp input {
+  border: 0; background: none; font-size: 14px; font-weight: 500; color: #5f5b55;
+  outline: 0; flex: 1; padding: 3px 0; border-bottom: 1px dashed transparent;
+}
+.qe-grp input:hover, .qe-grp input:focus { border-bottom-color: var(--qe-sand); }
+.qe-addt { border: 0; background: none; color: var(--qe-sage-d); font-size: 13px; padding: 4px 20px 10px; }
+
+/* ---------- טוגלים ---------- */
+.qe-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--qe-line2); }
+.qe-toggle .qe-t { flex: 1; min-width: 0; }
+.qe-toggle .qe-t b { font-weight: 500; display: block; }
+.qe-toggle .qe-t span { font-size: 13px; color: var(--qe-muted); }
+.qe-tg { width: 40px; height: 23px; border-radius: 99px; background: var(--qe-line); border: 0; position: relative; flex: none; }
+.qe-tg::after {
+  content: ""; position: absolute; top: 2px; right: 2px; width: 19px; height: 19px;
+  border-radius: 50%; background: #fff; transition: right .2s;
+}
+.qe-tg.on { background: var(--qe-sage); }
+.qe-tg.on::after { right: 19px; }
+
+.qe-hello { font-family: 'Frank Ruhl Libre', serif; font-size: 22px; margin: 2px 0 12px; color: var(--qe-sage-d); white-space: pre-line; }
+
+/* ---------- תצוגה מקדימה ---------- */
+.qe-ov {
+  position: fixed; inset: 0; background: rgba(22, 32, 29, .6); z-index: 40;
+  display: flex; flex-direction: column; align-items: center; direction: rtl;
+}
+.qe-ovbar { display: flex; gap: 10px; align-items: center; padding: 14px; flex-wrap: wrap; justify-content: center; }
+.qe-seg { display: flex; background: #fff; border-radius: 10px; padding: 3px; }
+.qe-seg button { border: 0; background: none; padding: 7px 16px; border-radius: 8px; color: var(--qe-muted); }
+.qe-seg button.on { background: var(--qe-sage-d); color: #fff; }
+.qe-ovx { border: 0; background: #fff; border-radius: 10px; padding: 8px 14px; }
+.qe-ovbody { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 30px; display: flex; justify-content: center; width: 100%; }
+/* מסגרת המכשיר. ה-iframe בפנים בגודלו האמיתי, מוקטן ב-transform,
+   ולכן התיבה כאן מקבלת את המידות **אחרי** ההקטנה. */
+.qe-dev { flex: none; overflow: hidden; background: #16201d; align-self: flex-start; }
+.qe-dev--phone {
+  border-radius: 26px; box-shadow: 0 0 0 9px #0e1513, 0 10px 40px rgba(0, 0, 0, .5);
+  margin-top: 9px;
+}
+.qe-devnote {
+  padding: 0 0 14px; font-size: 12px; color: rgba(239, 231, 216, .65); direction: rtl;
+}
+.qe-paper-wrap { align-self: flex-start; }
+
+/* ---------- מודאל ---------- */
+.qe-mo {
+  position: fixed; inset: 0; background: rgba(22, 32, 29, .38); z-index: 50;
+  display: flex; align-items: center; justify-content: center; direction: rtl; padding: 16px;
+}
+.qe-mbox {
+  background: #fff; border-radius: 16px; width: min(560px, 100%);
+  max-height: 86vh; overflow-y: auto; padding: 20px 22px;
+}
+.qe-mbox h3 { margin: 0 0 12px; font-size: 18px; font-weight: 500; }
+.qe-mbox p { font-size: 14px; line-height: 1.6; }
+.qe-li {
+  display: flex; align-items: center; gap: 10px; border: 1px solid var(--qe-line);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 7px; cursor: pointer;
+  background: #fff; width: 100%; text-align: right;
+}
+.qe-li:hover { border-color: var(--qe-sage); background: var(--qe-sage-l); }
+.qe-li div { flex: 1; min-width: 0; }
+.qe-li b { font-weight: 500; display: block; }
+.qe-li span { font-size: 12.5px; color: var(--qe-muted); }
+.qe-search {
+  width: 100%; border: 1px solid var(--qe-line); border-radius: 10px;
+  padding: 9px 11px; outline: 0; margin-bottom: 10px;
+}
+.qe-search:focus { border-color: var(--qe-sage); }
+.qe-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.qe-tag {
+  border: 1px solid var(--qe-line); background: #fff; border-radius: 99px;
+  padding: 4px 12px; font-size: 12.5px; color: var(--qe-muted);
+}
+.qe-tag.on { background: var(--qe-sage-d); border-color: var(--qe-sage-d); color: #fff; }
+.qe-ck { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--qe-line2); font-size: 14px; }
+.qe-ck .ok { color: var(--qe-sage-d); }
+.qe-ck .no { color: var(--qe-warn); }
+.qe-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.qe-link {
+  display: block; width: 100%; direction: ltr; text-align: left;
+  background: #f6f4f1; border: 1px solid var(--qe-line); border-radius: 8px;
+  padding: 8px 10px; font-size: 12.5px; word-break: break-all; margin-top: 10px;
+}
+.qe-toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translate(-50%, 90px);
+  background: var(--qe-ink); color: #fff; padding: 10px 18px; border-radius: 10px;
+  transition: transform .3s; z-index: 60;
+}
+.qe-toast.show { transform: translate(-50%, 0); }
+
+/* ---------- טלפון ---------- */
+@media (max-width: 760px) {
+  .qe-faces { flex-direction: column; }
+  .qe-two { flex-direction: column; gap: 0; }
+  .qe-top { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+  .qe-top h1 { font-size: 15px; width: 100%; }
+  .qe-wrap { padding: 16px 10px 90px; }
+  .qe-pad { padding: 14px; }
+  .qe-ch { padding: 12px 14px; }
+  .qe-body { padding: 4px 14px 16px; }
+  .qe-add, .qe-addrow { margin-inline: 14px; }
+  .qe-fee input { width: 160px; font-size: 28px; }
+}
+
+/* ---------- עריכת תבנית ---------- */
+.qe-gram { display: flex; gap: 12px; }
+.qe-gram > div { flex: 1; min-width: 0; }
+.qe-gram-l {
+  display: block; font-size: 11.5px; color: var(--qe-sage-d);
+  margin-bottom: 3px; letter-spacing: .04em;
+}
+.qe-gram input, .qe-gram textarea {
+  width: 100%; border: 1px solid var(--qe-line); border-radius: 8px;
+  padding: 7px 9px; outline: 0; background: #fff; resize: vertical; line-height: 1.55;
+}
+.qe-gram input:focus, .qe-gram textarea:focus { border-color: var(--qe-sage); }
+.qe-sample {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--qe-sage-l); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: #3d5a3b;
+}
+.qe-sample .qe-sp { flex: 1; }
+.qe-seg.qe-seg--sm button { padding: 5px 11px; font-size: 12.5px; }
+.qe-seg.qe-seg--sm { background: #fff; border: 1px solid var(--qe-line); }
+.qe-warn {
+  background: var(--qe-warn-l, #fbeee6); color: #8a4a28; border-radius: 10px;
+  padding: 10px 14px; font-size: 13px; margin-top: 10px; line-height: 1.6;
+}
+.qe-vers { max-height: 46vh; overflow-y: auto; }
+@media (max-width: 760px) { .qe-gram { flex-direction: column; gap: 8px; } }
+
+/* ---------- עוזר העריכה ---------- */
+.qe-withchat { display: flex; align-items: flex-start; gap: 0; }
+.qe-withchat .qe-wrap { flex: 1; min-width: 0; margin: 0 auto; }
+.qe-chat {
+  position: sticky; top: 61px; flex: none; width: 380px;
+  height: calc(100vh - 61px); display: flex; flex-direction: column;
+  background: var(--qe-card); border-inline-start: 1px solid var(--qe-line);
+}
+.qe-chat-top {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid var(--qe-line2); font-size: 14px;
+}
+.qe-chat-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
+.qe-chat-hint { font-size: 13px; color: var(--qe-muted); line-height: 1.7; }
+.qe-chat-hint ul { margin: 8px 0; padding-inline-start: 18px; }
+.qe-msg {
+  border-radius: 12px; padding: 9px 12px; margin-bottom: 10px;
+  font-size: 13.5px; line-height: 1.65; white-space: pre-wrap;
+}
+.qe-msg.me { background: var(--qe-sage-l); color: #3d5a3b; }
+.qe-msg.bot { background: #f6f4f1; }
+.qe-msg-note { font-size: 11.5px; color: var(--qe-warn); margin-top: 6px; }
+.qe-thinking { color: var(--qe-muted); }
+.qe-approveall { width: 100%; margin-bottom: 10px; }
+.qe-prop {
+  border: 1px solid var(--qe-line); border-radius: 12px;
+  padding: 10px 12px; margin-bottom: 10px; background: #fff;
+}
+.qe-prop.approved { border-color: var(--qe-sage); background: var(--qe-sage-l); }
+.qe-prop.rejected { opacity: .5; }
+.qe-prop-head {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-size: 13px; font-weight: 500; margin-bottom: 8px;
+}
+.qe-binding {
+  font-size: 11px; font-weight: 400; color: #8a4a28;
+  background: #fbeee6; border-radius: 99px; padding: 2px 9px;
+}
+.qe-prop-diff { font-size: 12.5px; line-height: 1.6; }
+.qe-prop-before {
+  color: var(--qe-muted); text-decoration: line-through;
+  text-decoration-color: var(--qe-sand); margin-bottom: 4px;
+}
+.qe-prop-after { color: var(--qe-ink); }
+.qe-prop-act { display: flex; gap: 6px; margin-top: 10px; }
+.qe-prop-act .qe-b { padding: 5px 12px; font-size: 12.5px; }
+.qe-prop-state { margin-top: 8px; font-size: 12px; color: var(--qe-sage-d); }
+.qe-chat-form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--qe-line2); }
+.qe-chat-form textarea {
+  flex: 1; min-width: 0; border: 1px solid var(--qe-line); border-radius: 10px;
+  padding: 8px 10px; outline: 0; resize: none; line-height: 1.5; font: inherit;
+}
+.qe-chat-form textarea:focus { border-color: var(--qe-sage); }
+
+@media (max-width: 980px) {
+  .qe-withchat { flex-direction: column; }
+  .qe-chat {
+    position: fixed; inset: 61px 0 0; width: auto; height: auto;
+    z-index: 30; border-inline-start: 0;
+  }
+}

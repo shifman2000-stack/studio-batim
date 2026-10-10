@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>עורך הצעות פשוט</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&family=Frank+Ruhl+Libre:wght@300;400;500&family=Playfair+Display&family=Rubik:wght@300&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f7f5f2;--card:#fff;--ink:#1a1a18;--muted:#8a8680;--line:#e4dfd7;--line2:#eeebe6;--sage:#7a9478;--sage-d:#4a6e48;--sage-l:#eef2ec;--sand:#c8bfb0;--warn:#c0653a;--warn-l:#fbeee6;--night:#16201d;--cream:#efe7d8;--terra:#d9774a;--glow:#f4b860}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Heebo',sans-serif;font-size:15px}
+button{font:inherit;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:12px 20px}
+.top h1{margin:0;font-size:17px;font-weight:500}
+.top h1 small{color:var(--muted);font-weight:400}
+.saved{font-size:12.5px;color:var(--muted)}
+.sp{flex:1}
+.b{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 16px}
+.b.pri{background:var(--sage-d);border-color:var(--sage-d);color:#fff;font-weight:500}
+.wrap{max-width:780px;margin:0 auto;padding:26px 18px 120px}
+.tip{background:var(--sage-l);border-radius:12px;padding:12px 16px;font-size:14px;color:#3d5a3b;margin-bottom:22px}
+.sec{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:18px;overflow:hidden}
+.sec>h2{margin:0;padding:16px 20px;font-size:18px;font-weight:500;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line2)}
+.sec>h2 .n{width:26px;height:26px;border-radius:50%;background:var(--sage-l);color:var(--sage-d);font-size:14px;display:flex;align-items:center;justify-content:center}
+.sec>h2 small{font-size:13px;color:var(--muted);font-weight:400;margin-inline-start:auto}
+.pad{padding:16px 20px}
+/* fee */
+.fee{display:flex;align-items:center;gap:10px}
+.fee input{font-family:'Playfair Display';font-size:34px;border:0;border-bottom:2px solid var(--line);width:220px;outline:0;padding:2px 4px;direction:ltr;text-align:right}
+.fee input:focus{border-color:var(--sage)}
+.fee span{font-size:15px;color:var(--muted)}
+table.split{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
+table.split td{padding:8px 4px;border-bottom:1px solid var(--line2)}
+table.split td.pc input{width:58px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;text-align:center}
+table.split td.amt{color:var(--muted);text-align:left;white-space:nowrap}
+.sum{margin-top:10px;font-size:14px;font-weight:500;color:var(--sage-d)}
+.sum.bad{color:var(--warn)}
+/* cards */
+.card{border-bottom:1px solid var(--line2)}
+.card:last-of-type{border-bottom:0}
+.ch{display:flex;align-items:center;gap:10px;padding:13px 20px;cursor:pointer}
+.ch:hover{background:#fbfaf8}
+.ch .num{width:24px;color:var(--muted);font-size:13px}
+.ch .t{flex:1}
+.ch .t b{font-weight:500;display:block}
+.ch .t span{font-size:13px;color:var(--muted)}
+.ch .act{display:flex;gap:2px}
+.ic{border:0;background:none;width:30px;height:30px;border-radius:8px;color:var(--muted);font-size:14px}
+.ic:hover{background:var(--line2);color:var(--ink)}
+.edit{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;font-size:13px;color:var(--sage-d)}
+.card.open .edit{background:var(--sage-d);color:#fff;border-color:var(--sage-d)}
+.body{display:none;padding:4px 20px 18px;background:#fbfaf8}
+.card.open .body{display:block}
+.faces{display:flex;gap:14px}
+.face{flex:1;min-width:0;border-radius:12px;padding:12px 14px;border:1px solid var(--line)}
+.face.wr{background:#fff}
+.face.mk{background:#fff}
+.face h4{margin:0 0 10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;color:#5f5b55}
+.face h4 i{font-style:normal;font-size:15px}
+.f{margin-bottom:10px}
+.f label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px}
+.f input,.f textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;outline:0;background:#fff;resize:vertical;line-height:1.55}
+.f input:focus,.f textarea:focus{border-color:var(--sage)}
+.f textarea{min-height:70px}
+.opt{font-size:11.5px;color:var(--muted);margin-top:3px}
+.add{display:block;width:calc(100% - 40px);margin:12px 20px 16px;border:1.5px dashed var(--sand);background:none;border-radius:10px;padding:10px;color:var(--sage-d);font-size:14px}
+.add:hover{background:var(--sage-l)}
+.grp{display:flex;align-items:center;gap:8px;padding:14px 20px 4px;font-size:13px;color:var(--muted);letter-spacing:.06em}
+.grp input{border:0;background:none;font-size:14px;font-weight:500;color:#5f5b55;outline:0;flex:1;padding:3px 0;border-bottom:1px dashed transparent}
+.grp input:hover,.grp input:focus{border-bottom-color:var(--sand)}
+.addt{border:0;background:none;color:var(--sage-d);font-size:13px;padding:4px 20px 10px 0;margin-inline-start:20px}
+.toggle{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--line2)}
+.toggle .t{flex:1}.toggle .t b{font-weight:500;display:block}.toggle .t span{font-size:13px;color:var(--muted)}
+.tg{width:40px;height:23px;border-radius:99px;background:var(--line);border:0;position:relative;flex:none}
+.tg:after{content:"";position:absolute;top:2px;right:2px;width:19px;height:19px;border-radius:50%;background:#fff;transition:right .2s}
+.tg.on{background:var(--sage)}.tg.on:after{right:19px}
+.hello{font-family:'Frank Ruhl Libre';font-size:22px;margin:2px 0 12px;color:var(--sage-d)}
+/* preview overlay */
+.ov{position:fixed;inset:0;background:rgba(22,32,29,.6);z-index:40;display:none;flex-direction:column;align-items:center}
+.ov.show{display:flex}
+.ovbar{display:flex;gap:10px;align-items:center;padding:14px;}
+.seg{display:flex;background:#fff;border-radius:10px;padding:3px}
+.seg button{border:0;background:none;padding:7px 16px;border-radius:8px;color:var(--muted)}
+.seg button.on{background:var(--sage-d);color:#fff}
+.ovx{border:0;background:#fff;border-radius:10px;padding:8px 14px}
+.ovbody{flex:1;min-height:0;overflow:auto;padding:0 16px 30px;display:flex;justify-content:center}
+.phone{width:375px;height:min(740px,calc(100vh - 90px));border-radius:30px;background:#0e1513;padding:10px;flex:none}
+.scr{height:100%;border-radius:22px;overflow-y:auto;background:var(--night);color:var(--cream)}
+.scr::-webkit-scrollbar{width:0}
+.mh{padding:40px 22px 24px}.mh .to{font-size:11px;letter-spacing:.3em;color:var(--terra)}
+.mh h1{font-family:'Frank Ruhl Libre';font-weight:300;font-size:42px;line-height:1.03;margin:10px 0 0}
+.mh p{font-size:13.5px;line-height:1.7;color:#cfc7b8;margin:12px 0 0}
+.mc{padding:22px;border-top:1px solid rgba(239,231,216,.1)}
+.mc .k{font-size:11px;color:var(--terra);letter-spacing:.2em}
+.mc h2{font-family:'Frank Ruhl Libre';font-weight:400;font-size:23px;margin:6px 0}
+.mc p{font-size:13px;line-height:1.7;color:#d6cfc1;margin:0}
+.mc .got{margin-top:10px;background:#1f2b27;border-radius:10px;padding:9px 12px;font-family:'Frank Ruhl Libre';font-size:14px}
+.mc .fx{margin-top:8px;font-size:11.5px;color:#cfc7b8}.mc .fx b{color:var(--glow);font-weight:500}
+.mf{text-align:center;padding:30px}.mf .a{font-family:'Frank Ruhl Libre';font-weight:300;font-size:52px}
+.mq{padding:10px 22px;border-top:1px solid rgba(239,231,216,.1)}.mq b{font-family:'Frank Ruhl Libre';font-weight:400;font-size:15px;display:block}.mq span{font-size:12px;color:#cfc7b8;line-height:1.6}
+.paper{width:700px;background:#fff;padding:44px 54px;font-size:12.5px;align-self:flex-start;flex:none}
+.paper .run{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:10px}
+.paper .run b{font-family:Rubik;font-weight:300;font-size:18px}
+.paper h1{font-family:'Frank Ruhl Libre';font-weight:300;font-size:34px;margin:20px 0}
+.paper h2{font-family:'Frank Ruhl Libre';font-weight:400;font-size:20px;margin:22px 0 8px}
+.paper table{width:100%;border-collapse:collapse}.paper td,.paper th{padding:6px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:top}
+.paper th{font-weight:500;color:var(--muted);font-size:11px}
+.paper .pc{font-family:'Playfair Display';color:var(--sage-d);font-size:16px}
+.paper .st{padding:8px 0;border-bottom:1px solid var(--line2)}.paper .st b{font-family:'Frank Ruhl Libre';font-weight:500;font-size:15px}
+.paper .tr{display:flex;gap:12px;padding:5px 0;border-bottom:1px solid var(--line2)}.paper .tr b{width:110px;flex:none;color:var(--sage-d);font-weight:500}
+/* modal */
+.mo{position:fixed;inset:0;background:rgba(22,32,29,.38);z-index:50;display:none;align-items:center;justify-content:center}
+.mo.show{display:flex}
+.mbox{background:#fff;border-radius:16px;width:min(520px,94vw);max-height:86vh;overflow-y:auto;padding:20px 22px}
+.mbox h3{margin:0 0 12px;font-size:18px;font-weight:500}
+.li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer}
+.li:hover{border-color:var(--sage);background:var(--sage-l)}
+.li div{flex:1}.li b{font-weight:500;display:block}.li span{font-size:12.5px;color:var(--muted)}
+.ck{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2)}
+.ck .ok{color:var(--sage-d)}.ck .no{color:var(--warn)}
+.row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,90px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;transition:transform .3s;z-index:60}
+.toast.show{transform:translate(-50%,0)}
+@media(max-width:700px){.faces{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>הצעת מחיר <small id="who"></small></h1>
+  <span class="saved" id="saved">✓ נשמר</span>
+  <span class="sp"></span>
+  <button class="b" id="pvBtn">👁 תצוגה מקדימה</button>
+  <button class="b pri" id="sendBtn">שליחה ללקוח</button>
+</div>
+
+<div class="wrap" id="app"></div>
+
+<div class="ov" id="ov">
+  <div class="ovbar"><div class="seg" id="seg"><button data-v="mk" class="on">📱 מה שהלקוח רואה</button><button data-v="wr">📄 ההצעה הכתובה (PDF)</button></div><button class="ovx" id="ovx">סגירה ✕</button></div>
+  <div class="ovbody" id="ovb"></div>
+</div>
+<div class="mo" id="mo"><div class="mbox" id="mbox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const uid=()=>Math.random().toString(36).slice(2,8);
+const S={
+  name:'איתי זיו', name2:'', city:'תימורים', fee:120000, house:'200', plot:'490',
+  hello1:'בוא נבנה לך בית.', hello2:'בואו נבנה לכם בית.',
+  intro:'בית מגורים בתימורים. גללו למטה, והבית ייבנה מול העיניים — שלב אחרי שלב, בדיוק בסדר שבו נעבוד יחד.',
+  scope:'תכנון אדריכלי, רישוי וליווי של פרויקט בניית בית מגורים בתימורים, לרבות פיתוח שטח המגרש. השירות כולל ליווי מקצה לקצה: מגיבוש הקונספט, הסקיצות והמודל התלת-ממדי, דרך הוצאת היתר הבנייה והפקת תוכניות העבודה, ועד פיקוח עליון וליווי אדריכלי בשטח.',
+  stages:[
+    {id:uid(),name:'איסוף מידע ותכנון ראשוני',pct:15,trigger:'עם חתימת החוזה',duration:'30 ימי עבודה מפגישת פרוגרמה',process:'פגישת פרוגרמה להגדרת הצרכים, הרצונות והסגנון העיצובי המבוקש, לצד ניתוח נתוני המגרש, הוראות התב״ע וביקור בשטח.',output:'סקיצות ראשוניות לבחינה משותפת, כולל העמדת ריהוט עקרוני.',mTitle:'מקשיבים, ומשרטטים את הקו הראשון',mText:'נשב לפגישת פרוגרמה: מה אתם צריכים, איך אתם חיים, איזה בית אתם רואים בעיניים.',mGot:'סקיצות ראשונות לבחינה משותפת.'},
+    {id:uid(),name:'פיתוח תוכנית סופית',pct:20,trigger:'עם מסירת סקיצות ראשונות',duration:'90 ימים מהגשת תכנון ראשוני',process:'עיבוד החלופה הנבחרת לתוכניות מפורטות, פיתוח המגרש לפרטיו, מודל תלת-ממדי וסיור במשקפי VR.',output:'סט תוכניות סופיות ומודל תלת-ממד.',mTitle:'הבית מקבל צורה',mText:'נפתח את החלופה שבחרתם לתוכניות מפורטות, ותטיילו בבית עם משקפי VR.',mGot:'תוכניות סופיות ומודל תלת-ממדי.'},
+    {id:uid(),name:'הכנת תיק רישוי',pct:20,trigger:'עם אישור חלופת תכנון נבחרת',duration:'30 ימי עבודה',process:'קבלת תיק מידע מהוועדה והכנת גרמושקה, כולל תיאום יועצי הרישוי.',output:'תיק רישוי מלא ומסודר.',mTitle:'מתרגמים את החלום לשפה של הוועדה',mText:'נהפוך את התוכניות לגרמושקה רשמית עם כל הטפסים.',mGot:'תיק רישוי מוכן להגשה.'},
+    {id:uid(),name:'טיפול בבקשה להיתר',pct:20,trigger:'עם פתיחת בקשה להיתר',duration:'כ-8-10 חודשים',process:'פתיחת הבקשה ב״רישוי זמין״ וליווי מול הוועדה עד לאישור.',output:'היתר בנייה מאושר.',mTitle:'החותמת',mText:'נלווה את הבקשה לאורך כל הבקרות מול הוועדה.',mGot:'היתר בנייה מאושר וחתום.'},
+    {id:uid(),name:'הפקת תוכניות עבודה',pct:20,trigger:'לאחר אישור ועדת רישוי',duration:'30 ימי עבודה',process:'סט תוכניות מקיף התואם להיתר, כולל תיאום יועצים ומפרט כמויות.',output:'סט תוכניות למכרז ולביצוע.',mTitle:'כל פרט, כל חלון, כל שקע',mText:'נפיק את תוכניות העבודה, עם כל היועצים מסונכרנים.',mGot:'סט תוכניות מלא לביצוע.'},
+    {id:uid(),name:'ליווי בנייה ופיקוח עליון',pct:5,trigger:'עם סיום הבנייה, ועד 12 חודשים מקבלת היתר',duration:'עד טופס 4',process:'טופס 2, ארבעה ביקורי פיקוח עליון, ועם סיום הבנייה טופס 4.',output:'ליווי אדריכלי, פיקוח עליון וטופס 4.',mTitle:'ונשארים איתכם עד שנדלק האור',mText:'נלווה את הבנייה עד המפתח.',mGot:'ליווי עד המפתח ותעודת גמר.'},
+  ],
+  groups:[
+    {id:uid(),title:'שינויים',items:[
+      {id:uid(),title:'התאמה לנתוני הפרויקט',body:'הצעת המחיר תואמת לנתונים המפורטים בתכולת השירות. במידה וישתנו נתונים אלו, תעודכן ההצעה בהתאם.',q:'…נתוני הפרויקט ישתנו?',a:''},
+      {id:uid(),title:'שינויים בתכנון',body:'כל שינוי שיצריך חזרה על שלבים שהסתיימו ואושרו יתומחר לפי 350 ₪ לשעה בתוספת מע״מ.',q:'…נרצה לשנות משהו שכבר אישרנו?',a:''},
+      {id:uid(),title:'היתר שינויים',body:'בסמכות מהנדס הוועדה 8,500 ₪, היתר שינויים מלא 15,000 ₪, בתוספת מע״מ.',q:'…נצטרך היתר שינויים?',a:''}]},
+    {id:uid(),title:'לוחות זמנים',items:[
+      {id:uid(),title:'הערכת זמנים',body:'משך הזמן לכל שלב מהווה הערכה עקרונית, וקיימים אילוצים היכולים להשפיע עליו.',q:'…הרשויות יתעכבו?',a:''},
+      {id:uid(),title:'רצף תכנוני',body:'אם לא תאושר סקיצה בתוך 4 חודשים מפגישת הפרוגרמה, תתווסף עלות של 500 ₪ לכל חודש נוסף.',q:'…ניקח יותר זמן לבחור סקיצה?',a:'זה בסדר גמור. רק אם זה נמשך מעל 4 חודשים, נוספים 500 ₪ לחודש.'},
+      {id:uid(),title:'השהיית הפרויקט',body:'השהיה מעל 90 יום מבטלת את ההסכם, והמשך העבודה בהתקשרות מחודשת.',q:'…נעצור את הפרויקט לתקופה?',a:''}]},
+    {id:uid(),title:'אגרות והוצאות',items:[
+      {id:uid(),title:'אגרות והיטלים',body:'אגרות והיטלים לרשויות חלים על המזמין.',q:'מי משלם אגרות?',a:''},
+      {id:uid(),title:'הוצאות',body:'הדפסות ושליחויות ישולמו ישירות למכון ההעתקות.',q:'מי משלם הדפסות?',a:''}]},
+  ],
+  extras:[{id:uid(),on:true,t:'פרטי נגרות בהתאמה אישית',s:'ארונות, ספריות ומטבח'},{id:uid(),on:true,t:'ליווי רכישות ביבוא אישי',s:'חיפויים, תאורה וכלים סניטריים'}],
+  open:null, changes:new Map()
+};
+const LIB=[
+  {name:'תכנון בריכת שחייה',pct:0,trigger:'יחד עם שלב 2',duration:'במקביל לשלב 2',process:'תכנון פונקציונלי של הבריכה, פרטים ומיקום מערכות.',output:'תוכנית בריכה מתואמת.',mTitle:'גם המים מתוכננים',mText:'נתכנן את הבריכה כחלק מהבית.',mGot:'תוכנית בריכה.'},
+  {name:'עיצוב פנים מורחב',pct:0,trigger:'בתיאום',duration:'לפי היקף',process:'ליווי בבחירת חומרים ותאורה, שלוש פגישות עיצוב.',output:'תיק עיצוב פנים.',mTitle:'פנים הבית',mText:'נבחר יחד חומרים, צבעים ותאורה.',mGot:'תיק עיצוב פנים.'},
+];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>Math.round(n||0).toLocaleString('en-US');
+const sum=()=>S.stages.reduce((a,s)=>a+(+s.pct||0),0);
+const two=()=>!!S.name2.trim();
+const greet=()=>(two()?S.name.split(' ')[0]+' ו'+S.name2.split(' ')[0]:S.name.split(' ')[0])+', '+(two()?S.hello2:S.hello1);
+let tt;function saved(){const e=$('#saved');e.textContent='שומר…';clearTimeout(tt);tt=setTimeout(()=>e.textContent='✓ נשמר',600)}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1800)}
+function chg(k,l){S.changes.set(k,l);saved()}
+
+function fld(label,path,val,area,opt){return `<div class="f"><label>${label}</label>${area?`<textarea data-p="${path}">${esc(val)}</textarea>`:`<input data-p="${path}" value="${esc(val)}">`}${opt?`<div class="opt">${opt}</div>`:''}</div>`}
+
+function render(){
+  $('#who').textContent='· '+S.name+(two()?' ו'+S.name2:'')+' · '+S.city;
+  const sp=sum();
+  const stages=S.stages.map((s,i)=>{const o=S.open==='s'+s.id;return `
+    <div class="card ${o?'open':''}">
+      <div class="ch" data-tog="s${s.id}"><span class="num">${i+1}</span><div class="t"><b>${esc(s.name)}</b><span>${s.pct}% · ${esc(s.trigger)}</span></div>
+        <div class="act"><button class="ic" data-mv="${s.id}|-1" title="למעלה">▲</button><button class="ic" data-mv="${s.id}|1" title="למטה">▼</button><button class="ic" data-rm="${s.id}" title="הסרה">🗑</button></div>
+        <button class="edit">${o?'סגירה':'עריכה'}</button></div>
+      <div class="body"><div class="faces">
+        <div class="face wr"><h4><i>📄</i>בהצעה הכתובה</h4>${fld('שם השלב','s.'+s.id+'.name',s.name)}${fld('מועד התשלום','s.'+s.id+'.trigger',s.trigger)}${fld('משך','s.'+s.id+'.duration',s.duration)}${fld('התהליך','s.'+s.id+'.process',s.process,1)}${fld('התוצר','s.'+s.id+'.output',s.output,1)}</div>
+        <div class="face mk"><h4><i>📱</i>במה שהלקוח רואה בטלפון</h4>${fld('כותרת','s.'+s.id+'.mTitle',s.mTitle)}${fld('מה קורה בשלב','s.'+s.id+'.mText',s.mText,1)}${fld('מה תקבלו','s.'+s.id+'.mGot',s.mGot,1)}</div>
+      </div></div></div>`}).join('');
+  const terms=S.groups.map(g=>`
+    <div class="grp"><input data-gt="${g.id}" value="${esc(g.title)}" title="שם הנושא — אפשר לשנות"><button class="ic" data-rmg="${g.id}" title="מחיקת נושא">🗑</button></div>
+    ${g.items.map(it=>{const o=S.open==='t'+it.id;return `<div class="card ${o?'open':''}">
+      <div class="ch" data-tog="t${it.id}"><span class="num">·</span><div class="t"><b>${esc(it.title)}</b></div>
+        <div class="act"><button class="ic" data-rmt="${it.id}" title="הסרה">🗑</button></div><button class="edit">${o?'סגירה':'עריכה'}</button></div>
+      <div class="body"><div class="faces">
+        <div class="face wr"><h4><i>📄</i>בהצעה הכתובה</h4>${fld('כותרת','t.'+it.id+'.title',it.title)}${fld('הנוסח','t.'+it.id+'.body',it.body,1)}</div>
+        <div class="face mk"><h4><i>📱</i>בטלפון — בתור שאלה</h4>${fld('השאלה','t.'+it.id+'.q',it.q)}${fld('תשובה בשפה פשוטה','t.'+it.id+'.a',it.a,1,'לא חובה. אם ריק, יופיע הנוסח של ההצעה הכתובה.')}</div>
+      </div></div></div>`}).join('')}
+    <button class="addt" data-addt="${g.id}">+ תנאי בנושא הזה</button>`).join('');
+  $('#app').innerHTML=`
+    <div class="tip">💡 ברוב ההצעות מספיק לבדוק את המחיר ולשלוח. כל השאר כבר מוכן מהתבנית.</div>
+
+    <div class="sec"><h2><span class="n">1</span>פתיחה</h2><div class="pad">
+      <div class="f"><label>שם הלקוח</label><input data-p="name" value="${esc(S.name)}"></div>
+      <div class="f"><label>לקוח/ה נוסף/ת</label><input data-p="name2" value="${esc(S.name2)}" placeholder="אם יש — ההצעה תעבור אוטומטית לפנייה בלשון רבים"></div>
+      <div class="two" style="display:flex;gap:12px"><div class="f" style="flex:1"><label>שטח הבית (מ״ר)</label><input data-p="house" value="${esc(S.house)}" inputmode="numeric" placeholder="לא חובה"></div><div class="f" style="flex:1"><label>שטח המגרש (מ״ר)</label><input data-p="plot" value="${esc(S.plot)}" inputmode="numeric" placeholder="לא חובה"></div></div>
+      <div class="opt" style="margin:-4px 0 14px">מופיעים בשרטוט הבית בטלפון. אם ריקים — פשוט לא יופיעו.</div>
+      <label class="f" style="display:block"><span style="font-size:12.5px;color:var(--muted)">כך תיפתח ההצעה בטלפון:</span></label>
+      <div class="hello">${esc(greet())}</div>
+      ${two()?fld('המשפט (לזוג)','hello2',S.hello2):fld('המשפט (ללקוח אחד)','hello1',S.hello1,0,'ללקוחה? פשוט לשנות כאן ל״בואי נבנה לך בית״.')}
+      ${fld('פסקת פתיחה בטלפון','intro',S.intro,1)}
+      ${fld('תכולת השירות בהצעה הכתובה','scope',S.scope,1)}
+    </div>
+      ${S.extras.map(x=>`<div class="toggle"><div class="t"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></div><button class="tg ${x.on?'on':''}" data-x="${x.id}"></button></div>`).join('')}
+      <button class="add" id="addExtra">+ תוספת</button>
+    </div>
+
+    <div class="sec"><h2><span class="n">2</span>המחיר</h2><div class="pad">
+      <div class="fee"><input id="fee" value="${fmt(S.fee)}" inputmode="numeric"><span>₪ בתוספת מע״מ</span></div>
+      <table class="split">${S.stages.map(s=>`<tr><td>${esc(s.name)}</td><td class="pc"><input data-pct="${s.id}" value="${s.pct}">%</td><td class="amt">${fmt(S.fee*s.pct/100)} ₪</td></tr>`).join('')}</table>
+      <div class="sum ${sp===100?'':'bad'}">${sp===100?'✓ סה״כ 100%':'סה״כ '+sp+'% — צריך להגיע ל-100%'}</div>
+    </div></div>
+
+    <div class="sec"><h2><span class="n">3</span>השלבים<small>${S.stages.length} שלבים</small></h2>
+      ${stages}<button class="add" id="addStage">+ הוספת שלב</button></div>
+
+    <div class="sec"><h2><span class="n">4</span>התנאים<small>בטלפון הם מופיעים כ״ומה אם…?״</small></h2>
+      ${terms}<button class="add" id="addGroup">+ נושא חדש</button></div>
+`;
+}
+
+/* preview */
+let face='mk';
+function preview(){
+  const b=$('#ovb');
+  if(face==='mk'){
+    b.innerHTML=`<div class="phone"><div class="scr">
+      <div class="mh"><div class="to">הצעה אישית</div><h1>${esc(greet())}</h1><p>${esc(S.intro)}</p></div>
+      <svg viewBox="0 0 360 150" style="display:block;width:100%;border-top:1px solid rgba(239,231,216,.12);border-bottom:1px solid rgba(239,231,216,.12)"><path d="M10 110H350M110 110V78H250V110M100 78H260M140 78V46H240V78M130 46H250" fill="none" stroke="#efe7d8" stroke-width="1.3"/><rect x="170" y="54" width="44" height="12" fill="#f4b860"/><rect x="128" y="86" width="22" height="14" fill="#f4b860"/><circle cx="58" cy="88" r="13" fill="none" stroke="#efe7d8"/><path d="M58 110V101" stroke="#efe7d8"/>${S.house.trim()?`<text x="180" y="36" text-anchor="middle" fill="#97a49c" font-size="11" font-family="Heebo">בית · כ-${esc(S.house)} מ״ר</text>`:''}${S.plot.trim()?`<text x="180" y="132" text-anchor="middle" fill="#97a49c" font-size="11" font-family="Heebo">מגרש · כ-${esc(S.plot)} מ״ר</text>`:''}</svg>
+      <div style="padding:10px 22px 0;font-size:11px;color:#97a49c">בסקיצה: שרטוט פשוט. במערכת — החוויה המלאה עם הבית שנבנה בגלילה.</div>
+      ${S.stages.map((s,i)=>`<div class="mc"><div class="k">${i+1} מתוך ${S.stages.length}</div><h2>${esc(s.mTitle)}</h2><p>${esc(s.mText)}</p><div class="got">${esc(s.mGot)}</div><div class="fx">תשלום <b>${s.pct}%</b> · ${fmt(S.fee*s.pct/100)} ₪ · ${esc(s.duration)}</div></div>`).join('')}
+      <div class="mf"><div style="font-size:11px;letter-spacing:.3em;color:var(--terra)">אז כמה זה עולה?</div><div class="a">${fmt(S.fee)} ₪</div></div>
+      <div style="padding:0 22px 6px;font-family:'Frank Ruhl Libre';font-size:24px">ומה אם…?</div>
+      ${S.groups.flatMap(g=>g.items).map(t=>`<div class="mq"><b>${esc(t.q)}</b><span>${esc(t.a||t.body)}</span></div>`).join('')}
+      <div style="height:30px"></div></div></div>`;
+  } else {
+    b.innerHTML=`<div class="paper"><div class="run"><b>סטודיו בתים</b><span style="color:var(--muted);font-size:11px">הצעת מחיר</span></div>
+      <h1>${esc(S.name)}${two()?' ו'+esc(S.name2):''} · ${esc(S.city)}</h1>
+      <h2>תכולת השירות</h2><p style="line-height:1.8">${esc(S.scope)}</p>
+      <h2>תשלומים · ${fmt(S.fee)} ₪</h2><table><tr><th>שלב</th><th>מועד</th><th>משך</th><th>%</th></tr>${S.stages.map(s=>`<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.trigger)}</td><td>${esc(s.duration)}</td><td class="pc">${s.pct}%</td></tr>`).join('')}</table>
+      <h2>פירוט שלבי העבודה</h2>${S.stages.map((s,i)=>`<div class="st"><b>שלב ${i+1} · ${esc(s.name)}</b><div style="line-height:1.7">${esc(s.process)}</div><div style="color:var(--sage-d)">התוצר: ${esc(s.output)}</div></div>`).join('')}
+      <h2>מסגרת העבודה</h2>${S.groups.map(g=>`<div style="font-family:'Frank Ruhl Libre';font-size:16px;margin-top:10px">${esc(g.title)}</div>${g.items.map(t=>`<div class="tr"><b>${esc(t.title)}</b><span style="line-height:1.7">${esc(t.body)}</span></div>`).join('')}`).join('')}
+    </div>`;
+  }
+}
+$('#pvBtn').onclick=()=>{$('#ov').classList.add('show');preview()};
+$('#ovx').onclick=()=>$('#ov').classList.remove('show');
+$('#seg').onclick=e=>{const b=e.target.closest('button');if(!b)return;face=b.dataset.v;[...$('#seg').children].forEach(x=>x.classList.toggle('on',x===b));preview()};
+
+/* events */
+function get(path){const [k,id,f]=path.split('.');if(!f)return [S,k];const arr=k==='s'?S.stages:S.groups.flatMap(g=>g.items);return [arr.find(x=>x.id===id),f]}
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.p){const [o,f]=get(t.dataset.p);o[f]=t.value;saved();if(['name','name2','hello1','hello2'].includes(f)){const h=$('.hello');if(h)h.textContent=greet()}if(f==='name')$('#who').textContent='· '+S.name;return}
+  if(t.dataset.pct){const s=S.stages.find(x=>x.id===t.dataset.pct);s.pct=+t.value.replace(/[^\d]/g,'')||0;saved();const tr=t.closest('tr');tr.querySelector('.amt').textContent=fmt(S.fee*s.pct/100)+' ₪';const sp=sum(),el=$('.sum');el.className='sum '+(sp===100?'':'bad');el.textContent=sp===100?'✓ סה״כ 100%':'סה״כ '+sp+'% — צריך להגיע ל-100%';return}
+  if(t.id==='fee'){S.fee=+t.value.replace(/[^\d]/g,'')||0;saved();document.querySelectorAll('[data-pct]').forEach(i=>{const s=S.stages.find(x=>x.id===i.dataset.pct);i.closest('tr').querySelector('.amt').textContent=fmt(S.fee*s.pct/100)+' ₪'});return}
+  if(t.dataset.gt){S.groups.find(g=>g.id===t.dataset.gt).title=t.value;saved()}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='fee'){t.value=fmt(S.fee);chg('fee','המחיר: '+fmt(S.fee)+' ₪')}
+  else if(t.dataset.p){const [o,f]=get(t.dataset.p);chg(t.dataset.p,(o.name||o.title||'פתיחה')+' — שינוי נוסח');if(f==='name2')render()}
+  else if(t.dataset.pct){chg('pct','חלוקת האחוזים');render()}
+  else if(t.dataset.gt){chg('g'+t.dataset.gt,'שם נושא: '+t.value)}
+});
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const mv=t.closest('[data-mv]');if(mv){e.stopPropagation();const [id,d]=mv.dataset.mv.split('|');const i=S.stages.findIndex(s=>s.id===id),j=i+ +d;if(j>=0&&j<S.stages.length){[S.stages[i],S.stages[j]]=[S.stages[j],S.stages[i]];chg('order','סדר השלבים');render()}return}
+  const rm=t.closest('[data-rm]');if(rm){e.stopPropagation();const s=S.stages.find(x=>x.id===rm.dataset.rm);S.stages=S.stages.filter(x=>x!==s);chg('rm'+s.id,'הוסר שלב: '+s.name);render();toast('השלב הוסר');return}
+  const rmt=t.closest('[data-rmt]');if(rmt){e.stopPropagation();S.groups.forEach(g=>g.items=g.items.filter(i=>i.id!==rmt.dataset.rmt));chg('rmt'+rmt.dataset.rmt,'הוסר תנאי');render();toast('התנאי הוסר');return}
+  const rmg=t.closest('[data-rmg]');if(rmg){const g=S.groups.find(x=>x.id===rmg.dataset.rmg);if(g.items.length&&!confirmBox(g))return;return}
+  const tog=t.closest('[data-tog]');if(tog){S.open=S.open===tog.dataset.tog?null:tog.dataset.tog;render();return}
+  const at=t.closest('[data-addt]');if(at){const g=S.groups.find(x=>x.id===at.dataset.addt);const it={id:uid(),title:'תנאי חדש',body:'',q:'',a:''};g.items.push(it);S.open='t'+it.id;chg('t'+it.id,'נוסף תנאי');render();return}
+  const x=t.closest('[data-x]');if(x){const o=S.extras.find(e=>e.id===x.dataset.x);o.on=!o.on;chg('x'+o.id,(o.on?'הוצג':'הוסתר')+': '+o.t);render();return}
+  if(t.id==='addStage'){openLib();return}
+  if(t.id==='addGroup'){S.groups.push({id:uid(),title:'נושא חדש',items:[]});chg('ng','נושא חדש');render();return}
+  if(t.id==='addExtra'){S.extras.push({id:uid(),on:true,t:'תוספת חדשה',s:''});render();return}
+  const li=t.closest('[data-lib]');if(li){const i=li.dataset.lib;const src=i==='new'?{name:'שלב חדש',pct:0,trigger:'',duration:'',process:'',output:'',mTitle:'',mText:'',mGot:''}:LIB[i];const s={...src,id:uid()};S.stages.push(s);S.open='s'+s.id;chg('add'+s.id,'נוסף שלב: '+s.name);closeMo();render();toast('השלב נוסף · עדכני את האחוזים במחיר');return}
+  if(t.closest('[data-close]')||t.id==='mo'){closeMo();return}
+  const d=t.closest('[data-done]');if(d){closeMo();toast(d.dataset.done==='wa'?'נפתח וואטסאפ עם הקישור (בסקיצה)':'הקישור הועתק (בסקיצה)')}
+});
+function confirmBox(g){openMo(`<h3>למחוק את הנושא "${esc(g.title)}"?</h3><p>יימחקו גם ${g.items.length} התנאים שבו.</p><div class="row"><button class="b pri" id="delg">מחיקה</button><button class="b" data-close>ביטול</button></div>`);$('#delg').onclick=()=>{S.groups=S.groups.filter(x=>x!==g);chg('rg'+g.id,'הוסר נושא: '+g.title);closeMo();render()};return false}
+function openMo(h){$('#mbox').innerHTML=h;$('#mo').classList.add('show')}
+function closeMo(){$('#mo').classList.remove('show')}
+function openLib(){openMo(`<h3>הוספת שלב</h3>${LIB.map((s,i)=>`<div class="li" data-lib="${i}"><div><b>${esc(s.name)}</b><span>${esc(s.mTitle)}</span></div>+</div>`).join('')}<div class="li" data-lib="new"><div><b>שלב ריק</b><span>כותבים מאפס</span></div>+</div><div class="row"><button class="b" data-close>ביטול</button></div>`)}
+$('#sendBtn').onclick=()=>{
+  const sp=sum();const ok=S.fee>0&&sp===100;
+  const ch=[...S.changes.values()];
+  openMo(`<h3>שליחה ללקוח</h3>
+    <div class="ck"><span class="${S.fee>0?'ok':'no'}">${S.fee>0?'✓':'!'}</span>מחיר: ${fmt(S.fee)} ₪</div>
+    <div class="ck"><span class="${sp===100?'ok':'no'}">${sp===100?'✓':'!'}</span>חלוקת התשלומים: ${sp}%</div>
+    ${ch.length?`<p style="margin:16px 0 6px;font-size:14px">שינית ${ch.length} דברים. לשמור משהו מהם גם להצעות הבאות?</p>${ch.map(c=>`<label class="ck" style="cursor:pointer"><input type="checkbox"> ${esc(c)}</label>`).join('')}`:''}
+    <div class="row">${ok?`<button class="b pri" style="background:#1f8a4c;border-color:#1f8a4c" data-done="wa">שליחה בוואטסאפ</button><button class="b" data-done="copy">העתקת קישור</button>`:''}<button class="b" data-close>${ok?'ביטול':'חזרה לתיקון'}</button></div>`);
+};
+$('#mo').addEventListener('click',e=>{if(e.target.id==='mo')closeMo()});
+render();
+</script>
+</body>
+</html>

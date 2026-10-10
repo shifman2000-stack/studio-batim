@@ -36,6 +36,9 @@
     "api/finalize-quote-v2.js": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/template-assistant.js": {
+      "maxDuration": 60
     }
   }
 }

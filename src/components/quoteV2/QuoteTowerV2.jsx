@@ -4,6 +4,7 @@ import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
 import { varsOf, clientCountOf, signersOf, isSignedContent } from '../../lib/quoteV2/content'
 import Money from './Money'
+import Logo from '../Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════
    QuoteTowerV2 — הפן הכתוב של הצעת מחיר v2 ("מגדל הבית")
@@ -40,12 +41,13 @@ const STUDIO = {
    בדיוק סוג התלות שמתפרקת בצינור ההדפסה — ולבנה היא 7 פוליגונים,
    זול יותר מלנסות להבין למה. */
 const BRICK_COLORS = {
-  sand: { left: '#a89f90', front: '#c8bfb0', top: '#ddd5c8', seam: '#968c7c' },
-  sage: { left: '#4a6e48', front: '#7a9478', top: '#9fb39d', seam: '#3d5a3b' },
+  sand:  { left: '#a89f90', front: '#c8bfb0', top: '#ddd5c8', seam: '#968c7c' },
+  /* הלבנה האחרונה — סוף הפרויקט — בטרקוטה של המסע, לא בירוק. */
+  terra: { left: '#b45a2c', front: '#d9774a', top: '#e89a73', seam: '#9c4c24' },
 }
 
-function Brick({ w = 46, sage = false, style, className }) {
-  const c = sage ? BRICK_COLORS.sage : BRICK_COLORS.sand
+function Brick({ w = 46, accent = false, style, className }) {
+  const c = accent ? BRICK_COLORS.terra : BRICK_COLORS.sand
   return (
     <svg
       className={'qt-brick' + (className ? ' ' + className : '')}
@@ -80,7 +82,7 @@ function Chapter({ num, title, first }) {
 /* ── המגדל שעל השער ────────────────────────────────────────────────
    המוקאפ קשיח ל-6 לבנים ב-bottom: 0/44/88/… . כאן המרווח נגזר
    ממספר השלבים, כך שגובה המגדל נשאר קבוע (B.4). הלבנה האחרונה
-   בצבע sage — היא סוף הפרויקט. */
+   בטרקוטה — היא סוף הפרויקט. */
 function Tower({ names }) {
   const n = names.length
   if (n === 0) return null
@@ -89,7 +91,7 @@ function Tower({ names }) {
   return (
     <div className="qt-tower" style={{ height }}>
       {names.map((name, i) => (
-        <Brick key={'b' + i} w={110} sage={i === n - 1} className="qt-brickpos"
+        <Brick key={'b' + i} w={110} accent={i === n - 1} className="qt-brickpos"
           style={{ bottom: Math.round(i * step) }} />
       ))}
       {names.map((name, i) => (
@@ -123,7 +125,11 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
     () => (S.stages?.items ?? []).filter(s => s?.enabled !== false),
     [S]
   )
-  const groups = useMemo(() => S.terms?.groups ?? [], [S])
+  /* כמו השלבים למעלה: פריט מכובה נשאר במסמך ולא מרונדר (C.2). */
+  const groups = useMemo(
+    () => (S.terms?.groups ?? []).map(g => ({ ...g, items: (g.items ?? []).filter(i => i?.enabled !== false) })),
+    [S]
+  )
   const fee = Number(v.fee) || 0
   const amounts = useMemo(
     () => computePayments(fee, stages.map(s => s.pct)),
@@ -151,12 +157,6 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
   const dateLine = isFilled(v.date) ? v.date : ''
   const metaLine = [clientLine, v.settlement].filter(isFilled).join(' · ')
 
-  const Logo = (
-    <div className="qt-logo">
-      <div className="qt-lg-he">סטודיו בתים</div>
-      <div className="qt-lg-en">BY EINAV SHIFMAN</div>
-    </div>
-  )
 
   return (
     <div className="qt-doc" dir="rtl" lang="he">
@@ -164,7 +164,7 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
       {/* ══ עמוד השער ══ */}
       <section className="qt-cover">
         <div className="qt-run">
-          {Logo}
+          <Logo height={22} />
           <div className="qt-meta">{['הצעת מחיר', dateLine].filter(Boolean).join(' · ')}</div>
         </div>
 
@@ -240,7 +240,7 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
           {stages.map((st, i) => (
             <div className="qt-pay" key={st.id ?? i}>
               <span className="qt-pc">{st.pct}%</span>
-              <Brick w={40} sage={i === stages.length - 1} />
+              <Brick w={40} accent={i === stages.length - 1} />
               <div className="qt-mid">
                 <small>שלב {i + 1}</small>
                 <b>{t(st.formalName)}</b>
@@ -279,7 +279,7 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
           {stages.map((st, i) => (
             <div className="qt-stage" key={st.id ?? i}>
               <div className="qt-side">
-                <Brick w={46} sage={i === stages.length - 1} />
+                <Brick w={46} accent={i === stages.length - 1} />
                 <div className="qt-no">שלב {i + 1}</div>
                 <h3>{t(st.formalName)}</h3>
               </div>

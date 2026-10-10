@@ -135,6 +135,7 @@ export default function QuoteV2New() {
         if (e) throw e
         setQuoteId(v2rows[0].id)
         setLink('')
+        navigate(`/quotes-v2/${v2rows[0].id}`)
         return
       }
 
@@ -149,6 +150,7 @@ export default function QuoteV2New() {
       if (e) throw e
       setQuoteId(created.id)
       setLink('')
+      navigate(`/quotes-v2/${created.id}`)
     } catch (e) {
       const raw = e?.message || String(e)
       setError(

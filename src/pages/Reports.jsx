@@ -70,6 +70,11 @@ export default function Reports() {
             <div className="report-card-title">רשימת דגמים לפרויקט אב</div>
             <div className="report-card-desc">ניהול רשימת הדגמים (שם, תאור, תמונה, הערות) עבור כל פרויקט אב</div>
           </div>
+          <div className="report-card" onClick={() => navigate('/quotes-v2/template')}>
+            <div className="report-card-icon">📝</div>
+            <div className="report-card-title">עריכת טופס הצעת מחיר</div>
+            <div className="report-card-desc">עריכת הנוסח שממנו נפתחת כל הצעת מחיר חדשה — פתיחה, שלבים, תנאים ושירותים משלימים</div>
+          </div>
           <div className="report-card" onClick={() => navigate('/reports/site-health')}>
             <div className="report-card-icon">🌐</div>
             <div className="report-card-title">בדיקת אתר</div>

@@ -29,6 +29,15 @@ import QuoteTowerV2 from '../components/quoteV2/QuoteTowerV2'
 export const TOWER_PRINT_STYLE = `
 @page { size: A4 portrait; margin: 18mm 16mm 20mm; }
 
+/* ⚠️ הגיליון המודפס נשאר **לבן**, וזו החלטה ולא השמטה.
+   ניסינו לצבוע אותו ב-#f7f5f1 כמו על המסך, ו-Chromium צובע את רקע
+   אלמנט השורש רק על **תיבת התוכן** של העמוד ולא על שולי ה-@page.
+   התוצאה הייתה ריבוע קרם עם מסגרת לבנה סביבו — גרוע מלבן אחיד.
+   אין דרך לצבוע את רצועות השוליים: margin boxes אינם נתמכים, ושתי
+   תבניות ה-header/footer של Puppeteer מכסות רק למעלה ולמטה, כך
+   שהרצועות הצדדיות היו נשארות לבנות. ויתור על השוליים לטובת
+   @page{margin:0} היה מוחק את הכותרת הרצה ואת מספור העמודים.
+   לכן: הנייר לבן, והמסך נשאר #f7f5f1. */
 html, body, #root {
   height: auto !important;
   min-height: 0 !important;
@@ -43,6 +52,12 @@ html, body, #root {
 .qtp-print .qt-doc { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; }
 
 @media print {
+  /* ⚠️ שלושת הכללים הגלובליים של visibility:hidden על הכול שבבאנדל
+     (Hours.css, QuoteBuilder.css, ReportTable.css) מסתירים גם את
+     html ו-body — ואלמנט מוסתר לא מצייר גם את הרקע שלו. */
+  html, body, #root, .qtp-print { visibility: visible !important; background: #fff !important; }
+  /* המסמך עצמו לבן בהדפסה בלבד; על המסך הוא #f7f5f1 מהטוקן. */
+  .qt-doc { background: #fff !important; }
   .qt-doc, .qt-doc * { visibility: visible !important; }
 }
 `

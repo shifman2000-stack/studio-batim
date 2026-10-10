@@ -231,6 +231,63 @@ test('previewOf להסרה ולהוספה', () => {
 })
 
 console.log('')
+console.log(' שימור דקדוק וקטעים מותנים')
+
+test('נוסח ששיטח יחיד/רבים נפסל, גם כשכל המשתנים נשמרו', () => {
+  const c = content()
+  const open = ops.sectionByType(c, 'opening')
+  /* הנוסח המקורי מבחין בין יחיד לרבים; החדש שומר את {{firstNames}}
+     אבל מנסח אחיד — וזה בדיוק מה שנראה תקין ונשבר אצל לקוח יחיד. */
+  const r = validateEdit(c, {
+    kind: 'set_text', sectionId: open.id, field: 'greeting',
+    newText: '{{firstNames}}, נתכנן יחד בית.',
+  })
+  assert.equal(r.ok, false)
+  assert.match(r.reason, /יחיד/)
+})
+
+test('נוסח ששומר את ההבדל בניסוח אחר — עובר', () => {
+  const c = content()
+  const open = ops.sectionByType(c, 'opening')
+  const r = validateEdit(c, {
+    kind: 'set_text', sectionId: open.id, field: 'greeting',
+    newText: '{{firstNames}}, {בוא|בואו} נתכנן {לך|לכם} בית.',
+  })
+  assert.equal(r.ok, true, r.reason)
+})
+
+test('נוסח שאיבד קטע מותנה נפסל', () => {
+  const c = content()
+  /* תכולת השירות מזכירה שטחים בתוך [[ ]]; נוסח שמשאיר את המשתנה
+     בלי הסוגריים יציג "(כ- מ״ר)" ריק כששדה הרשות ריק. */
+  const r = validateEdit(c, {
+    kind: 'set_text', sectionId: 'sec_scope', field: 'body',
+    newText: 'תכנון של בית כ-{{houseArea}} מ״ר ומגרש כ-{{plotArea}} מ״ר.',
+  })
+  assert.equal(r.ok, false)
+  assert.match(r.reason, /מותנה/)
+})
+
+test('נוסח ששומר את הקטעים המותנים — עובר', () => {
+  const c = content()
+  const r = validateEdit(c, {
+    kind: 'set_text', sectionId: 'sec_scope', field: 'body',
+    newText: 'תכנון של בית[[ כ-{{houseArea}} מ״ר]] ומגרש[[ כ-{{plotArea}} מ״ר]].',
+  })
+  assert.equal(r.ok, true, r.reason)
+})
+
+test('שדה שלא היה בו דקדוק — ניסוח אחיד מותר', () => {
+  const c = content()
+  const st = ops.sectionByType(c, 'stages').items[0]
+  const r = validateEdit(c, {
+    kind: 'set_text', sectionId: 'sec_stages', itemId: st.id, field: 'output',
+    newText: 'סקיצות ראשונות לבחינה משותפת.',
+  })
+  assert.equal(r.ok, true, r.reason)
+})
+
+console.log('')
 console.log(' הגנה מקצה לקצה')
 test('הצעה שעוברת — הנוסח נפתר נקי לשני מספרי לקוחות', () => {
   const edit = {

@@ -130,7 +130,9 @@ export default function AssistantPanel({ content, twoClients, onApply, onClose }
             {m.content}
             {m.dropped > 0 && (
               <div className="qe-msg-note">
-                {m.dropped === 1 ? 'הצעה אחת נפסלה' : `${m.dropped} הצעות נפסלו`} באימות התחביר ולא הוצגו.
+                {m.dropped === 1
+                  ? 'הצעה אחת נפסלה באימות ולא הוצגה.'
+                  : `${m.dropped} הצעות נפסלו באימות ולא הוצגו.`}
               </div>
             )}
           </div>

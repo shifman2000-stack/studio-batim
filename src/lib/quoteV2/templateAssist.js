@@ -109,6 +109,25 @@ export function validateEdit(content, edit) {
         const out = resolveText(edit.newText, vars, n)
         if (/[{}]|\[\[|\]\]/.test(out)) return { ok: false, reason: 'הנוסח לא נפתר נקי' }
       }
+      /* ⚠️ שתי בדיקות התנהגותיות ולא תחביריות. נוסח יכול לשמר כל
+         {{משתנה}} ועדיין לשטח את ההבדל בין יחיד לרבים, או להפוך
+         קטע רשות לקבוע — שני דברים שנראים תקינים לגמרי בעברית
+         ונשברים רק אצל הלקוח הבא. */
+      const vp = sampleVars(true)
+      /* ⚠️ אותם vars לשני מספרי הלקוחות. אם משווים vars של יחיד מול
+         vars של רבים, {{firstNames}} לבדו כבר יוצר הבדל וכל נוסח
+         "נראה" דקדוקי — הבדיקה הייתה עוברת תמיד. */
+      const differsByCount = (t) => resolveText(t, vp, 1) !== resolveText(t, vp, 2)
+      if (differsByCount(before) && !differsByCount(edit.newText)) {
+        return { ok: false, reason: 'הנוסח החדש איבד את ההבדל בין לשון יחיד לרבים' }
+      }
+      /* קטע מותנה נספר מבנית. גם כאן השוואת פלטים לא עובדת: נוסח
+         בלי [[ ]] עדיין "משתנה" כששדה הרשות מתרוקן — הוא פשוט
+         מציג "כ- מ״ר" ריק, וזה בדיוק הפגם. */
+      const segs = (t) => (String(t ?? '').match(/\[\[/g) || []).length
+      if (segs(edit.newText) < segs(before)) {
+        return { ok: false, reason: 'הנוסח החדש איבד קטע מותנה — הוא יופיע גם כששדה הרשות ריק' }
+      }
       return { ok: true }
     }
     case 'set_pct': {

@@ -164,6 +164,9 @@ test('set_text מוחל ומדווח על הנתיב שנערך', () => {
   assert.equal(r.touched[0].ownerId, stageId())
   assert.equal(r.touched[0].field, 'process')
   assert.ok(r.touched[0].before.length > 0, 'לא נשמר הנוסח הקודם')
+  /* ⚠️ after הוא מה שהעורך צריך כדי להפוך את הנוסח החדש לבסיס
+     השדה (grammarRebase). בלעדיו תיבת הרבים נשארת על הישן. */
+  assert.equal(r.touched[0].after, 'תהליך חדש.')
 })
 
 test('applyEdits מחיל רצף ומדלג על מה שכבר לא תקף', () => {

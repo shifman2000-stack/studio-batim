@@ -20,7 +20,7 @@ import { stagesOf, termGroupsOf } from '../lib/quoteV2/validate'
 import * as ops from '../lib/quoteV2/editorOps'
 import { applyEdits } from '../lib/quoteV2/templateAssist'
 import {
-  sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes,
+  sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes, grammarRebase,
   buildTemplateFromEditor, describeTemplateDiff,
 } from '../lib/quoteV2/templateEdit'
 
@@ -351,12 +351,25 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
      חזרה לנוסח תבנית עם המשתנים והחלופות שלו. */
   const applyAssistantEdits = (edits) => {
     const r = applyEdits(content, edits)
+    let next = r.content
     for (const t of r.touched) {
       const path = `${t.ownerId}.${t.field}`
-      if (!(path in origRaw.current)) origRaw.current[path] = t.before
+      /* ⚠️ העוזר כותב נוסח תבנית, והעורך מציג נתוני דוגמה. בשדה
+         רגיל אין פער — התצוגה פותרת את הנוסח. בשדה דקדוקי יש:
+         שם ה-content מחזיק את תיבת היחיד הפתורה, ונוסח תבנית
+         גולמי היה מופיע בתיבה כמו שהוא. לכן שם הנוסח החדש הופך
+         לבסיס, ומה שנכנס ל-content הוא הפתרון שלו. */
+      const reb = grammarRebase(t.after, origRaw.current[path] ?? t.before)
+      if (reb) {
+        origRaw.current[path] = reb.originalRaw
+        plural.current[path] = reb.plural
+        next = ops.patchById(next, t.ownerId, { [t.field]: reb.singular })
+      } else if (!(path in origRaw.current)) {
+        origRaw.current[path] = t.before
+      }
       edited.current.add(path)
     }
-    update(r.content)
+    update(next)
     if (r.skipped.length) flash(`${r.skipped.length} הצעות כבר לא תקפות ודולגו`)
   }
 

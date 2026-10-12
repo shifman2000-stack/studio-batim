@@ -10,6 +10,7 @@ import {
   formatTotalHHMM,
   fetchEmployeeDailyDetails,
   formatDrillLine,
+  ABSENCE_TYPES,
 } from './lib/hoursDetail'
 import './Hours.css'
 
@@ -46,7 +47,12 @@ const MONTH_NAMES = [
   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
 ]
 const DAY_NAMES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
-const DAY_TYPE_LABELS = { work: 'עבודה', vacation: 'חופש', sick: 'מחלה' }
+/* ⚠️ day_type is free text in the DB — no CHECK, no enum, no lookup
+   table. These four keys are the whole vocabulary the app writes, and
+   this map is where a fifth would start. 'unpaid' = חל״ת: a full-day
+   absence that is neither work nor paid leave, so it is counted on its
+   own everywhere and never folded into חופש or מחלה. */
+const DAY_TYPE_LABELS = { work: 'עבודה', vacation: 'חופש', sick: 'מחלה', unpaid: 'חל״ת' }
 
 /* toMins / isoDate / formatDDMMYY / formatTotalHHMM live in
    src/lib/hoursDetail.js — imported above so this component and the
@@ -162,7 +168,7 @@ function Hours() {
   // Admin approvals list and monthly summary
   const [approvalsList, setApprovalsList] = useState([])
   const [monthlySummary, setMonthlySummary] = useState({
-    sickDays: 0, vacationDays: 0, totalMins: 0,
+    sickDays: 0, vacationDays: 0, unpaidDays: 0, totalMins: 0,
     pendingMins: 0, rejectedMins: 0, officeDays: 0, wfhDays: 0,
   })
   /* Per-employee daily details for the calendar's viewed month (ADMIN view).
@@ -486,6 +492,7 @@ function Hours() {
     // Sick / vacation: only from attendance (they save directly as approved, no pending flow)
     const sickDays     = attData ? attData.filter(a => a.day_type === 'sick').length     : 0
     const vacationDays = attData ? attData.filter(a => a.day_type === 'vacation').length : 0
+    const unpaidDays   = attData ? attData.filter(a => a.day_type === 'unpaid').length   : 0
 
     // Approved hours — prefer attendance diff (actual time at work) over project sum.
     // Admins don't write attendance records, so fall back to hour_reports for their case.
@@ -517,7 +524,7 @@ function Hours() {
     const officeDays   = approvedWork.filter(a => !a.work_from_home).length
     const wfhDays      = approvedWork.filter(a =>  a.work_from_home).length
 
-    setMonthlySummary({ sickDays, vacationDays, totalMins, pendingMins, rejectedMins, officeDays, wfhDays })
+    setMonthlySummary({ sickDays, vacationDays, unpaidDays, totalMins, pendingMins, rejectedMins, officeDays, wfhDays })
 
     /* For admin: also build a per-employee daily breakdown for the same month.
        Renders below the calendar as a per-day view (one row per selected
@@ -578,8 +585,8 @@ function Hours() {
         for (const day of dayMap.values()) {
           /* Prefer attendance diff (actual at-work mins); fall back to project sum (admin case). */
           const totalMins = day.attMins > 0 ? day.attMins : day.repMins
-          /* Include vacation/sick days OR days with hours. Skip empty days. */
-          if (day.dayType === 'vacation' || day.dayType === 'sick' || totalMins > 0) {
+          /* Include any full-day absence OR days with hours. Skip empty days. */
+          if (ABSENCE_TYPES.has(day.dayType) || totalMins > 0) {
             byDate[day.date] = {
               date:          day.date,
               dayType:       day.dayType,
@@ -616,6 +623,7 @@ function Hours() {
   const formatDrillEntryNoDate = (day) => {
     if (day.dayType === 'vacation') return 'יום חופש'
     if (day.dayType === 'sick')     return 'יום מחלה'
+    if (day.dayType === 'unpaid')   return 'יום חל״ת'
     const arrival   = day.arrivalTime   || '—'
     const departure = day.departureTime || '—'
     const total     = formatTotalHHMM(day.totalMins)
@@ -749,6 +757,7 @@ function Hours() {
         wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
         vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,
         sickDays:     empAtt.filter(a => a.day_type === 'sick').length,
+        unpaidDays:   empAtt.filter(a => a.day_type === 'unpaid').length,
       }
     })
     setReportData(rows)
@@ -1366,6 +1375,7 @@ function Hours() {
           let cls = 'hours-cal-cell'
           if (calStatus && dt === 'vacation') cls += ' cal-vacation'
           else if (calStatus && dt === 'sick') cls += ' cal-sick'
+          else if (calStatus && dt === 'unpaid') cls += ' cal-unpaid'
           if (calStatus === 'rejected') cls += ' cal-rejected'
           if (ds === today) cls += ' cal-today'
           if (isSel)        cls += ' cal-selected'
@@ -1428,6 +1438,9 @@ function Hours() {
                   {calStatus === 'approved' && dt === 'sick' && (
                     <span className="cal-day-label">מחלה</span>
                   )}
+                  {calStatus === 'approved' && dt === 'unpaid' && (
+                    <span className="cal-day-label">חל״ת</span>
+                  )}
                   {calStatus === 'pending' && dt === 'work' && (
                     <span className="cal-status-pending">⏳</span>
                   )}
@@ -1440,6 +1453,12 @@ function Hours() {
                   {calStatus === 'pending' && dt === 'sick' && (
                     <>
                       <span className="cal-day-label">מחלה</span>
+                      <span className="cal-status-pending">⏳</span>
+                    </>
+                  )}
+                  {calStatus === 'pending' && dt === 'unpaid' && (
+                    <>
+                      <span className="cal-day-label">חל״ת</span>
                       <span className="cal-status-pending">⏳</span>
                     </>
                   )}
@@ -1534,6 +1553,7 @@ function Hours() {
         <button className={`hours-daytype-btn${dayType === 'work'     ? ' active' : ''}`} onClick={() => setDayType('work')}>עבודה</button>
         <button className={`hours-daytype-btn vacation${dayType === 'vacation' ? ' active' : ''}`} onClick={() => setDayType('vacation')}>חופש</button>
         <button className={`hours-daytype-btn sick${dayType === 'sick'     ? ' active' : ''}`} onClick={() => setDayType('sick')}>מחלה</button>
+        <button className={`hours-daytype-btn unpaid${dayType === 'unpaid'   ? ' active' : ''}`} onClick={() => setDayType('unpaid')}>חל״ת</button>
       </div>
 
       {dayType === 'work' && !isAdmin && (
@@ -1803,6 +1823,7 @@ function Hours() {
                     <th>ימי עבודה מהבית</th>
                     <th>ימי חופשה</th>
                     <th>ימי מחלה</th>
+                    <th>ימי חל״ת</th>
                     <th className="hours-drill-toggle-header" />
                   </tr>
                 </thead>
@@ -1816,6 +1837,7 @@ function Hours() {
                         <td>{row.wfhDays}</td>
                         <td>{row.vacationDays}</td>
                         <td>{row.sickDays}</td>
+                        <td>{row.unpaidDays}</td>
                         <td className="hours-drill-toggle-cell">
                           <button
                             type="button"
@@ -1829,7 +1851,7 @@ function Hours() {
                       </tr>
                       {reportDrillExpanded.has(row.id) && (
                         <tr className="hours-drill-row">
-                          <td colSpan={7}>
+                          <td colSpan={8}>
                             <div className="hours-drill-list">{renderDrillBody(row.id, 'report')}</div>
                           </td>
                         </tr>
@@ -1842,7 +1864,7 @@ function Hours() {
                           so this block has content regardless of whether the
                           on-screen row is currently expanded. */}
                       <tr className="hours-drill-print-row" aria-hidden="true">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className="hours-drill-print-list">
                             {(reportDrillCache[row.id] || []).map(day => (
                               <div key={day.date} className="hours-drill-print-line">

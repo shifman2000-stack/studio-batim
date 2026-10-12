@@ -98,6 +98,17 @@
   color: #fff;
 }
 
+/* חל״ת — a muted grey-violet. Deliberately cool: חופש is green and
+   מחלה is amber, and a fourth warm tone would read as "another kind of
+   sick day". The holiday annotation's indigo (#5b4bb7) is a saturated
+   text colour on white, never a day's ground, so the two cannot be
+   confused at a glance. */
+.hours-daytype-btn.unpaid.active {
+  background: #6f6a8c;
+  border-color: #6f6a8c;
+  color: #fff;
+}
+
 .hours-daytype-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -662,6 +673,17 @@
 
 .cal-sick .cal-day-label {
   color: #e65100;
+}
+
+/* חל״ת: muted grey-violet background — see the button rule above for
+   why this one is cool rather than another warm tone. */
+.cal-unpaid {
+  background: #eeedf3;
+  border-color: #cbc8d8;
+}
+
+.cal-unpaid .cal-day-label {
+  color: #4f4a6b;
 }
 
 /* Rejected: red background */

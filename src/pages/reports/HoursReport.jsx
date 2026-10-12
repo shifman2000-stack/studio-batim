@@ -155,6 +155,7 @@ export default function HoursReport() {
         wfhDays:      empAtt.filter(a => a.day_type === 'work' &&  a.work_from_home).length,
         vacationDays: empAtt.filter(a => a.day_type === 'vacation').length,
         sickDays:     empAtt.filter(a => a.day_type === 'sick').length,
+        unpaidDays:   empAtt.filter(a => a.day_type === 'unpaid').length,
       }
     })
     setReportData(rows)
@@ -237,6 +238,7 @@ export default function HoursReport() {
                 <th>ימי עבודה מהבית</th>
                 <th>ימי חופשה</th>
                 <th>ימי מחלה</th>
+                <th>ימי חל״ת</th>
                 <th className="hours-drill-toggle-header" />
               </tr>
             </thead>
@@ -250,6 +252,7 @@ export default function HoursReport() {
                     <td>{row.wfhDays}</td>
                     <td>{row.vacationDays}</td>
                     <td>{row.sickDays}</td>
+                    <td>{row.unpaidDays}</td>
                     <td className="hours-drill-toggle-cell">
                       <button
                         type="button"
@@ -263,7 +266,7 @@ export default function HoursReport() {
                   </tr>
                   {drillExpanded.has(row.id) && (
                     <tr className="hours-drill-row">
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <div className="hours-drill-list">{renderDrillBody(row.id)}</div>
                       </td>
                     </tr>
@@ -275,7 +278,7 @@ export default function HoursReport() {
                       filtered row so this block has content regardless
                       of the on-screen expand state. */}
                   <tr className="hours-drill-print-row" aria-hidden="true">
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="hours-drill-print-list">
                         {(drillCache[row.id] || []).map(day => (
                           <div key={day.date} className="hours-drill-print-line">

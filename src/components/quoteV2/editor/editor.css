@@ -284,9 +284,15 @@
 .qe-vers { max-height: 46vh; overflow-y: auto; }
 @media (max-width: 760px) { .qe-gram { flex-direction: column; gap: 8px; } }
 
-/* ---------- עוזר העריכה ---------- */
+/* ---------- עוזר העריכה ----------
+   העוזר מעוגן לצד הטופס ופתוח כברירת מחדל. "מצומצם" מוסיף
+   is-collapsed על המכל: הפאנל נעלם ובמקומו נשארת רצועה דקה.
+   שניהם תמיד ב-DOM — ההסתרה היא CSS בלבד, כדי שהשיחה וההצעות
+   שממתינות לאישור לא ייעלמו בצמצום. */
 .qe-withchat { display: flex; align-items: flex-start; gap: 0; }
 .qe-withchat .qe-wrap { flex: 1; min-width: 0; margin: 0 auto; }
+.qe-withchat.is-collapsed .qe-chat { display: none; }
+.qe-withchat:not(.is-collapsed) .qe-chatstrip { display: none; }
 .qe-chat {
   position: sticky; top: 61px; flex: none; width: 380px;
   height: calc(100vh - 61px); display: flex; flex-direction: column;
@@ -338,10 +344,53 @@
 }
 .qe-chat-form textarea:focus { border-color: var(--qe-sage); }
 
-@media (max-width: 980px) {
+.qe-collapse {
+  border: 1px solid var(--qe-line); background: #fff; border-radius: 99px;
+  padding: 4px 11px; font: inherit; font-size: 12.5px; color: var(--qe-muted);
+  cursor: pointer; white-space: nowrap;
+}
+.qe-collapse:hover { border-color: var(--qe-sage); color: var(--qe-sage-d); }
+
+/* הרצועה שמחליפה את הפאנל כשהוא מצומצם — וגם מה שפותח אותו. */
+.qe-chatstrip {
+  position: sticky; top: 61px; flex: none; width: 38px;
+  height: calc(100vh - 61px);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 16px 0; cursor: pointer; font: inherit; color: var(--qe-muted);
+  background: var(--qe-card); border: 0;
+  border-inline-start: 1px solid var(--qe-line);
+}
+.qe-chatstrip:hover { background: var(--qe-sage-l); color: var(--qe-sage-d); }
+.qe-chatstrip-i { font-size: 15px; line-height: 1; }
+/* הכיתוב ברצועה: אות מתחת לאות, מלמעלה למטה. */
+.qe-chatstrip-t {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  font-size: 13px; line-height: 1;
+}
+
+/* מתחת לרוחב הזה העוזר מכסה את הטופס במקום לשבת לצידו —
+   אותו מספר כמו NARROW_PX ב-QuoteEditorV2.jsx. */
+@media (max-width: 1000px) {
   .qe-withchat { flex-direction: column; }
   .qe-chat {
     position: fixed; inset: 61px 0 0; width: auto; height: auto;
     z-index: 30; border-inline-start: 0;
   }
+  /* ברוחב צר הרצועה היא כפתור צף — רצועה לכל הגובה הייתה גוזלת
+     רוחב מהטופס בדיוק במקום שבו הוא הכי צר. */
+  .qe-chatstrip {
+    position: fixed; inset: auto auto 18px 14px; width: auto; height: auto;
+    flex-direction: row; gap: 7px; padding: 9px 16px; border-radius: 99px;
+    border: 1px solid var(--qe-line); box-shadow: 0 6px 20px rgba(0, 0, 0, .12);
+    z-index: 30;
+  }
+  /* בכפתור הצף המילה חוזרת להיות אופקית; flex row תחת rtl מניח
+     את האות הראשונה מימין, כך שהסדר נשאר נכון. */
+  .qe-chatstrip-t { flex-direction: row; gap: 0; font-size: 13.5px; }
+}
+
+/* בטלפון סרגל הכלים נשבר לשתיים-שלוש שורות, ו-61px היו חותכים
+   אותו באמצע. שם העוזר מכסה מסך מלא, והיציאה היא "צמצום". */
+@media (max-width: 760px) {
+  .qe-chat { inset: 0; }
 }

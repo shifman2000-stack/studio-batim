@@ -41,6 +41,16 @@ import {
 
 const AUTOSAVE_MS = 800
 
+/* רוחב שמתחתיו העוזר כבר לא יושב לצד הטופס אלא מכסה אותו —
+   אותו מספר בדיוק כמו ה-@media ב-editor.css. מתחתיו ברירת
+   המחדל היא מצומצם, כדי שהטופס לא ייחסם בכניסה למסך. */
+const NARROW_PX = 1000
+const CHAT_KEY = (uid) => `qev2.assistant.collapsed.${uid}`
+
+/* ברירת המחדל כשעוד לא נשמרה העדפה: פתוח, אלא אם המסך צר. */
+const defaultCollapsed = () =>
+  typeof window !== 'undefined' && window.innerWidth < NARROW_PX
+
 /* עוטף תוכן תבנית כ-content_v2 מלא עם נתוני דוגמה, כדי שכל רכיבי
    הסעיפים והתצוגה המקדימה יעבדו בלי שום תנאי מיוחד. */
 function asEditable(tplContent, twoClients) {
@@ -85,7 +95,11 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const [twoClients, setTwoClients] = useState(true)
   const [undo, setUndo] = useState(null)        // { previous } אחרי שמירה
   const [inquiry, setInquiry] = useState(null) // רק למצב הצעה
-  const [chatOpen, setChatOpen] = useState(false)
+  /* העוזר מעוגן לצד הטופס ופתוח מראש. "מצומצם" הוא מצב תצוגה
+     בלבד — הרכיב נשאר מורכב, כך שהשיחה וההצעות הפתוחות שורדות
+     צמצום והרחבה. */
+  const [chatCollapsed, setChatCollapsed] = useState(defaultCollapsed)
+  const uid = useRef(null)
   const [tplRow, setTplRow] = useState(null)
   const [backups, setBackups] = useState([])
   const [tplDirty, setTplDirty] = useState(false)
@@ -105,6 +119,13 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         .from('profiles').select('role').eq('id', session.user.id).single()
       if (profile?.role !== 'admin') { navigate('/dashboard'); return }
       if (cancelled) return
+      uid.current = session.user.id
+      /* ההעדפה נשמרת לכל משתמש בנפרד. אם עוד לא נשמרה — נשארים
+         עם ברירת המחדל שנקבעה לפי רוחב המסך. */
+      try {
+        const v = localStorage.getItem(CHAT_KEY(session.user.id))
+        if (v === '0' || v === '1') setChatCollapsed(v === '1')
+      } catch { /* דפדפן שחוסם אחסון — פשוט ברירת המחדל */ }
       setState('loading')
 
       if (isTpl) {
@@ -316,6 +337,14 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     } finally { setSending(false) }
   }
 
+  /* צמצום/הרחבה של העוזר — נזכר למשתמש הנוכחי. */
+  const setChat = (collapsed) => {
+    setChatCollapsed(collapsed)
+    try {
+      if (uid.current) localStorage.setItem(CHAT_KEY(uid.current), collapsed ? '1' : '0')
+    } catch { /* אחסון חסום — ההעדפה פשוט לא תישמר */ }
+  }
+
   /* ── הצעות העוזר ─────────────────────────────────────────────
      מוחלות על המצב המקומי בלבד. כל שדה שנגעו בו נרשם כ"נערך" עם
      הנוסח שקדם לו — בדיוק כמו הקלדה ידנית — וכך השמירה תמיר אותו
@@ -460,9 +489,8 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
             {tplDirty && <span className="qe-saved err">יש שינויים שלא נשמרו</span>}
             <span className="qe-sp" />
             <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'preview' })}>👁 תצוגה מקדימה</button>
-            <button type="button" className={'qe-b' + (chatOpen ? ' pri' : '')} onClick={() => setChatOpen(v => !v)}>
-              ✨ עוזר העריכה
-            </button>
+            {/* אין כאן כפתור לעוזר: הוא מעוגן לצד הטופס, והרצועה
+                שבצד היא מה שפותח אותו כשהוא מצומצם. */}
             <button type="button" className="qe-b" onClick={() => setDialog({ kind: 'tplVersions' })}>גרסאות קודמות</button>
             <button type="button" className="qe-b" onClick={leave}>יציאה</button>
             <button type="button" className="qe-b pri" disabled={!tplDirty || busy === 'save'} onClick={openSaveConfirm}>
@@ -492,7 +520,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         )}
       </div>
 
-      <div className={isTpl && chatOpen ? 'qe-withchat' : undefined}>
+      <div className={isTpl ? 'qe-withchat' + (chatCollapsed ? ' is-collapsed' : '') : undefined}>
       <div className="qe-wrap">
         {isTpl && (
           <div className="qe-sample">
@@ -586,13 +614,32 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         />
       </div>
 
-      {isTpl && chatOpen && (
-        <AssistantPanel
-          content={content}
-          twoClients={twoClients}
-          onApply={applyAssistantEdits}
-          onClose={() => setChatOpen(false)}
-        />
+      {/* שניהם מרונדרים תמיד; ה-CSS מסתיר את מי שלא רלוונטי.
+          כך הצמצום לא מאבד את השיחה ולא את ההצעות שממתינות. */}
+      {isTpl && (
+        <>
+          <AssistantPanel
+            content={content}
+            twoClients={twoClients}
+            onApply={applyAssistantEdits}
+            onClose={() => setChat(true)}
+          />
+          <button
+            type="button"
+            className="qe-chatstrip"
+            title="פתיחת עוזר העריכה"
+            aria-expanded={!chatCollapsed}
+            onClick={() => setChat(false)}
+          >
+            <span className="qe-chatstrip-i" aria-hidden="true">✨</span>
+            {/* אות בכל שורה, ולא writing-mode: בכיוון אנכי ה-bidi
+                מסדר את העברית מלמטה למעלה, והמילה יוצאת הפוכה.
+                (נמדד: גם upright וגם bidi-override נתנו "רזוע".) */}
+            <span className="qe-chatstrip-t" aria-label="עוזר">
+              {[...'עוזר'].map((ch, i) => <span key={i} aria-hidden="true">{ch}</span>)}
+            </span>
+          </button>
+        </>
       )}
       </div>
 

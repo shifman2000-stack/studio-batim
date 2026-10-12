@@ -1,0 +1,227 @@
+/* ══════════════════════════════════════════════════════════════════════
+   שלבי התקדמות — מסך הצוות (ProjectGantt.jsx)
+
+   אין כאן שפה שלישית. הלבנה, הצבעים, החיצים והאגדה הם אלה של מפת
+   המסע בפורטל הלקוח: הציור מגיע מ-gantt/blockArt.jsx ומחלקות
+   ה-.cpj-* של ClientProgressJourney.css, שהקובץ הזה לא נוגע בהן.
+   מה שיש כאן הוא רק הפריסה של מסך הצוות — ארבע עמודות, שורה לשלב,
+   השם ליד הלבנה ולא מתחתיה — והגדלים הגדולים של הדסקטופ.
+
+   --pg-k הוא מקדם גודל אחד שהרכיב מודד מהרוחב בפועל ומזריק ב-style.
+   כל מידה כאן מוכפלת בו, בדיוק כמו --cpj-k במפה, כדי שהמסך יגדל
+   כולו ולא רק הטקסט.
+
+   RTL: המסך dir="rtl", ועמודה 0 היא הימנית ביותר.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── גלילה אחת בלבד ─────────────────────────────────────────────────
+   מסגרת הלשונית (.pd-tab-content) היא גוללת בכל הטאבים. כאן היא לא:
+   הרשת היא הדבר היחיד שנגלל, והאגדה, שורת ההסבר וכותרות העמודות
+   נשארות במקומן. בלי זה היו שני פסי גלילה אנכיים — של המסגרת ושל
+   הרשת — ושניהם גללו את אותו דבר.
+
+   המודיפייר נוסף ב-ProjectDetail.jsx רק לטאב 8, בדיוק כמו
+   .pd-tab-content--tasks של טאב המשימות. שאר הטאבים לא מושפעים.
+
+   min-height:0 בכל חוליה בשרשרת, אחרת ילד של flex מסרב להתכווץ
+   והרשת דוחפת את עצמה מתחת לתחתית המסך במקום להיגלל. */
+.pd-tab-content--stages {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pg {
+  --pg-k: 1;
+  direction: rtl;
+  font-family: 'Heebo', sans-serif;
+  color: var(--text-primary);
+  /* הרוחב המלא של לשונית הפרויקט. קודם היה maxWidth: 65% עם
+     paddingLeft קבוע, ושם ישב כל הצמצום של המסך. */
+  inline-size: 100%;
+  box-sizing: border-box;
+  padding-inline: calc(4px * var(--pg-k));
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* החלקים שנשארים במקומם מעל הרשת. */
+.pg-legend,
+.pg-hint,
+.pg-heads {
+  flex: none;
+}
+
+/* ── אגדה ──
+   אותה רצועה רכה של המפה (.cpj-legend), עם הכיתובים של הצוות. */
+.pg-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: calc(18px * var(--pg-k));
+  margin-block-end: calc(10px * var(--pg-k));
+  padding: calc(7px * var(--pg-k)) calc(12px * var(--pg-k));
+  background: var(--bg-surface-deep);
+  border-radius: var(--radius-lg);
+  font-size: calc(11.5px * var(--pg-k));
+  color: var(--text-secondary);
+}
+
+.pg-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--pg-k));
+}
+
+/* ה-.cpj-mini מגיע מהמפה ב-26px; כאן הוא גדול יותר, כי המסך גדול
+   יותר. היחס של ה-viewBox נשמר (38×30). */
+.pg-legend .cpj-mini {
+  width: calc(28px * var(--pg-k));
+  height: calc(22.1px * var(--pg-k));
+}
+
+/* בתוך הרצועה, בקצה הרחוק מהדוגמיות. */
+.pg-hint {
+  margin-inline-start: auto;
+  font-size: calc(11px * var(--pg-k));
+  color: var(--text-secondary);
+}
+
+/* ── כותרות העמודות ── */
+.pg-heads {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-block-end: 1px solid var(--border-subtle);
+}
+
+.pg-head {
+  text-align: center;
+  font-size: calc(13px * var(--pg-k));
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: calc(4px * var(--pg-k)) calc(2px * var(--pg-k)) calc(6px * var(--pg-k));
+}
+
+/* ── אזור הנתונים — הדבר היחיד שנגלל ── */
+/* ⚠️ flex:1 + min-height:0, ולא max-height לפי 100vh: הגובה שנשאר
+   ללשונית לא ידוע מכאן (כותרת הפרויקט, שורת הטאבים ובאנר הארכיון
+   כולם מעליה), וכל ניחוש השאיר או פס גלילה שני או שלב אחרון שאי
+   אפשר להגיע אליו. */
+.pg-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.pg-grid-wrap {
+  position: relative;
+}
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* תא = פס הלבנה מימין, השם משמאלו. */
+.pg-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  block-size: var(--pg-row);
+  padding-inline: calc(2px * var(--pg-k));
+}
+
+/* השלב הנוכחי יושב על אותו רחץ רך שהמפה נותנת לבחירה — שינוי של
+   רקע, אף פעם לא של צבע הלבנה, כדי שלא ייקרא כסטטוס. */
+.pg-cell--current {
+  background: var(--bg-hover);
+  border-radius: calc(10px * var(--pg-k));
+}
+
+.pg-art {
+  position: relative;
+  /* 36% ולא 30%: הלבנה גדלה, והחץ בין העמודות רץ מקצה השם של
+     המקור עד ממש לפני הלבנה של היעד — ככל שהלבנה יושבת פנימה
+     יותר, נשאר לחץ הזה אורך לנשום בו. */
+  inline-size: 46%;
+  block-size: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* המסילה האנכית של העמודה — אותו טוקן של .cpj-rail. */
+.pg-rail {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  inline-size: 1px;
+  background: var(--border-subtle);
+  z-index: 0;
+}
+
+.pg-block {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  overflow: visible;
+}
+
+.pg-block--click { cursor: pointer; }
+
+/* כמו במפה: בחירה היא רחץ, ולכן אין טבעת כהה של הדפדפן. מיקוד
+   מקלדת מקבל את אותו רחץ דרך שטח הלחיצה הבלתי נראה. */
+.pg-block:focus { outline: none; }
+.pg-block:focus-visible .pg-hit { fill: var(--bg-hover); }
+
+.pg-hit { fill: transparent; }
+
+.pg-label {
+  inline-size: 54%;
+  font-size: calc(12px * var(--pg-k));
+  line-height: 1.28;
+  padding-inline-end: calc(6px * var(--pg-k));
+  text-align: start;
+  /* שתי שורות לכל היותר, כמו התוויות במפה — שם ארוך נשבר ולא
+     נחתך באמצע מילה. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* שמות עם ספרות ("טופס 4 – תעודת גמר") אחרת מקבלים את שלוש
+     הנקודות בצד הלא נכון. */
+  unicode-bidi: plaintext;
+  color: var(--text-secondary);
+}
+
+.pg-label--done    { color: var(--text-primary); }
+.pg-label--current { color: var(--sage-dark); font-weight: 600; }
+
+/* ── חיצים ──
+   תמיד מוצגים, מקווקווים, באותם טוקנים של .cpj-edge. */
+.pg-arrows {
+  position: absolute;
+  /* left פיזי במכוון: ה-x-ים של החיצים נמדדים מהקצה השמאלי של
+     ה-SVG בשני הכיוונים, בדיוק כמו התוויות במפה. */
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.pg-edge {
+  stroke: var(--text-secondary);
+  stroke-width: calc(1.3px * var(--pg-k));
+  stroke-dasharray: calc(4px * var(--pg-k)) calc(3px * var(--pg-k));
+}
+
+.pg-arrow-head { fill: var(--text-secondary); }

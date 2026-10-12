@@ -1,13 +1,44 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 // Grid layout (19 rows × 4 columns) lives in the shared module so the
 // client-portal "שלבי התקדמות" screen reads the same source. Aliased to
 // the original local name to keep this file's rendering logic identical.
 import { GANTT_GRID as GRID } from './gantt/gridDefinition'
+// The isometric block, and the colours that paint it, come from the client
+// journey map — same art file, same .cpj-block--<status> rules. This screen
+// contributes the LAYOUT (four columns, a row per stage, the name beside the
+// block) and nothing else; it never redefines how a block looks.
+import { BlockDrawing, MiniBlock } from './gantt/blockArt'
+import '../pages/client/ClientProgressJourney.css'
+import './ProjectGantt.css'
 
 const COL_KEYS   = ['col0', 'col1', 'col2', 'col3']
 const COL_LABELS = ['שלב א׳ – תכנון', 'שלב ב׳ – רישוי', 'שלב ג׳ – תוכניות עבודה', 'שלב ד׳ – בניה']
-const ROW_H      = 28
+
+/* ── Size ──────────────────────────────────────────────────────────────
+   One factor, --pg-k, measured from the real width and multiplied into
+   every dimension — row height, block, label, legend, arrowheads, stroke
+   widths. Same device as --cpj-k on the client map, for the same reason:
+   the screen has to grow as a drawing, not as a font size.
+
+   K_BASE is the width at which the numbers below are taken literally.
+   Below it the screen simply stops shrinking; the tab is a desktop tab. */
+const ROW_H  = 38      // at k = 1
+const K_BASE = 900
+const K_MAX  = 1.3
+
+/* The block is drawn at BLOCK_SCALE in its own units — its faces span
+   x ∓18, so this is a 36×26px block at k = 1, against the 29×21 the phone
+   map draws. */
+const BLOCK_SCALE = 1
+
+/* ⚠️ The share of a column taken by the block band, and therefore where the
+   block's centre sits, measured from the column's right edge. It MUST match
+   .pg-art's inline-size in ProjectGantt.css: the cross-column arrows are
+   drawn from this number, and a band that drifted from it left every
+   arrowhead stopping short of the block it points at. */
+const ART_FRACTION = 0.46
+const BLOCK_F      = ART_FRACTION / 2
 
 // Column active row ranges (first → last row with a real stage)
 const COL_RANGE = {}
@@ -26,30 +57,36 @@ COL_KEYS.forEach(col => {
   })
 })
 
+const STATUS_LABEL = { done: 'הסתיים', current: 'שלב נוכחי', future: 'שלב עתידי' }
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function ProjectGantt({ project, isAdmin, onStateChange }) {
   const [ganttState, setGanttState] = useState(project?.gantt_state || {})
   const containerRef = useRef(null)
-  const legendRef    = useRef(null)
   const [containerWidth, setContainerWidth] = useState(0)
-  const [legendH, setLegendH] = useState(40)
 
   useEffect(() => {
     setGanttState(project?.gantt_state || {})
   }, [project?.gantt_state])
 
   useEffect(() => {
-    const update = () => {
-      if (containerRef.current) setContainerWidth(containerRef.current.offsetWidth)
-      if (legendRef.current)    setLegendH(legendRef.current.offsetHeight + 14) // +14 = marginBottom
-    }
+    const el = containerRef.current
+    if (!el) return undefined
+    const update = () => setContainerWidth(el.offsetWidth)
     update()
+    /* The tab's width changes with the window AND with the app's own
+       sidebar, which no resize event reports. */
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
     window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
+    return () => { ro.disconnect(); window.removeEventListener('resize', update) }
   }, [])
 
   const getStatus = id => ganttState[id] || 'future'
 
+  /* ⚠️ Unchanged from the dot version: admin only, future → current → done
+     → future, one 'current' per column, written straight to the row and
+     reported upward. The drawing changed; this did not. */
   const handleDotClick = async id => {
     if (!isAdmin || !project) return
     const cur  = getStatus(id)
@@ -66,12 +103,40 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
     if (onStateChange) onStateChange(id, next)
   }
 
-  // Physical x of dot center for a column (RTL: col0 is rightmost)
-  // Each column = containerWidth/4. Dot = center of right 30% of column.
+  /* Left edge of each stage name's actual TEXT, in the grid's own pixels.
+     Measured rather than derived: a name's width depends on the font, the
+     size factor and whether it wrapped to a second line. Re-measured
+     whenever the width changes, which is also when the font does. */
+  const textRefs = useRef(new Map())
+  const [textLeft, setTextLeft] = useState({})
+  useLayoutEffect(() => {
+    const wrap = containerRef.current
+    if (!wrap || !containerWidth) return
+    const base = wrap.getBoundingClientRect().left
+    const next = {}
+    for (const [id, el] of textRefs.current) {
+      if (el.isConnected) next[id] = el.getBoundingClientRect().left - base
+    }
+    /* Same numbers → same object, so React bails out instead of looping. */
+    setTextLeft(prev => {
+      const keys = Object.keys(next)
+      const same = keys.length === Object.keys(prev).length
+        && keys.every(x => Math.abs((prev[x] ?? NaN) - next[x]) < 0.5)
+      return same ? prev : next
+    })
+  }, [containerWidth, ganttState])
+
+  const k     = Math.min(K_MAX, Math.max(1, containerWidth / K_BASE))
+  const rowH  = ROW_H * k
+  const scale = BLOCK_SCALE * k
+  const gridH = rowH * GRID.length
+
+  // Physical x of block centre for a column (RTL: col0 is rightmost)
+  // Each column = containerWidth/4; the block is centred in the band.
   const getDotX = col => {
     const idx  = parseInt(col.slice(3))
     const colW = containerWidth / 4
-    return containerWidth - idx * colW - colW * 0.15
+    return containerWidth - idx * colW - colW * BLOCK_F
   }
 
   // Physical x of the LEFT edge of a column's text area (= the column's left boundary)
@@ -80,166 +145,160 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
     return containerWidth * (3 - idx) / 4
   }
 
-  return (
-    <div style={{ fontFamily: "'Heebo', sans-serif", direction: 'rtl', maxWidth: '65%', marginRight: 0, paddingLeft: 16 }}>
+  /* An arrow must not be drawn under the block it points at: both ends are
+     pulled back by the block's painted half-width plus a little air, so the
+     head's tip lands in clear space. 18 is the block's own half-width in
+     its drawing units. */
+  const trim = 18 * scale + 3 * k
 
-      {/* ── Legend ── */}
-      <div ref={legendRef} style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 14, paddingRight: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#52c27a', flexShrink: 0 }} />
-          <span style={{ fontSize: 11, color: '#555' }}>הסתיים</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#1a1a18', flexShrink: 0 }} />
-          <span style={{ fontSize: 11, color: '#555' }}>שלב נוכחי</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', border: '1.5px solid #bbb', background: 'none', flexShrink: 0 }} />
-          <span style={{ fontSize: 11, color: '#555' }}>שלב עתידי</span>
-        </div>
+  /* Where the arrow's TAIL starts. The label box is a fixed share of the
+     column, but the words in it are not: a short name like "אישור ראשוני"
+     left a wide empty strip, and an arrow starting at the box's edge looked
+     like it began in the middle of nowhere. So the tail starts just past
+     the last letter, measured.
+
+     Falls back to the box's edge until the first measurement lands — one
+     frame, and the same value the arrow had before. */
+  const tailX = (cellId, col) => {
+    const px = textLeft[cellId]
+    const edge = getColLeftEdgeX(col)
+    return px === undefined ? edge : Math.max(edge, px - 6 * k)
+  }
+
+  return (
+    <div className="pg" style={{ '--pg-k': k, '--pg-row': `${rowH}px` }}>
+
+      {/* ── Legend — the map's own band and swatches, with this screen's
+             wording. The swatch IS the block, seen smaller.
+             The click hint rides INSIDE the band, pushed to its far end:
+             as its own line it cost a row of grid height for one sentence. ── */}
+      <div className="pg-legend">
+        <span><MiniBlock status="done" />הסתיים</span>
+        <span><MiniBlock status="current" />שלב נוכחי</span>
+        <span><MiniBlock status="future" />שלב עתידי</span>
+        {isAdmin && (
+          <span className="pg-hint">לחיצה על לבנה מחליפה את מצב השלב: עתידי → נוכחי → הסתיים.</span>
+        )}
       </div>
 
       {/* ── Column headers ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 20px', direction: 'rtl' }}>
+      <div className="pg-heads">
         {COL_KEYS.map((col, i) => (
-          <div key={col} style={{ textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#1a1a18', padding: '5px 0 6px', borderBottom: '1px solid #e8e3dc' }}>
-            {COL_LABELS[i]}
-          </div>
+          <div key={col} className="pg-head">{COL_LABELS[i]}</div>
         ))}
-        <div />
       </div>
 
       {/* ── Scrollable data area ── */}
-      <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 350px)', paddingLeft: 20, boxSizing: 'border-box' }}>
-      <div ref={containerRef} style={{ position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 20px', direction: 'rtl', gap: 0 }}>
-          {GRID.map((row, i) => [
-            ...COL_KEYS.map(col => {
-              const cell     = row[col]
-              const status   = cell ? getStatus(cell.id) : null
-              const isDone   = status === 'done'
-              const isCurr   = status === 'current'
-              const range    = COL_RANGE[col]
-              const inRange  = range && i >= range.first && i <= range.last
-              const isFirst  = range && i === range.first
-              const isLast   = range && i === range.last
+      <div className="pg-scroll">
+        <div ref={containerRef} className="pg-grid-wrap">
+          <div className="pg-grid">
+            {GRID.map((row, i) => COL_KEYS.map(col => {
+              const cell    = row[col]
+              const status  = cell ? getStatus(cell.id) : null
+              const range   = COL_RANGE[col]
+              const inRange = range && i >= range.first && i <= range.last
+              const isFirst = range && i === range.first
+              const isLast  = range && i === range.last
 
               return (
                 <div
                   key={`${i}-${col}`}
-                  style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', height: ROW_H, padding: '0 2px', background: isCurr ? '#f5f5f5' : 'transparent', borderRadius: isCurr ? 4 : 0 }}
+                  className={'pg-cell' + (status === 'current' ? ' pg-cell--current' : '')}
                 >
-                  {/* RIGHT 30% — dot + vertical line */}
-                  <div style={{ width: '30%', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', height: '100%' }}>
+                  <div className="pg-art">
                     {inRange && (
-                      <div style={{
-                        position: 'absolute',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                      <div className="pg-rail" style={{
                         top:    isFirst ? '50%' : 0,
                         bottom: isLast  ? '50%' : 0,
-                        width: 1,
-                        background: '#e0e0e0',
-                        zIndex: 0,
                       }} />
                     )}
-                    {cell ? (
-                      <div
+                    {cell && (
+                      <svg
+                        className={
+                          'pg-block' +
+                          ` cpj-block--${status}` +
+                          (isAdmin ? ' pg-block--click' : '')
+                        }
+                        width={44 * scale}
+                        height={34 * scale}
+                        viewBox="-20 -11 44 34"
+                        role={isAdmin ? 'button' : 'img'}
+                        tabIndex={isAdmin ? 0 : -1}
+                        aria-label={`${cell.label} — ${STATUS_LABEL[status]}`}
                         onClick={() => handleDotClick(cell.id)}
-                        style={{
-                          position: 'relative',
-                          zIndex: 1,
-                          width:  isDone || isCurr ? 18 : 16,
-                          height: isDone || isCurr ? 18 : 16,
-                          borderRadius: '50%',
-                          flexShrink: 0,
-                          background: isDone ? '#52c27a' : isCurr ? '#1a1a18' : 'none',
-                          border: (!isDone && !isCurr) ? '1.5px solid #bbb' : 'none',
-                          cursor: isAdmin ? 'pointer' : 'default',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: 10,
-                          fontWeight: 700,
+                        onKeyDown={(e) => {
+                          if (!isAdmin) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault(); handleDotClick(cell.id)
+                          }
                         }}
                       >
-                        {isDone ? '✓' : null}
-                      </div>
-                    ) : (
-                      <div style={{ position: 'relative', zIndex: 1, width: 0, height: 0 }} />
+                        <title>{`${cell.label} — ${STATUS_LABEL[status]}`}</title>
+                        <rect className="pg-hit" x={-20} y={-11} width={44} height={34} rx={8} />
+                        <BlockDrawing />
+                      </svg>
                     )}
                   </div>
 
-                  {/* LEFT 70% — label */}
-                  <div style={{
-                    width: '70%',
-                    fontSize: 11,
-                    color:      isCurr ? '#1a1a18' : '#555',
-                    fontWeight: isCurr ? 600 : 400,
-                    textAlign: 'left',
-                    paddingRight: 4,
-                    background:   'transparent',
-                    borderRadius: 0,
-                    height: 22,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {cell ? cell.label : ''}
+                  <div className={'pg-label' + (cell ? ` pg-label--${status}` : '')}>
+                    {/* The text is wrapped so its REAL end can be measured —
+                        see textLeft below. A label box is a fixed share of
+                        the column; the words inside it are not. */}
+                    {cell && (
+                      <span ref={el => { if (el) textRefs.current.set(cell.id, el) }}>
+                        {cell.label}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
-            }),
-            <div key={`spacer-${i}`} />,
-          ])}
-        </div>
+            }))}
+          </div>
 
-        {/* ── Arrow SVG overlay ── */}
-        {containerWidth > 0 && (
-          <svg
-            style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}
-            width={containerWidth}
-            height={ROW_H * GRID.length}
-            viewBox={`0 0 ${containerWidth} ${ROW_H * GRID.length}`}
-          >
-            <defs>
-              <marker id="gantt-ah" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
-                <polygon points="0 0, 6 2.5, 0 5" fill="#aaa" />
-              </marker>
-            </defs>
-            {GRID.map((row, i) => {
-              const y = i * ROW_H + ROW_H / 2
-              return COL_KEYS.map(col => {
-                const cell = row[col]
-                if (!cell?.arrowTo) return null
-                const isReverse = cell.id === 'siyum_bniya'  // col3→col1, goes rightward
-                const x1 = isReverse
-                  ? getDotX(col) + 9                   // start just right of source dot
-                  : getColLeftEdgeX(col)               // start at left edge of source text area
-                const x2 = isReverse
-                  ? getColLeftEdgeX(cell.arrowTo)      // end at left edge of target text area
-                  : getDotX(cell.arrowTo) + 9          // end just right of target dot
-                return (
-                  <line
-                    key={`arr-${cell.id}`}
-                    x1={x1}
-                    y1={y}
-                    x2={x2}
-                    y2={y}
-                    stroke="#aaa"
-                    strokeWidth="1"
-                    strokeDasharray="4 3"
-                    markerEnd="url(#gantt-ah)"
-                  />
-                )
-              })
-            })}
-          </svg>
-        )}
-      </div>
+          {/* ── Arrow SVG overlay ── */}
+          {containerWidth > 0 && (
+            <svg
+              className="pg-arrows"
+              width={containerWidth}
+              height={gridH}
+              viewBox={`0 0 ${containerWidth} ${gridH}`}
+              aria-hidden="true"
+            >
+              <defs>
+                {/* refX on the TIP, so the head's point lands exactly on the
+                    trimmed end of the line. userSpaceOnUse keeps the head the
+                    same size whatever the stroke width. */}
+                <marker id="pg-arrow" viewBox="0 0 7 6" refX={7} refY={3}
+                  markerWidth={9 * k} markerHeight={9 * k}
+                  markerUnits="userSpaceOnUse" orient="auto">
+                  <path className="pg-arrow-head" d="M0 0 L7 3 L0 6 Z" />
+                </marker>
+              </defs>
+              {GRID.map((row, i) => {
+                const y = i * rowH + rowH / 2
+                return COL_KEYS.map(col => {
+                  const cell = row[col]
+                  if (!cell?.arrowTo) return null
+                  const isReverse = cell.id === 'siyum_bniya'  // col3→col1, goes rightward
+                  const x1 = isReverse
+                    ? getDotX(col) + trim                 // start just clear of the source block
+                    : tailX(cell.id, col)                 // start just past the source's last letter
+                  const x2 = isReverse
+                    ? getColLeftEdgeX(cell.arrowTo)       // end at left edge of target text area
+                    : getDotX(cell.arrowTo) + trim        // end just clear of the target block
+                  return (
+                    <line
+                      key={`arr-${cell.id}`}
+                      className="pg-edge"
+                      x1={x1} y1={y} x2={x2} y2={y}
+                      markerEnd="url(#pg-arrow)"
+                    />
+                  )
+                })
+              })}
+            </svg>
+          )}
+        </div>
       </div>
     </div>
   )

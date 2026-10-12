@@ -1158,8 +1158,16 @@ function ProjectDetail() {
         </div>
       )}
 
-      {/* ── Tab content ── */}
-      <div className={`pd-tab-content${activeTab === 5 ? ' pd-tab-content--tasks' : ''}`}>
+      {/* ── Tab content ──
+          Two tabs own their own scrolling and turn this frame into a flex
+          column instead of a scroller: 5 (משימות) and 8 (שלבי התקדמות),
+          whose grid is the one thing that scrolls. Everything else keeps
+          the plain scrolling frame. */}
+      <div className={
+        'pd-tab-content'
+        + (activeTab === 5 ? ' pd-tab-content--tasks' : '')
+        + (activeTab === 8 ? ' pd-tab-content--stages' : '')
+      }>
 
         {/* ── Tab 5 — משימות ── */}
         {activeTab === 5 && (

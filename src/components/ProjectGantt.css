@@ -14,6 +14,24 @@
    RTL: המסך dir="rtl", ועמודה 0 היא הימנית ביותר.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── גלילה אחת בלבד ─────────────────────────────────────────────────
+   מסגרת הלשונית (.pd-tab-content) היא גוללת בכל הטאבים. כאן היא לא:
+   הרשת היא הדבר היחיד שנגלל, והאגדה, שורת ההסבר וכותרות העמודות
+   נשארות במקומן. בלי זה היו שני פסי גלילה אנכיים — של המסגרת ושל
+   הרשת — ושניהם גללו את אותו דבר.
+
+   המודיפייר נוסף ב-ProjectDetail.jsx רק לטאב 8, בדיוק כמו
+   .pd-tab-content--tasks של טאב המשימות. שאר הטאבים לא מושפעים.
+
+   min-height:0 בכל חוליה בשרשרת, אחרת ילד של flex מסרב להתכווץ
+   והרשת דוחפת את עצמה מתחת לתחתית המסך במקום להיגלל. */
+.pd-tab-content--stages {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .pg {
   --pg-k: 1;
   direction: rtl;
@@ -24,6 +42,17 @@
   inline-size: 100%;
   box-sizing: border-box;
   padding-inline: calc(4px * var(--pg-k));
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* החלקים שנשארים במקומם מעל הרשת. */
+.pg-legend,
+.pg-hint,
+.pg-heads {
+  flex: none;
 }
 
 /* ── אגדה ──
@@ -76,10 +105,15 @@
 }
 
 /* ── אזור הנתונים — הדבר היחיד שנגלל ── */
+/* ⚠️ flex:1 + min-height:0, ולא max-height לפי 100vh: הגובה שנשאר
+   ללשונית לא ידוע מכאן (כותרת הפרויקט, שורת הטאבים ובאנר הארכיון
+   כולם מעליה), וכל ניחוש השאיר או פס גלילה שני או שלב אחרון שאי
+   אפשר להגיע אליו. */
 .pg-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  max-block-size: calc(100vh - 330px);
   box-sizing: border-box;
 }
 

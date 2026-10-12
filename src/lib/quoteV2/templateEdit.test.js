@@ -18,7 +18,7 @@ import { resolveText } from './resolve.js'
 import {
   SAMPLE, sampleVars, sampleClients, varNamesIn, hasAlternates, hasVariables,
   detokenize, rebuildAlternates, rewrapOptional, toTemplateRaw, grammarBoxes,
-  describeTemplateDiff, buildTemplateFromEditor,
+  grammarRebase, describeTemplateDiff, buildTemplateFromEditor,
 } from './templateEdit.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -169,6 +169,87 @@ test('כל שדות הטקסט בתבנית — הלוך ושוב בלי אוב�
         if (resolveText(raw, VS, 1) !== resolveText(v, VS, 1)) fails.push(`${path}.${k} יחיד`)
         if (resolveText(raw, VP, 2) !== resolveText(v, VP, 2)) fails.push(`${path}.${k} רבים`)
         for (const n of varNamesIn(v)) if (!raw.includes(`{{${n}}}`)) fails.push(`${path}.${k} איבד {{${n}}}`)
+      } else if (v && typeof v === 'object') {
+        walk(v, `${path}.${k}`)
+      }
+    }
+  }
+  walk(template, 'tpl')
+  assert.deepEqual(fails, [])
+})
+
+/* ── נוסח שנכנס לשדה לא בהקלדה (הצעה של העוזר שאושרה) ── */
+
+console.log('\n בסיס מחדש אחרי הצעה שאושרה')
+
+const RAW_SYNTAX = /\{\{|\}\}|\[\[|\]\]|\{[^{}]*\|[^{}]*\}/
+
+test('שדה דקדוקי — שתי התיבות מציגות טקסט פתור, לא תבנית', () => {
+  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
+  const reb = grammarRebase(next)
+  assert.notEqual(reb, null)
+  assert.equal(RAW_SYNTAX.test(reb.singular), false, 'ביחיד נשאר תחביר: ' + reb.singular)
+  assert.equal(RAW_SYNTAX.test(reb.plural), false, 'ברבים נשאר תחביר: ' + reb.plural)
+  assert.equal(reb.singular, 'לקוח1,\nבוא נתכנן\nלך בית.')
+  assert.equal(reb.plural, 'לקוח1 ולקוח2,\nבואו נתכנן\nלכם בית.')
+})
+
+test('תיבת הרבים מתעדכנת לנוסח החדש ולא נשארת על הישן', () => {
+  const before = template.sections.find(s => s.type === 'opening').greeting
+  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
+  const reb = grammarRebase(next, before)
+  assert.notEqual(reb.plural, grammarBoxes(before).plural)
+  assert.ok(reb.plural.includes('נתכנן'), 'הרבים נשאר על הנוסח הישן: ' + reb.plural)
+})
+
+test('השמירה לא משתנה — הלוך ושוב מחזיר בדיוק את נוסח ההצעה', () => {
+  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
+  const reb = grammarRebase(next)
+  const { raw, warnings } = toTemplateRaw({
+    originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
+  })
+  assert.deepEqual(warnings, [])
+  assert.equal(raw, next)
+})
+
+test('הבסיס הוא הנוסח החדש — קטע מותנה שההצעה הוסיפה שורד שמירה', () => {
+  const before = 'בית מגורים ב{{settlement}}. {גלול|גללו} למטה.'
+  const next = 'בית מגורים[[ של כ-{{houseArea}} מ״ר]] ב{{settlement}}. {גלול|גללו} למטה.'
+  const reb = grammarRebase(next, before)
+  const { raw } = toTemplateRaw({
+    originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
+  })
+  assert.equal(raw, next)
+  assert.ok(raw.includes('[['), 'הקטע המותנה אבד: ' + raw)
+  assert.ok(raw.includes('{{houseArea}}'), 'המשתנה החדש אבד: ' + raw)
+})
+
+test('שדה בלי חלופות — אין מה לתקן', () => {
+  assert.equal(grammarRebase('בית מגורים ב{{settlement}}.'), null)
+})
+
+test('הצעה שמורידה חלופות משדה שהיה דקדוקי — עדיין מוצג פתור', () => {
+  const before = '{{firstNames}}, {בוא|בואו} נבנה.'
+  const next = '{{firstNames}}, נתחיל לבנות.'
+  const reb = grammarRebase(next, before)
+  assert.notEqual(reb, null)
+  assert.equal(RAW_SYNTAX.test(reb.singular), false)
+  assert.equal(reb.singular, 'לקוח1, נתחיל לבנות.')
+})
+
+test('כל שדה דקדוקי אמיתי בתבנית — בסיס מחדש וחזרה בלי אובדן', () => {
+  const fails = []
+  const walk = (obj, path) => {
+    for (const [k, v] of Object.entries(obj ?? {})) {
+      if (typeof v === 'string' && hasAlternates(v)) {
+        const reb = grammarRebase(v)
+        if (RAW_SYNTAX.test(reb.singular)) fails.push(`${path}.${k} יחיד נשאר תבנית`)
+        if (RAW_SYNTAX.test(reb.plural)) fails.push(`${path}.${k} רבים נשאר תבנית`)
+        const { raw } = toTemplateRaw({
+          originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
+        })
+        if (resolveText(raw, VS, 1) !== resolveText(v, VS, 1)) fails.push(`${path}.${k} יחיד`)
+        if (resolveText(raw, VP, 2) !== resolveText(v, VP, 2)) fails.push(`${path}.${k} רבים`)
       } else if (v && typeof v === 'object') {
         walk(v, `${path}.${k}`)
       }

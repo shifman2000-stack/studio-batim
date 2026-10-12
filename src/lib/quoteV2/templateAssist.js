@@ -239,7 +239,11 @@ export function applyEdit(content, edit) {
   switch (edit.kind) {
     case 'set_text': {
       const id = edit.itemId || edit.groupId || edit.sectionId
-      touched.push({ ownerId: id, field: edit.field, before: findOwner(content, edit)?.[edit.field] ?? '' })
+      touched.push({
+        ownerId: id, field: edit.field,
+        before: findOwner(content, edit)?.[edit.field] ?? '',
+        after: edit.newText,
+      })
       return { content: ops.patchById(content, id, { [edit.field]: edit.newText }), touched }
     }
     case 'set_pct':
@@ -274,7 +278,11 @@ export function applyEdit(content, edit) {
       return { content: r.content, touched, newId: r.id }
     }
     case 'rename_group':
-      touched.push({ ownerId: edit.groupId, field: 'title', before: findOwner(content, edit)?.title ?? '' })
+      touched.push({
+        ownerId: edit.groupId, field: 'title',
+        before: findOwner(content, edit)?.title ?? '',
+        after: edit.newText,
+      })
       return { content: ops.patchById(content, edit.groupId, { title: edit.newText }), touched }
     case 'remove_group':
       return { content: ops.removeGroup(content, edit.groupId), touched }

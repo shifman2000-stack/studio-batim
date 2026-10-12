@@ -59,6 +59,27 @@ const MAX_BLOCK_W = 38
 const LABEL_TOP   = 18      // from the block's centre to the label's top edge
 const LABEL_LINE  = 11      // must match .cpj-label's line-height
 
+/* ── One size factor for the whole screen ──────────────────────────────
+   There is no second, desktop drawing. Everything below — pitch, block,
+   label, bubble, arrowheads — is the phone's geometry multiplied by k,
+   and the CSS multiplies its own pixel values by the same number through
+   --cpj-k. So the desktop map is the phone's map seen larger, and a
+   change to either stays a change to both.
+
+   k comes from the MEASURED map width, not from a media query, for two
+   reasons. The admin's "תצוגת לקוח" overlay is a phone-width portal
+   inside a desktop viewport — keyed off the viewport it would blow up
+   inside a 360px frame. And the CSS caps the container at K_BASE below
+   768px, so a measured width can only exceed K_BASE once the desktop
+   rules are already in force: k is exactly 1 on every phone, including
+   a 767px-wide one, without a breakpoint written here.
+
+   K_MAX is a vertical budget, not a taste: the row pitch scales with k,
+   so at 1.7 the 19-row map is ≈1630px tall. Higher reads better and
+   scrolls worse. */
+const K_BASE = 600
+const K_MAX  = 1.7
+
 /* The selection wash spans the block AND its label as ONE shape — hence a
    single rect from just above the block to just below a two-line label,
    rather than a box round the block and a second one round the text. 52
@@ -131,7 +152,7 @@ function MiniBlock({ status }) {
 
 /* One block on the map: the shared drawing, placed and scaled, wrapped in
    the interaction layer — hit area, role, keyboard, and the live dot. */
-function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
+function JourneyBlock({ point, status, selected, onSelect, x, y, scale, k }) {
   return (
     <g
       /* data-cpj-hold marks everything that must NOT clear the selection;
@@ -154,7 +175,8 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
       <title>{`${point.label} — ${STATUS_LABEL[status]}`}</title>
       {/* Generous invisible hit area — the drawn block is ~36×26 CSS px and
           a finger is not. */}
-      <rect className="cpj-hit" x={x - 22} y={y - 14} width={44} height={30} rx={8} />
+      <rect className="cpj-hit"
+        x={x - 22 * k} y={y - 14 * k} width={44 * k} height={30 * k} rx={8 * k} />
 
       <g transform={`translate(${x} ${y}) scale(${scale})`}>
         <BlockDrawing />
@@ -163,7 +185,7 @@ function JourneyBlock({ point, status, selected, onSelect, x, y, scale }) {
       {/* The live dot — only on a step actually in progress, so "where are
           we right now" survives even when something else is selected. */}
       {status === 'current' && (
-        <circle className="cpj-live" cx={x + 17} cy={y - 10} r={3.2} />
+        <circle className="cpj-live" cx={x + 17 * k} cy={y - 10 * k} r={3.2 * k} />
       )}
     </g>
   )
@@ -236,17 +258,28 @@ export default function ClientProgressJourney() {
 
   /* Track 0 on the visual RIGHT: measure inward from the right edge. */
   const trackCount = journey.tracks.length
+  const k = Math.min(K_MAX, Math.max(1, mapWidth / K_BASE))
   const step  = mapWidth / trackCount
   const xOf   = (trackIndex) => mapWidth - step * (trackIndex + 0.5)
-  const yOf   = (row) => TOP_PAD + row * ROW_PITCH
-  const mapH  = TOP_PAD + (journey.rowCount - 1) * ROW_PITCH + LABEL_TOP + 2 * LABEL_LINE
-  const blockW = Math.min(MAX_BLOCK_W, step - 14)
-  const scale  = Math.min(1, blockW / BLOCK_UNIT) * 0.82
+  const yOf   = (row) => TOP_PAD * k + row * ROW_PITCH * k
+  const mapH  = (TOP_PAD + (journey.rowCount - 1) * ROW_PITCH + LABEL_TOP + 2 * LABEL_LINE) * k
+  const blockW = Math.min(MAX_BLOCK_W * k, step - 14 * k)
+  /* Math.min(k, …) rather than Math.min(1, …): the cap is "never bigger
+     than the nominal block", and on this screen the nominal block is k
+     times the phone's. At k = 1 this is the old expression exactly. */
+  const scale  = Math.min(k, blockW / BLOCK_UNIT) * 0.82
+  /* ⚠️ Anything drawn NEXT to a block — its hit area, the live dot — is
+     sized from k and NOT from `scale`. On a phone the block is width-
+     limited (38 of a nominal 39), so scale/0.82 is 0.974, not 1, and
+     sizing from it would move the live dot by a pixel on every phone.
+     Measured: a 39-pixel difference against the current build. */
   /* Labels are as wide as the track allows, less a gutter, so two labels in
-     the same row cannot touch. */
-  const labelW = Math.max(52, step - 6)
-  const edgeTrim = BLOCK_HALF_U * scale + HEAD_GAP
-  const bubbleW = Math.max(150, Math.min(224, mapWidth - 2 * BUBBLE_PAD))
+     the same row cannot touch. On a wide screen the tracks spread and the
+     labels spread with them — that is the extra air, and it is also what
+     turns most two-line names into one line. */
+  const labelW = Math.max(52 * k, step - 6 * k)
+  const edgeTrim = BLOCK_HALF_U * scale + HEAD_GAP * k
+  const bubbleW = Math.max(150 * k, Math.min(224 * k, mapWidth - 2 * BUBBLE_PAD * k))
 
   /* The bubble is placed from its MEASURED height rather than a guess: its
      two relation rows wrap differently per step and per width, and a guess
@@ -267,12 +300,12 @@ export default function ClientProgressJourney() {
     const h = bubbleRef.current.offsetHeight
     const x = xOf(selected.trackIndex)
     const y = yOf(selected.row)
-    const below = y + LABEL_TOP + 2 * LABEL_LINE + BUBBLE_GAP
+    const below = y + (LABEL_TOP + 2 * LABEL_LINE + BUBBLE_GAP) * k
     const flip  = below + h > mapH
-    const top   = flip ? y - SEL_TOP - BUBBLE_GAP - h : below
+    const top   = flip ? y - (SEL_TOP + BUBBLE_GAP) * k - h : below
     const left  = Math.max(
-      BUBBLE_PAD,
-      Math.min(mapWidth - bubbleW - BUBBLE_PAD, x - bubbleW / 2),
+      BUBBLE_PAD * k,
+      Math.min(mapWidth - bubbleW - BUBBLE_PAD * k, x - bubbleW / 2),
     )
     /* Same values → same object, so React bails out instead of looping. */
     setBubblePos(prev =>
@@ -325,7 +358,10 @@ export default function ClientProgressJourney() {
   )
 
   return (
-    <div className="cp-page cpj-page">
+    /* The one place the size factor leaves JS: the CSS multiplies its own
+       pixel values by it, so type, swatches and padding grow with the
+       drawing instead of beside it. */
+    <div className="cp-page cpj-page" style={{ '--cpj-k': k }}>
       <div className="cp-container cpj">
 
         <p className="cpj-summary">
@@ -377,11 +413,11 @@ export default function ClientProgressJourney() {
                       with the map inside the desktop overlay's scale(0.83)
                       — 9 → ~7.5px, 11 → ~9px. */}
                   <marker id="cpj-arrow" viewBox="0 0 7 6" refX={7} refY={3}
-                    markerWidth={9} markerHeight={9} markerUnits="userSpaceOnUse" orient="auto">
+                    markerWidth={9 * k} markerHeight={9 * k} markerUnits="userSpaceOnUse" orient="auto">
                     <path className="cpj-arrow-head" d="M0 0 L7 3 L0 6 Z" />
                   </marker>
                   <marker id="cpj-arrow-on" viewBox="0 0 7 6" refX={7} refY={3}
-                    markerWidth={11} markerHeight={11} markerUnits="userSpaceOnUse" orient="auto">
+                    markerWidth={11 * k} markerHeight={11 * k} markerUnits="userSpaceOnUse" orient="auto">
                     <path className="cpj-arrow-head cpj-arrow-head--on" d="M0 0 L7 3 L0 6 Z" />
                   </marker>
                 </defs>
@@ -391,15 +427,15 @@ export default function ClientProgressJourney() {
                     block and label together, which is what makes the wash
                     read as a single shape rather than two. */}
                 {selected && (
-                  <rect className="cpj-sel" rx={9}
+                  <rect className="cpj-sel" rx={9 * k}
                     x={xOf(selected.trackIndex) - labelW / 2}
-                    y={yOf(selected.row) - SEL_TOP}
-                    width={labelW} height={SEL_H} />
+                    y={yOf(selected.row) - SEL_TOP * k}
+                    width={labelW} height={SEL_H * k} />
                 )}
 
                 {journey.tracks.map(track => (
                   <line key={track.key} className="cpj-rail"
-                    x1={xOf(track.index)} x2={xOf(track.index)} y1={3} y2={mapH - 8} />
+                    x1={xOf(track.index)} x2={xOf(track.index)} y1={3 * k} y2={mapH - 8 * k} />
                 ))}
 
                 {edges.map(edge => {
@@ -432,6 +468,7 @@ export default function ClientProgressJourney() {
                     x={xOf(point.trackIndex)}
                     y={yOf(point.row)}
                     scale={scale}
+                    k={k}
                   />
                 ))}
               </svg>
@@ -467,7 +504,7 @@ export default function ClientProgressJourney() {
                     /* physical `left`, deliberately: the x above is measured
                        from the SVG's left edge in both directions. */
                     left: xOf(point.trackIndex) - labelW / 2,
-                    top: yOf(point.row) + LABEL_TOP,
+                    top: yOf(point.row) + LABEL_TOP * k,
                     width: labelW,
                   }}
                   onClick={() => toggle(point.pointId)}

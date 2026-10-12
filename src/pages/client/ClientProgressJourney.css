@@ -35,8 +35,46 @@
   /* The map is the content, and it wants every pixel: four tracks across a
      360px phone. 8px is the smallest gutter that still keeps the outermost
      track's label off the screen edge. */
-  padding-inline: 8px;
+  padding-inline: var(--cpj-pad, 8px);
   padding-block-end: 0;
+  /* Fallback only — the screen sets this inline from the measured width.
+     At 1 every calc() below is the phone's own number. */
+  --cpj-k: 1;
+}
+
+/* ── Width, per breakpoint ─────────────────────────────────────────────
+   Declared on .cp-content--fixed, which is the only ancestor the map AND
+   the portal's header row share. Both read the same two numbers, so the
+   title's edges keep landing on the map's edges without either side
+   knowing what the other chose. .cp-content--fixed is set only for this
+   tab, so nothing else in the portal sees these.
+
+   Below 768px nothing here changes: same 8px gutter, same 600px cap, and
+   the header row keeps the portal's own mobile rules untouched. The cap
+   is also what guarantees the measured width stays ≤600 on a phone, i.e.
+   --cpj-k stays exactly 1. */
+.cp-content--fixed {
+  --cpj-pad: 8px;
+  --cpj-max: 600px;
+}
+
+@media (min-width: 768px) {
+  .cp-content--fixed {
+    /* Fluid rather than a second breakpoint: a step in the gutter at some
+       round width made the map get NARROWER as the window got wider.
+       clamp() grows it from 24px at 768 to 40px from ~1330 on. */
+    --cpj-pad: clamp(24px, 3vw, 40px);
+    --cpj-max: 1400px;
+  }
+  /* The header row is a sibling of .cp-page, not a child, so it needs the
+     container's width PLUS the page's gutters to line its content up with
+     the map. (0,3,0) beats the portal's own (0,2,0) desktop rule. */
+  .cp-content--fixed.cp-content--with-header .cp-screen-header {
+    box-sizing: border-box;
+    max-width: calc(var(--cpj-max) + 2 * var(--cpj-pad));
+    padding-inline: var(--cpj-pad);
+    margin-inline: auto;
+  }
 }
 
 .cpj {
@@ -47,16 +85,28 @@
   /* .cp-container carries `margin: 0 auto`, and auto margins on a FLEX ITEM
      beat align-items: stretch — so this box was shrinking to its own content
      (286px inside a 360px phone) instead of filling the row. An explicit
-     100% makes the auto margins resolve to 0 here while max-width: 600px
+     100% makes the auto margins resolve to 0 here while the max-width
      still caps and centres it on a wide screen. */
   inline-size: 100%;
   font-family: var(--font-body);
   color: var(--text-primary);
 }
 
+/* (0,2,0), so it beats .cp-container's own 600px without !important. The
+   fallback keeps the phone's cap if the frame ever renders without
+   .cp-content--fixed, i.e. without the custom properties. */
+.cp-container.cpj {
+  max-inline-size: var(--cpj-max, 600px);
+}
+
+/* ── Everything below multiplies its own pixel values by --cpj-k ───────
+   calc(Npx * var(--cpj-k)) with k = 1 computes to exactly Npx, so the
+   phone keeps every number it had. Only sizes and spacing scale; colours,
+   weights and radii-by-token do not. */
+
 .cpj-summary {
   flex: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--cpj-k));
   color: var(--text-secondary);
   margin: 0;
 }
@@ -64,12 +114,12 @@
 /* Empty gantt_state — information, not an error. */
 .cpj-pending-note {
   flex: none;
-  margin-block: 10px 0;
-  padding: 8px 10px;
+  margin-block: calc(10px * var(--cpj-k)) 0;
+  padding: calc(8px * var(--cpj-k)) calc(10px * var(--cpj-k));
   border-radius: var(--radius-md);
   background: var(--bg-surface-deep);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--cpj-k));
 }
 
 /* ── Legend — at the top, under the header ──
@@ -80,13 +130,13 @@
   flex: none;
   display: flex;
   justify-content: center;
-  gap: 16px;
-  font-size: 11px;
+  gap: calc(16px * var(--cpj-k));
+  font-size: calc(11px * var(--cpj-k));
   color: var(--text-secondary);
-  margin-block: 10px 2px;
+  margin-block: calc(10px * var(--cpj-k)) calc(2px * var(--cpj-k));
   /* Same background token, radius and padding the removed "על מה עובדים
      עכשיו" line carried, so the top of the screen keeps one soft band. */
-  padding: 10px 12px;
+  padding: calc(10px * var(--cpj-k)) calc(12px * var(--cpj-k));
   background: var(--bg-surface-deep);
   border-radius: var(--radius-lg);
 }
@@ -94,15 +144,15 @@
 .cpj-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: calc(5px * var(--cpj-k));
 }
 
 /* The viewBox is 38x30, so the box keeps the drawing's own aspect ratio —
    a squashed swatch would be a different picture, not a smaller one. 26px
    is the smallest size at which the four cells still read as holes. */
 .cpj-mini {
-  width: 26px;
-  height: 20.5px;
+  width: calc(26px * var(--cpj-k));
+  height: calc(20.5px * var(--cpj-k));
   flex: none;
   overflow: visible;
 }
@@ -115,19 +165,19 @@
   flex: none;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  margin-block-start: 4px;
+  margin-block-start: calc(4px * var(--cpj-k));
 }
 
 .cpj-phase {
-  font-size: 12px;
+  font-size: calc(12px * var(--cpj-k));
   text-align: center;
-  padding: 4px 1px;
+  padding: calc(4px * var(--cpj-k)) 1px;
   color: inherit;
 }
 
 .cpj-phase small {
   display: block;
-  font-size: 11px;
+  font-size: calc(11px * var(--cpj-k));
   color: var(--text-secondary);
 }
 
@@ -163,7 +213,7 @@
 
 .cpj-rail {
   stroke: var(--border-subtle);
-  stroke-width: 1;
+  stroke-width: calc(1px * var(--cpj-k));
 }
 
 /* Every cross-track arrow is drawn at all times. The quiet style has to stay
@@ -173,8 +223,8 @@
    accent. */
 .cpj-edge {
   stroke: var(--text-secondary);
-  stroke-width: 1.3;
-  stroke-dasharray: 4 3;
+  stroke-width: calc(1.3px * var(--cpj-k));
+  stroke-dasharray: calc(4px * var(--cpj-k)) calc(3px * var(--cpj-k));
 }
 
 .cpj-arrow-head {
@@ -185,7 +235,7 @@
    the weight, solid rather than dashed. Painted last by the JSX ordering. */
 .cpj-edge--on {
   stroke: var(--sage-dark);
-  stroke-width: 2;
+  stroke-width: calc(2px * var(--cpj-k));
   stroke-dasharray: none;
 }
 
@@ -283,7 +333,7 @@
 .cpj-live {
   fill: var(--sage);
   stroke: var(--bg-page);
-  stroke-width: 1.2;
+  stroke-width: calc(1.2px * var(--cpj-k));
 }
 
 /* ── Selection ──
@@ -308,8 +358,11 @@
   border: 0;
   background: none;
   font: inherit;
-  font-size: 9px;
-  line-height: 11px;
+  /* ⚠️ these two must stay in step with LABEL_LINE / LABEL_TOP in the
+     JSX: the row pitch is derived from them, and a label taller than the
+     pitch allows lands on the next row's block. */
+  font-size: calc(9px * var(--cpj-k));
+  line-height: calc(11px * var(--cpj-k));
   text-align: center;
   cursor: pointer;
 
@@ -335,26 +388,26 @@
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  padding: 8px 10px 9px;
-  padding-inline-end: 26px;
+  padding: calc(8px * var(--cpj-k)) calc(10px * var(--cpj-k)) calc(9px * var(--cpj-k));
+  padding-inline-end: calc(26px * var(--cpj-k));
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 14px var(--border-strong);
-  font-size: 11px;
+  font-size: calc(11px * var(--cpj-k));
   line-height: 1.5;
   text-align: start;
 }
 
 .cpj-bubble-title {
-  margin: 0 0 4px;
-  font-size: 12px;
+  margin: 0 0 calc(4px * var(--cpj-k));
+  font-size: calc(12px * var(--cpj-k));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .cpj-bubble-row {
-  margin: 2px 0 0;
+  margin: calc(2px * var(--cpj-k)) 0 0;
   color: var(--text-secondary);
 }
 
@@ -379,16 +432,16 @@
    which starts on the right. */
 .cpj-bubble-x {
   position: absolute;
-  inset-inline-end: 2px;
+  inset-inline-end: calc(2px * var(--cpj-k));
   inset-block-start: 0;
-  width: 24px;
-  height: 24px;
+  width: calc(24px * var(--cpj-k));
+  height: calc(24px * var(--cpj-k));
   padding: 0;
   border: 0;
   background: none;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 17px;
+  font-size: calc(17px * var(--cpj-k));
   line-height: 1;
   cursor: pointer;
 }

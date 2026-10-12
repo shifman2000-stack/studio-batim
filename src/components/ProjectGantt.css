@@ -61,12 +61,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: calc(22px * var(--pg-k));
-  margin-block-end: calc(14px * var(--pg-k));
-  padding: calc(10px * var(--pg-k)) calc(14px * var(--pg-k));
+  gap: calc(18px * var(--pg-k));
+  margin-block-end: calc(10px * var(--pg-k));
+  padding: calc(7px * var(--pg-k)) calc(12px * var(--pg-k));
   background: var(--bg-surface-deep);
   border-radius: var(--radius-lg);
-  font-size: calc(12px * var(--pg-k));
+  font-size: calc(11.5px * var(--pg-k));
   color: var(--text-secondary);
 }
 
@@ -79,13 +79,14 @@
 /* ה-.cpj-mini מגיע מהמפה ב-26px; כאן הוא גדול יותר, כי המסך גדול
    יותר. היחס של ה-viewBox נשמר (38×30). */
 .pg-legend .cpj-mini {
-  width: calc(32px * var(--pg-k));
-  height: calc(25.3px * var(--pg-k));
+  width: calc(28px * var(--pg-k));
+  height: calc(22.1px * var(--pg-k));
 }
 
+/* בתוך הרצועה, בקצה הרחוק מהדוגמיות. */
 .pg-hint {
-  margin: 0 0 calc(10px * var(--pg-k));
-  font-size: calc(12px * var(--pg-k));
+  margin-inline-start: auto;
+  font-size: calc(11px * var(--pg-k));
   color: var(--text-secondary);
 }
 
@@ -98,10 +99,10 @@
 
 .pg-head {
   text-align: center;
-  font-size: calc(14px * var(--pg-k));
+  font-size: calc(13px * var(--pg-k));
   font-weight: 600;
   color: var(--text-primary);
-  padding: calc(6px * var(--pg-k)) calc(2px * var(--pg-k)) calc(8px * var(--pg-k));
+  padding: calc(4px * var(--pg-k)) calc(2px * var(--pg-k)) calc(6px * var(--pg-k));
 }
 
 /* ── אזור הנתונים — הדבר היחיד שנגלל ── */
@@ -186,8 +187,8 @@
 
 .pg-label {
   inline-size: 54%;
-  font-size: calc(13px * var(--pg-k));
-  line-height: 1.3;
+  font-size: calc(12px * var(--pg-k));
+  line-height: 1.28;
   padding-inline-end: calc(6px * var(--pg-k));
   text-align: start;
   /* שתי שורות לכל היותר, כמו התוויות במפה — שם ארוך נשבר ולא

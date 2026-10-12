@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 // Grid layout (19 rows × 4 columns) lives in the shared module so the
 // client-portal "שלבי התקדמות" screen reads the same source. Aliased to
@@ -23,7 +23,7 @@ const COL_LABELS = ['שלב א׳ – תכנון', 'שלב ב׳ – רישוי', 
 
    K_BASE is the width at which the numbers below are taken literally.
    Below it the screen simply stops shrinking; the tab is a desktop tab. */
-const ROW_H  = 42      // at k = 1
+const ROW_H  = 38      // at k = 1
 const K_BASE = 900
 const K_MAX  = 1.3
 
@@ -103,6 +103,29 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
     if (onStateChange) onStateChange(id, next)
   }
 
+  /* Left edge of each stage name's actual TEXT, in the grid's own pixels.
+     Measured rather than derived: a name's width depends on the font, the
+     size factor and whether it wrapped to a second line. Re-measured
+     whenever the width changes, which is also when the font does. */
+  const textRefs = useRef(new Map())
+  const [textLeft, setTextLeft] = useState({})
+  useLayoutEffect(() => {
+    const wrap = containerRef.current
+    if (!wrap || !containerWidth) return
+    const base = wrap.getBoundingClientRect().left
+    const next = {}
+    for (const [id, el] of textRefs.current) {
+      if (el.isConnected) next[id] = el.getBoundingClientRect().left - base
+    }
+    /* Same numbers → same object, so React bails out instead of looping. */
+    setTextLeft(prev => {
+      const keys = Object.keys(next)
+      const same = keys.length === Object.keys(prev).length
+        && keys.every(x => Math.abs((prev[x] ?? NaN) - next[x]) < 0.5)
+      return same ? prev : next
+    })
+  }, [containerWidth, ganttState])
+
   const k     = Math.min(K_MAX, Math.max(1, containerWidth / K_BASE))
   const rowH  = ROW_H * k
   const scale = BLOCK_SCALE * k
@@ -128,20 +151,35 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
      its drawing units. */
   const trim = 18 * scale + 3 * k
 
+  /* Where the arrow's TAIL starts. The label box is a fixed share of the
+     column, but the words in it are not: a short name like "אישור ראשוני"
+     left a wide empty strip, and an arrow starting at the box's edge looked
+     like it began in the middle of nowhere. So the tail starts just past
+     the last letter, measured.
+
+     Falls back to the box's edge until the first measurement lands — one
+     frame, and the same value the arrow had before. */
+  const tailX = (cellId, col) => {
+    const px = textLeft[cellId]
+    const edge = getColLeftEdgeX(col)
+    return px === undefined ? edge : Math.max(edge, px - 6 * k)
+  }
+
   return (
     <div className="pg" style={{ '--pg-k': k, '--pg-row': `${rowH}px` }}>
 
       {/* ── Legend — the map's own band and swatches, with this screen's
-             wording. The swatch IS the block, seen smaller. ── */}
+             wording. The swatch IS the block, seen smaller.
+             The click hint rides INSIDE the band, pushed to its far end:
+             as its own line it cost a row of grid height for one sentence. ── */}
       <div className="pg-legend">
         <span><MiniBlock status="done" />הסתיים</span>
         <span><MiniBlock status="current" />שלב נוכחי</span>
         <span><MiniBlock status="future" />שלב עתידי</span>
+        {isAdmin && (
+          <span className="pg-hint">לחיצה על לבנה מחליפה את מצב השלב: עתידי → נוכחי → הסתיים.</span>
+        )}
       </div>
-
-      {isAdmin && (
-        <p className="pg-hint">לחיצה על לבנה מחליפה את מצב השלב: עתידי → נוכחי → הסתיים.</p>
-      )}
 
       {/* ── Column headers ── */}
       <div className="pg-heads">
@@ -203,7 +241,14 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
                   </div>
 
                   <div className={'pg-label' + (cell ? ` pg-label--${status}` : '')}>
-                    {cell ? cell.label : ''}
+                    {/* The text is wrapped so its REAL end can be measured —
+                        see textLeft below. A label box is a fixed share of
+                        the column; the words inside it are not. */}
+                    {cell && (
+                      <span ref={el => { if (el) textRefs.current.set(cell.id, el) }}>
+                        {cell.label}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
@@ -237,7 +282,7 @@ export default function ProjectGantt({ project, isAdmin, onStateChange }) {
                   const isReverse = cell.id === 'siyum_bniya'  // col3→col1, goes rightward
                   const x1 = isReverse
                     ? getDotX(col) + trim                 // start just clear of the source block
-                    : getColLeftEdgeX(col)                // start at left edge of source text area
+                    : tailX(cell.id, col)                 // start just past the source's last letter
                   const x2 = isReverse
                     ? getColLeftEdgeX(cell.arrowTo)       // end at left edge of target text area
                     : getDotX(cell.arrowTo) + trim        // end just clear of the target block

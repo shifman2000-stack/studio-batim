@@ -109,7 +109,8 @@ export default function AssistantPanel({ content, twoClients, onApply, onClose }
       <div className="qe-chat-top">
         <b>עוזר העריכה</b>
         <span className="qe-sp" />
-        <button type="button" className="qe-ic" title="סגירה" onClick={onClose}>✕</button>
+        {/* צמצום, לא סגירה: הרכיב נשאר חי והשיחה נשמרת. */}
+        <button type="button" className="qe-collapse" title="צמצום העוזר" onClick={onClose}>‹ צמצום</button>
       </div>
 
       <div className="qe-chat-body">

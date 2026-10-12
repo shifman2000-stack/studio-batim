@@ -15,6 +15,17 @@
 
 import { supabase } from '../supabaseClient'
 
+/* Full-day absences — a day_type that means "away all day": no arrival,
+   no departure, no project rows, and never part of the hours total.
+   Counted separately from each other everywhere; this set only answers
+   "is this day an absence rather than hours?".
+
+   ⚠️ One source. Hours.jsx imports it rather than repeating the list —
+   the two filters drifted apart once already, and a day that is an
+   absence in one of them and not the other simply disappears from the
+   drill-down. */
+export const ABSENCE_TYPES = new Set(['vacation', 'sick', 'unpaid'])
+
 /* HH:MM → total minutes. Missing / empty → 0. */
 export const toMins = (hhmm) => {
   if (!hhmm) return 0
@@ -49,7 +60,7 @@ export const formatTotalHHMM = (mins) => {
  * hour_reports). Rows are returned sorted by date ascending.
  *
  * Row shape:
- *   { date, dayType: 'work'|'vacation'|'sick'|null, arrivalTime, departureTime, totalMins }
+ *   { date, dayType: 'work'|'vacation'|'sick'|'unpaid'|null, arrivalTime, departureTime, totalMins }
  *
  * @param {string} uId      profiles.id
  * @param {number} year     e.g. 2026
@@ -96,9 +107,9 @@ export async function fetchEmployeeDailyDetails(uId, year, month) {
   for (const day of dayMap.values()) {
     /* Prefer attendance-diff (actual time at work); fall back to hour_reports sum (admin case) */
     const totalMins = day.attMins > 0 ? day.attMins : day.repMins
-    /* Include days that are marked vacation/sick OR that have any hours.
+    /* Include days marked as a full-day absence OR that have any hours.
        Skip empty days (no day_type AND no hours). */
-    if (day.dayType === 'vacation' || day.dayType === 'sick' || totalMins > 0) {
+    if (ABSENCE_TYPES.has(day.dayType) || totalMins > 0) {
       rows.push({
         date:          day.date,
         dayType:       day.dayType,
@@ -114,7 +125,7 @@ export async function fetchEmployeeDailyDetails(uId, year, month) {
 
 /**
  * Format a single drill line.
- * Vacation / sick → date + label.
+ * A full-day absence → date + label.
  * Work day (or any day with hours) → `${date}  |  ${arrival} - ${departure}  |  סה״כ שעות: ${total}`.
  * Missing arrival/departure → "—". The "HH:MM - HH:MM" run is left to the
  * browser's natural bidi handling (LTR run inside RTL paragraph) so
@@ -124,6 +135,7 @@ export const formatDrillLine = (day) => {
   const date = formatDDMMYY(day.date)
   if (day.dayType === 'vacation') return `${date}  |  יום חופש`
   if (day.dayType === 'sick')     return `${date}  |  יום מחלה`
+  if (day.dayType === 'unpaid')   return `${date}  |  יום חל״ת`
   const arrival   = day.arrivalTime   || '—'
   const departure = day.departureTime || '—'
   const total     = formatTotalHHMM(day.totalMins)

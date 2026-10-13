@@ -561,7 +561,24 @@
   min-height: 0;
 }
 
-.is-svg { position: absolute; inset: 0; overflow: visible; }
+/* ── סדר הציור: טבעת → לבנות וחצים → שמות ──
+   ה-SVG לא לוכד עכבר; הכפתורים שמעליו הם מה שמרחפים עליו. */
+.is-ring {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid var(--im-terra);
+  border-radius: 999px;
+  background: #f1ece6;
+  pointer-events: none;
+}
+
+.is-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  z-index: 1;
+  pointer-events: none;
+}
 
 .is-rail { stroke: var(--im-line); stroke-width: 1; }
 .is-edge { stroke: var(--im-muted); stroke-width: 1.1; stroke-dasharray: 4 3; }
@@ -594,11 +611,13 @@
    שינוי של רקע ומסגרת, אף פעם לא של צבע הלבנה. */
 .is-cell {
   position: absolute;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  border: 1px solid transparent;
-  border-radius: 999px;
+  border: 0;
+  /* ⚠️ בלי רקע ובלי מסגרת: שתיהן עברו ל-.is-ring, שמצוירת מתחת
+     ל-SVG. כרקע של הכפתור הן כיסו את הלבנה של אותו שלב. */
   background: none;
   font: inherit;
   color: var(--im-ink);
@@ -606,16 +625,10 @@
   cursor: default;
   white-space: nowrap;
   overflow: hidden;
-  transition: background .18s, border-color .18s;
 }
 
 .is-cell.opens { cursor: pointer; }
 .is-cell:focus { outline: none; }
-
-.is-cell.on {
-  background: #f1ece6;
-  border-color: var(--im-terra);
-}
 
 .is-cell.on.opens span { color: var(--im-terra-d); font-weight: 500; }
 

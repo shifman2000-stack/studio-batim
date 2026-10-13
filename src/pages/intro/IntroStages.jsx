@@ -64,6 +64,52 @@ export default function IntroStages({ onOpen }) {
       yOf: (r) => r * rowH + rowH / 2 }
   }, [box])
 
+  /* ── איפה באמת נגמר השם ────────────────────────────────────────────
+     החצים רצים מהאות האחרונה של שם המקור ועד ממש לפני הלבנה של
+     היעד. הקצה הזה נמדד ולא מחושב: רוחב של שם תלוי בפונט, במקדם
+     הגודל ובשאלה אם הוא נחתך — ומקצה העמודה (שהוא מה שהיה כאן
+     קודם) החץ התחיל באמצע רצועה ריקה.
+
+     נמדד מחדש כשהתיבה משתנה — וזה גם מה שקורה כשמקדם הגודל זז,
+     כי הוא נגזר מרוחב החלון — וגם כשהפונטים מסיימים להיטען, כי עד
+     אז העברית נמדדת בגופן חלופי ברוחב אחר. */
+  const textRefs = useRef(new Map())
+  const [textLeft, setTextLeft] = useState({})
+  useLayoutEffect(() => {
+    const wrap = boxRef.current
+    if (!wrap || !box.w) return undefined
+    let cancelled = false
+    const measure = () => {
+      if (cancelled) return
+      const base = wrap.getBoundingClientRect().left
+      const next = {}
+      for (const [id, el] of textRefs.current) {
+        if (el?.isConnected) next[id] = el.getBoundingClientRect().left - base
+      }
+      setTextLeft(prev => {
+        const keys = Object.keys(next)
+        const same = keys.length === Object.keys(prev).length
+          && keys.every(k => Math.abs((prev[k] ?? NaN) - next[k]) < 0.5)
+        return same ? prev : next
+      })
+    }
+    measure()
+    document.fonts?.ready?.then(measure)
+    return () => { cancelled = true }
+  }, [box.w, box.h])
+
+  /* איפה בדיוק יושב השלב שמרחפים עליו — שורה ועמודה, בשביל
+     הטבעת שמצוירת מתחת לכול. */
+  const hoverCell = useMemo(() => {
+    if (!hover) return null
+    for (let r = 0; r < GRID.length; r++) {
+      for (let i = 0; i < COLS.length; i++) {
+        if (GRID[r][COLS[i]]?.id === hover) return { r, i }
+      }
+    }
+    return null
+  }, [hover])
+
   const ready = box.w > 0 && box.h > 0
 
   return (
@@ -79,6 +125,18 @@ export default function IntroStages({ onOpen }) {
       <div className="is-wrap" ref={boxRef}>
       {ready && (
         <>
+          {/* ⚠️ הטבעת היא שכבה נפרדת מתחת ל-SVG, ולא רקע של הכפתור.
+              כרקע היא נצבעה מעל הלבנה והעלימה אותה בדיוק בשלב
+              שעליו מרחפים. כאן: טבעת → לבנות וחצים → שמות. */}
+          {hoverCell && (
+            <div className="is-ring" style={{
+              top: geo.yOf(hoverCell.r) - geo.rowH / 2,
+              height: geo.rowH,
+              left: box.w - (hoverCell.i + 1) * geo.colW,
+              width: geo.colW,
+            }} />
+          )}
+
           <svg className="is-svg" viewBox={`0 0 ${box.w} ${box.h}`} width={box.w} height={box.h}>
             <defs>
               <marker id="is-arrow" viewBox="0 0 7 6" refX={7} refY={3}
@@ -102,15 +160,25 @@ export default function IntroStages({ onOpen }) {
               const cell = row[col]
               if (!cell?.arrowTo) return null
               const to = COLS.indexOf(cell.arrowTo)
-              const trim = 18 * geo.scale + 3
-              const back = cell.id === 'siyum_bniya'
               const y = geo.yOf(r)
-              /* ⚠️ החץ לא יוצא מהלבנה אלא מקצה העמודה: בין הלבנה
-                 לקצה יושב השם, וחץ שהתחיל מהלבנה חצה אותו. בכיוון
-                 ההפוך (siyum_bniya) השם נמצא בצד השני, ולכן שם החץ
-                 כן יוצא מהלבנה ונעצר בקצה עמודת היעד. */
-              const x1 = back ? geo.xOf(i) + trim : geo.colLeft(i)
-              const x2 = back ? geo.colLeft(to) : geo.xOf(to) + trim
+              /* כל החיצים אופקיים: היעד תמיד באותה שורה בהגדרת
+                 הרשת, ולכן אין כאן ניתוב אנכי לטפל בו. */
+              const GAP = 6
+              const brickRight = (c) => geo.xOf(c) + 18 * geo.scale
+              const target = GRID[r][cell.arrowTo]
+              /* מספר עמודה גדול יותר = שמאלה יותר, כי העמודה הראשונה
+                 היא הימנית. */
+              const left = to > i
+              const srcText = textLeft[cell.id]
+              const tgtText = target ? textLeft[target.id] : undefined
+              /* נפילה חזרה לקצה העמודה עד שהמדידה הראשונה נוחתת —
+                 בדיוק מה שהיה כאן קודם, פריים אחד. */
+              const x1 = left
+                ? (srcText === undefined ? geo.colLeft(i) : srcText - GAP)
+                : brickRight(i) + GAP
+              const x2 = left
+                ? brickRight(to) + GAP
+                : (tgtText === undefined ? geo.colLeft(to) : tgtText - GAP)
               return <line key={cell.id} className="is-edge" x1={x1} y1={y} x2={x2} y2={y}
                 markerEnd="url(#is-arrow)" />
             }))}
@@ -163,7 +231,9 @@ export default function IntroStages({ onOpen }) {
                 onBlur={() => setHover(h => (h === cell.id ? null : h))}
                 onClick={() => opens && onOpen(opens)}
               >
-                <span>{cell.label}</span>
+                <span ref={el => { if (el) textRefs.current.set(cell.id, el) }}>
+                  {cell.label}
+                </span>
               </button>
             )
           }))}

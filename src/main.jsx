@@ -29,6 +29,7 @@ import ContractorRoute from './components/ContractorRoute'
 import StaffViewPicker from './pages/staffview/StaffViewPicker'
 import StaffClientViewMount from './components/StaffClientViewMount'
 import StaffQuestionnaireView from './pages/StaffQuestionnaireView'
+import IntroMeeting from './pages/intro/IntroMeeting'
 import ProgrammingSummaryPage from './pages/ProgrammingSummaryPage'
 import NoAccess from './pages/NoAccess'
 import InquiryForm from './pages/InquiryForm'
@@ -99,6 +100,11 @@ createRoot(document.getElementById('root')).render(
         {/* Read-only programming summary document. Outside <Layout /> for
             the same reason as the route above, and gated the same way. */}
         <Route path="/programming-summary/:projectId" element={<ProgrammingSummaryPage />} />
+        {/* פגישת היכרות — מסך מצגת למסך גדול, נפתח בטאב נפרד מרשימת
+            הפניות. מחוץ ל-<Layout> בכוונה: בלי כותרת, בלי ניווט ובלי
+            סרגל ה-DEV. נועל את עצמו על שורת profiles כמו כל מסלול
+            צוות אחר כאן, וקורא בלבד. */}
+        <Route path="/intro/:inquiryId" element={<IntroMeeting />} />
         <Route path="/no-access" element={<NoAccess />} />
         <Route path="/inquiry-form/:token" element={<InquiryForm />} />
         <Route path="/child-inquiry/:token" element={<ChildInquiryForm />} />

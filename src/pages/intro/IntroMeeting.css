@@ -1,0 +1,642 @@
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500&family=Heebo:wght@200;300;400;500&family=Playfair+Display:wght@400;500&display=swap');
+
+/* ══════════════════════════════════════════════════════════════════════
+   פגישת היכרות — מסך מצגת (IntroMeeting.jsx)
+
+   "לבנה על לבנה". המסך נפתח בטאב נפרד, בלי מעטפת האפליקציה, ונועד
+   למסך גדול בחדר ישיבות (1920×1080) ולפעמים ללפטופ (1366–1440).
+
+   ── שני כללים שמחזיקים אותו ──
+   1. אין גלילה במסך הבית. כל גובה כאן הוא יחסי ל-viewport, ולכן
+      המסך מתכווץ ומתרחב במקום לייצר פס גלילה.
+   2. מידה אחת: --im-k, שנגזרת מרוחב החלון ומוכפלת בכל גודל. אותו
+      מנגנון בדיוק של --cpj-k במפת המסע ו---pg-k במסך השלבים, כדי
+      שהטיפוגרפיה תגדל כציור ולא כטקסט שתפח.
+
+   כל הכללים תחומים תחת .im-root: index.css נועל html/body/#root
+   ל-overflow:hidden, והמסך הזה חי בתוך הנעילה הזו ולא נלחם בה.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.im-root {
+  /* הפלטה של האתר — נייר, לא לבן */
+  --im-paper: #f7f5f1;
+  --im-ink: #1c1a18;
+  --im-muted: #9a9590;
+  --im-line: #e8e5df;
+  --im-terra: #d9774a;
+  --im-terra-d: #c2602f;
+
+  --im-k: 1;
+  /* גובה הסרגל העליון, מחושב מאותם מספרים שמרכיבים אותו: שני
+     ריפודים של 22 ועוד גובה הלוגו 28. מסך הבית נשען עליו כדי
+     להעמיד את הלבנים בדיוק באמצע המסך. */
+  --im-top-h: calc(72px * var(--im-k));
+
+  position: fixed;
+  inset: 0;
+  direction: rtl;
+  background: var(--im-paper);
+  color: var(--im-ink);
+  font-family: 'Heebo', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── סרגל עליון ── */
+.im-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(16px * var(--im-k));
+  padding: calc(22px * var(--im-k)) calc(46px * var(--im-k));
+  border-block-end: 1px solid var(--im-line);
+}
+
+.im-top-sp { flex: 1; }
+
+.im-top-title {
+  font-size: calc(12.5px * var(--im-k));
+  letter-spacing: .16em;
+  color: var(--im-muted);
+  white-space: nowrap;
+}
+
+/* ── מסך הבית ──
+   שלוש רצועות: כותרת, רווח נושם, ושלוש הדלתות. ה-grid הוא מה שמונע
+   גלילה: הרצועה האמצעית בולעת את מה שנשאר, והדלתות נשארות למטה. */
+.im-home {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  /* ⚠️ השורה הראשונה היא בדיוק חצי מסך פחות הסרגל העליון, ולכן
+     השורה השנייה — ושפת הלבנים שפותחת אותה — מתחילה בדיוק באמצע
+     החלון, בכל גודל. עם 1fr הלבנים היו ננעלות לתחתית והאמצע היה
+     יוצא אחר בכל רזולוציה. */
+  --im-home-pt: calc(26px * var(--im-k));
+  /* ⚠️ גם הסרגל העליון וגם הריפוד של המסך הזה יורדים מהחישוב, אחרת
+     השורה השנייה מתחילה נמוך מהאמצע בדיוק בגובה שלהם. */
+  grid-template-rows: calc(50vh - var(--im-top-h) - var(--im-home-pt)) 1fr;
+  padding: var(--im-home-pt) calc(46px * var(--im-k)) calc(40px * var(--im-k));
+}
+
+/* החלק העליון דחוס אל ראש חציו: הכותרת היא מה שמוביל, לא הרווח. */
+.im-home-top {
+  min-height: 0;
+  align-self: start;
+}
+
+.im-kicker {
+  font-size: calc(13px * var(--im-k));
+  letter-spacing: .22em;
+  color: var(--im-terra-d);
+  margin: 0 0 calc(12px * var(--im-k));
+}
+
+.im-head {
+  font-family: 'Frank Ruhl Libre', serif;
+  font-weight: 300;
+  font-size: calc(68px * var(--im-k));
+  line-height: 1.12;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.im-head em {
+  font-style: normal;
+  color: var(--im-terra);
+}
+
+/* ── שלוש הדלתות ── */
+.im-doors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(34px * var(--im-k));
+  align-items: start;
+  align-self: start;
+}
+
+.im-door {
+  display: block;
+  inline-size: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  /* אין ריפוד עליון ואין קו עליון: שפת הלבנה היא השפה העליונה של
+     הדלת, וזו מה שנוחתת על אמצע המסך. הקו עבר מתחת לתיאור. */
+  padding: 0 calc(6px * var(--im-k));
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.im-door:focus-visible { outline: none; }
+
+/* הקו שמתחת לדלת — קיים תמיד בגוון השקט, ונצבע בטרה במעבר עכבר
+   או במיקוד מקלדת. אותו מצב בדיוק לשניהם. */
+.im-door-rule {
+  display: block;
+  block-size: 1px;
+  margin-block-start: calc(16px * var(--im-k));
+  background: var(--im-line);
+  transition: background .25s;
+}
+
+.im-door:hover .im-door-rule,
+.im-door:focus-visible .im-door-rule { background: var(--im-terra); }
+
+/* ⚠️ אזור קבוע ללבנה, ולא גובה שנגזר ממנה: בלי זה כותרת של דלת
+   אחת יושבת גבוה או נמוך משכנתה ברגע שהתיאור מתארך. */
+.im-door-art {
+  block-size: calc(96px * var(--im-k));
+  display: flex;
+  align-items: flex-end;
+  gap: calc(12px * var(--im-k));
+}
+
+/* המספר ירד אל שורת הכותרת ויושב מימינה, על אותו קו בסיס. */
+.im-door-head {
+  display: flex;
+  align-items: baseline;
+  gap: calc(14px * var(--im-k));
+  margin: calc(18px * var(--im-k)) 0 calc(8px * var(--im-k));
+}
+
+.im-door-brick {
+  inline-size: calc(132px * var(--im-k));
+  block-size: auto;
+  overflow: visible;
+}
+
+/* ── הלבנה במעבר עכבר ──
+   הלבנה נצבעת ולא מתרוממת. הגוונים הם הטרה של המסך הזה ולא הירוק
+   של "שלב נוכחי": על נייר חם ירוק היה מושך את העין אל צבע שאין לו
+   כאן משמעות. אותם סלקטורים בדיוק של .cpj-block--current, כדי שכל
+   פאה ותא יקבלו את הגוון הנכון ולא רק החזית. */
+.im-door:hover .im-door-brick .cpj-face--top,
+.im-door:focus-visible .im-door-brick .cpj-face--top { fill: #eab08f; stroke: none; }
+.im-door:hover .im-door-brick .cpj-face--front,
+.im-door:focus-visible .im-door-brick .cpj-face--front { fill: var(--im-terra); stroke: none; }
+.im-door:hover .im-door-brick .cpj-face--side,
+.im-door:focus-visible .im-door-brick .cpj-face--side { fill: var(--im-terra-d); stroke: none; }
+.im-door:hover .im-door-brick .cpj-cell,
+.im-door:focus-visible .im-door-brick .cpj-cell { fill: var(--im-terra-d); opacity: 1; }
+.im-door:hover .im-door-brick .cpj-cell-lip,
+.im-door:focus-visible .im-door-brick .cpj-cell-lip { fill: var(--im-terra); }
+.im-door:hover .im-door-brick .cpj-cell-edge,
+.im-door:focus-visible .im-door-brick .cpj-cell-edge { stroke: var(--im-terra-d); }
+.im-door:hover .im-door-brick .cpj-shadow,
+.im-door:focus-visible .im-door-brick .cpj-shadow { opacity: .16; }
+
+.im-door-brick .cpj-face,
+.im-door-brick .cpj-cell,
+.im-door-brick .cpj-cell-lip,
+.im-door-brick .cpj-cell-edge,
+.im-door-brick .cpj-shadow { transition: fill .25s, stroke .25s, opacity .25s; }
+
+/* מספר חלול — Playfair, קו מתאר בלבד, בטרה */
+.im-door-num {
+  font-family: 'Playfair Display', serif;
+  font-weight: 500;
+  font-size: calc(62px * var(--im-k));
+  line-height: .9;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--im-terra);
+  letter-spacing: .02em;
+}
+
+.im-door-title {
+  font-family: 'Frank Ruhl Libre', serif;
+  font-weight: 400;
+  font-size: calc(27px * var(--im-k));
+  margin: 0;
+}
+
+.im-door-sub {
+  font-size: calc(16px * var(--im-k));
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--im-muted);
+  margin: 0;
+  /* שתי שורות לכל היותר — התיאורים באורך שונה, והמסך לא אמור לזוז
+     בגללם. אזור הלבנה והכותרת ממילא מיושרים מעליהם. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* ── אזור פנימי ──
+   נכנס ברכות ותופס את כל מה שמתחת לסרגל. */
+.im-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(18px * var(--im-k)) calc(40px * var(--im-k)) calc(26px * var(--im-k));
+  animation: im-in .32s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes im-in {
+  from { opacity: 0; transform: translateY(calc(14px * var(--im-k))); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im-area { animation: none; }
+  .im-door-brick { transition: none; }
+}
+
+.im-area-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: calc(18px * var(--im-k));
+  margin-block-end: calc(14px * var(--im-k));
+}
+
+.im-area-sp { flex: 1; }
+
+.im-area-title {
+  font-family: 'Frank Ruhl Libre', serif;
+  font-weight: 400;
+  font-size: calc(30px * var(--im-k));
+  margin: 0;
+}
+
+.im-area-sub {
+  font-size: calc(15px * var(--im-k));
+  font-weight: 300;
+  color: var(--im-muted);
+}
+
+.im-back {
+  flex: none;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: calc(15px * var(--im-k));
+  color: var(--im-terra-d);
+  cursor: pointer;
+  padding: calc(6px * var(--im-k)) calc(4px * var(--im-k));
+}
+
+.im-back:hover { color: var(--im-ink); }
+
+/* מכל התוכן של אזור — נותן ל-ProjectGantt את עמודת ה-flex שהוא
+   מצפה לה, בלי לגעת בו. */
+.im-area-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* על נייר, לא על לבן: הרשת של מסך השלבים מגיעה בלי רקע משלה. */
+.im-area-body .pg-legend { background: #efece6; }
+
+.im-pane {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--im-paper);
+  color: var(--im-muted);
+  font-family: 'Heebo', sans-serif;
+  font-size: 16px;
+  direction: rtl;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   אזורים 02 ו-03
+   ══════════════════════════════════════════════════════════════════════ */
+
+.im-caption {
+  flex: none;
+  margin: 0 0 calc(12px * var(--im-k));
+  font-size: calc(15px * var(--im-k));
+  font-weight: 300;
+  color: var(--im-muted);
+}
+
+/* מתג התצוגה בכותרת האזור */
+.im-seg {
+  display: inline-flex;
+  gap: calc(4px * var(--im-k));
+  padding: calc(3px * var(--im-k));
+  border: 1px solid var(--im-line);
+  border-radius: 999px;
+  background: #fff;
+}
+
+.im-seg button {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: calc(13px * var(--im-k));
+  padding: calc(5px * var(--im-k)) calc(13px * var(--im-k));
+  border-radius: 999px;
+  color: var(--im-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.im-seg button.on { background: var(--im-terra); color: #fff; }
+
+/* ── שני לוחות זה לצד זה ──
+   minmax(0,1fr) ולא 1fr: בלעדיו לוח עם תוכן רחב מסרב להתכווץ
+   ודוחף את שכנו אל מחוץ למסך. */
+.im-two {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* ⚠️ גם השורה: ברירת המחדל auto נותנת לתוכן לקבוע את הגובה, ומסגרת
+     טלפון בגובה 844px פשוט דוחפת את עצמה אל מחוץ למסך במקום להצטמק. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(26px * var(--im-k));
+}
+
+.im-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.im-panel-title {
+  flex: none;
+  margin: 0 0 calc(10px * var(--im-k));
+  font-family: 'Frank Ruhl Libre', serif;
+  font-weight: 400;
+  font-size: calc(19px * var(--im-k));
+}
+
+/* תוכן הלוח — במצב "מסך מלא" נפרס, ובמצב טלפון נכנס למסגרת. */
+.im-panel-body {
+  flex: 1;
+  min-height: 0;
+  background: #fff;
+  border: 1px solid var(--im-line);
+  border-radius: calc(14px * var(--im-k));
+  overflow: auto;
+}
+
+/* ── מסגרת טלפון ──
+   ⚠️ המסך הפנימי הוא 390×844 CSS אמיתיים — אותה מידה שמסגרת
+   "תצוגת לקוח" משתמשת בה — כדי שה-media queries של הפורטל יראו
+   טלפון אמיתי ולא קופסה מכווצת. מה שמוקטן הוא רק העטיפה, דרך
+   transform, ולכן הפריסה שבפנים לא יודעת על כך דבר. */
+.im-phone-fit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.im-phone {
+  inline-size: 390px;
+  block-size: 844px;
+  flex: none;
+  background: #fff;
+  border: calc(9px) solid #1c1a18;
+  border-radius: 38px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 18px 50px rgba(28, 26, 24, .18);
+  transform-origin: center center;
+}
+
+.im-phone-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* ── אזור 03 ── */
+
+/* חצי ה-VR מקבל קצת יותר רוחב משני הצדדים השווים של אזור 02:
+   הסרטון רחב (16:9) ונחתך-לא-נחתך לפי הרוחב בלבד, ולכן זה הדבר
+   היחיד שבאמת מגדיל אותו. */
+.im-two--tech {
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+}
+
+.im-tech-points {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(16px * var(--im-k));
+  justify-content: center;
+  padding-inline-end: calc(10px * var(--im-k));
+}
+
+.im-tech-point {
+  border-inline-start: 2px solid var(--im-line);
+  padding-inline-start: calc(14px * var(--im-k));
+}
+
+.im-tech-point b {
+  display: block;
+  font-family: 'Frank Ruhl Libre', serif;
+  font-weight: 400;
+  font-size: calc(21px * var(--im-k));
+  margin-block-end: calc(3px * var(--im-k));
+}
+
+.im-tech-point span {
+  font-size: calc(14.5px * var(--im-k));
+  font-weight: 300;
+  color: var(--im-muted);
+  line-height: 1.5;
+}
+
+.im-tech-right {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(22px * var(--im-k));
+  flex: 1;
+}
+
+.im-vr {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12px * var(--im-k));
+}
+
+/* ⚠️ contain ולא cover: הסרטון הוא הדבר היחיד שנשאר בחצי הזה, והוא
+   אמור להיראות שלם. cover היה ממלא את הקופסה וחותך את הקצוות —
+   ובסרטון של סיור בבית הקצוות הם בדיוק מה שמראים. */
+.im-vr video {
+  inline-size: 100%;
+  block-size: 100%;
+  min-height: 0;
+  flex: 1;
+  object-fit: contain;
+  border-radius: calc(16px * var(--im-k));
+  background: #1c1a18;
+}
+
+.im-vr-cap {
+  flex: none;
+  margin: calc(-4px * var(--im-k)) 0 calc(14px * var(--im-k));
+  font-size: calc(16px * var(--im-k));
+  font-weight: 300;
+  color: var(--im-muted);
+}
+
+
+/* ── אזור 02 — סיכום פגישה ── */
+.im-summary {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* העורך עוטף את עצמו בשכבה משלו (סרגל + שטח כתיבה); בלי להעביר
+   דרכה את העמודה, שטח הכתיבה נשאר בגובה המינימלי שלו וממלא רבע
+   מסך. */
+.im-summary > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.im-summary .rte-root {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: calc(17px * var(--im-k));
+}
+
+/* ── אזור 01 — טופס הפניה ── */
+.im-form {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--im-line);
+  border-radius: calc(14px * var(--im-k));
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   מפת השלבים — נכנסת למסך אחד תמיד
+   ══════════════════════════════════════════════════════════════════════ */
+
+.is-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-heads {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-block-end: calc(6px * var(--im-k));
+  border-block-end: 1px solid var(--im-line);
+}
+
+.is-head {
+  text-align: center;
+  font-size: calc(14px * var(--im-k));
+  font-weight: 500;
+}
+
+/* ⚠️ זו התיבה הנמדדת. אין כאן overflow, ובכוונה: הגיאומטריה נגזרת
+   מהגובה שלה, ולכן אין לה מה לגלול. */
+.is-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── סדר הציור: טבעת → לבנות וחצים → שמות ──
+   ה-SVG לא לוכד עכבר; הכפתורים שמעליו הם מה שמרחפים עליו. */
+.is-ring {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid var(--im-terra);
+  border-radius: 999px;
+  background: #f1ece6;
+  pointer-events: none;
+}
+
+.is-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.is-rail { stroke: var(--im-line); stroke-width: 1; }
+.is-edge { stroke: var(--im-muted); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.is-arrow-head { fill: var(--im-muted); }
+
+/* הלבנה — ניטרלית, ונצבעת בטרה כשעוברים עליה. אותם סלקטורים של
+   מפת המסע, כדי שכל פאה ותא יקבלו את הגוון ולא רק החזית. */
+.is-brick .cpj-face        { fill: var(--im-paper); stroke: #d8d3c9; stroke-width: .65; }
+.is-brick .cpj-face--front { fill: #efece6; }
+.is-brick .cpj-cell        { fill: #ddd8cd; }
+.is-brick .cpj-cell-lip    { fill: #efece6; }
+.is-brick .cpj-cell-edge   { stroke: #d8d3c9; }
+.is-brick .cpj-shadow      { opacity: .08; }
+
+.is-brick.on .cpj-face--top   { fill: #eab08f; stroke: none; }
+.is-brick.on .cpj-face--front { fill: var(--im-terra); stroke: none; }
+.is-brick.on .cpj-face--side  { fill: var(--im-terra-d); stroke: none; }
+.is-brick.on .cpj-cell        { fill: var(--im-terra-d); }
+.is-brick.on .cpj-cell-lip    { fill: var(--im-terra); }
+.is-brick.on .cpj-cell-edge   { stroke: var(--im-terra-d); }
+.is-brick.on .cpj-shadow      { opacity: .18; }
+
+.is-brick .cpj-face,
+.is-brick .cpj-cell,
+.is-brick .cpj-cell-lip,
+.is-brick .cpj-cell-edge,
+.is-brick .cpj-shadow { transition: fill .18s, stroke .18s, opacity .18s; }
+
+/* השם וטווח הלחיצה. הטבעת היא אותה טבעת של בחירה במפת המסע —
+   שינוי של רקע ומסגרת, אף פעם לא של צבע הלבנה. */
+.is-cell {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  /* ⚠️ בלי רקע ובלי מסגרת: שתיהן עברו ל-.is-ring, שמצוירת מתחת
+     ל-SVG. כרקע של הכפתור הן כיסו את הלבנה של אותו שלב. */
+  background: none;
+  font: inherit;
+  color: var(--im-ink);
+  text-align: start;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.is-cell.opens { cursor: pointer; }
+.is-cell:focus { outline: none; }
+
+.is-cell.on.opens span { color: var(--im-terra-d); font-weight: 500; }
+
+
+/* מסך ה-VR לבדו — הסרטון תופס את מה שנשאר, שלם ולא חתוך. */
+.im-vr-only {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

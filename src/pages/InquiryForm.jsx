@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import LogoStacked from '../components/LogoStacked'
@@ -25,10 +25,28 @@ const INCLUSION_OPTIONS = [
   'אחר',
 ]
 
-export default function InquiryForm() {
+/**
+ * The client's inquiry form.
+ *
+ * Three ways in, and they differ only in how the row is found and what
+ * the form may do with it:
+ *   · public       — by token, through the RPCs, ends in "thank you".
+ *   · ?preview=true — staff, by token, every field disabled.
+ *   · staffEdit    — staff, BY ID, every field live, saved as you type.
+ *
+ * ⚠️ staffEdit is the intro-meeting screen, where Einav fixes details
+ * with the family in the room. It writes to THIS row and only this row:
+ * there is no insert path on it, and no submit — the client's
+ * "שליחת הטופס" and its thank-you screen are hidden, because the form
+ * was already submitted and resubmitting it would move dates that mean
+ * something.
+ */
+export default function InquiryForm({ staffEdit = false, inquiryId = null } = {}) {
   const { token } = useParams()
   const [searchParams] = useSearchParams()
   const isPreview = searchParams.get('preview') === 'true'
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const [status, setStatus] = useState('loading') // loading | not_found | already_submitted | form | preview | success
   const [submitting, setSubmitting] = useState(false)
@@ -62,14 +80,17 @@ export default function InquiryForm() {
   // ── Fetch inquiry on mount ──
   useEffect(() => {
     async function fetchInquiry() {
-      // Preview mode: check auth — use authenticated client
-      if (isPreview) {
+      // Preview / staff edit: check auth — use authenticated client
+      if (isPreview || staffEdit) {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           const { data, error } = await supabase
             .from('inquiries')
             .select('id, form_submitted_at, first_name, last_name, phone, email, contact2_name, contact2_phone, contact2_email, project_type, city, plot_size, house_size, floors, inclusions, extra_notes')
-            .eq('form_token', token)
+            /* staffEdit arrives from a row the staff already has open, so
+               it is keyed by id; the token is a client-side artefact and
+               an inquiry that never got a form link has none. */
+            .eq(staffEdit ? 'id' : 'form_token', staffEdit ? inquiryId : token)
             .single()
 
           if (error || !data) { setStatus('not_found'); return }
@@ -125,7 +146,7 @@ export default function InquiryForm() {
           }
 
           setExtraNotes(data.extra_notes ?? '')
-          setStatus('preview')
+          setStatus(staffEdit ? 'staff' : 'preview')
           return
         }
         // Not authenticated — fall through to normal logic
@@ -140,7 +161,51 @@ export default function InquiryForm() {
       setStatus('form')
     }
     fetchInquiry()
-  }, [token, isPreview])
+  }, [token, isPreview, staffEdit, inquiryId])
+
+  /* ── staffEdit: save as you type ──────────────────────────────────────
+     Debounced, and skipped until the row has actually loaded — otherwise
+     the first render's empty fields would be written straight over the
+     family's answers.
+
+     An UPDATE by id, never an insert and never the submit RPC: that RPC
+     also stamps form_submitted_at and questionnaire_status, which are a
+     record of when the CLIENT sent the form and must not move because a
+     phone number was corrected in a meeting. */
+  const saveTimer = useRef(null)
+  useEffect(() => {
+    if (!staffEdit || status !== 'staff' || !inquiryId) return undefined
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      const withOther = (list, other) => list.map(v =>
+        v === 'אחר' && other.trim() ? `אחר: ${other.trim()}` : v)
+      const { error } = await supabase.from('inquiries').update({
+        first_name:     firstName.trim()   || null,
+        last_name:      lastName.trim()    || null,
+        phone:          phone.trim()       || null,
+        email:          email.trim()       || null,
+        contact2_name:  [contact2FirstName.trim(), contact2LastName.trim()].filter(Boolean).join(' ') || null,
+        contact2_phone: contact2Phone.trim() || null,
+        contact2_email: contact2Email.trim() || null,
+        project_type:   withOther(projectTypes, projectTypeOther),
+        city:           city.trim()      || null,
+        plot_size:      plotSize.trim()  || null,
+        house_size:     houseSize.trim() || null,
+        floors:         floors.trim()    || null,
+        inclusions:     withOther(inclusions, inclusionOther),
+        extra_notes:    extraNotes.trim() || null,
+      }).eq('id', inquiryId)
+      if (error) { setSaveError('השמירה נכשלה: ' + error.message); return }
+      setSaveError('')
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 1800)
+    }, 700)
+    return () => clearTimeout(saveTimer.current)
+  }, [staffEdit, status, inquiryId,
+      firstName, lastName, phone, email,
+      contact2FirstName, contact2LastName, contact2Phone, contact2Email,
+      projectTypes, projectTypeOther, city, plotSize, houseSize, floors,
+      inclusions, inclusionOther, extraNotes])
 
   // ── Populate contact2 fields after rawData is set (runs after render) ──
   useEffect(() => {
@@ -292,6 +357,14 @@ export default function InquiryForm() {
   return (
     <div style={styles.page} dir="rtl">
       <LogoStacked height={64} style={{ marginBottom: styles.logo.marginBottom }} />
+
+      {staffEdit && (
+        <p style={styles.previewBanner}>
+          {saveError
+            ? saveError
+            : savedFlash ? '✓ נשמר' : 'עריכה — נשמר אוטומטית'}
+        </p>
+      )}
 
       {/* Admin preview banner — simple text line */}
       {isReadOnly && (
@@ -560,7 +633,7 @@ export default function InquiryForm() {
           <p style={styles.errorMsg}>{errorMsg}</p>
         )}
 
-        {!isReadOnly && (
+        {!isReadOnly && !staffEdit && (
           <button
             type="submit"
             style={submitting ? { ...styles.submitBtn, opacity: 0.65 } : styles.submitBtn}

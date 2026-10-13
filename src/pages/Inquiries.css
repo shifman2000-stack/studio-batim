@@ -768,3 +768,39 @@
   color: #1D9E75;
   font-weight: 400;
 }
+
+
+/* ── פגישת היכרות — תאריך + פתיחת מסך המצגת באותה עמודה ── */
+.inq-col-intro {
+  /* ⚠️ רחבה מהעמודות האחרות, ובכוונה: היא מחזיקה שני דברים —
+     התאריך וכפתור הפתיחה. ב-flex:1 התאריך הצטמצם ל-55px והציג
+     חצי שנה. גם הכותרת בטבלה חייבת לקבל את אותו flex. */
+  flex: 2;
+  gap: 6px;
+}
+
+/* התאריך מתכווץ, הכפתור לא: ברוחב צר עדיף תאריך קצר מכפתור
+   שנשבר לשתי שורות. */
+.inq-col-intro .inq-date-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inq-intro-btn {
+  flex: none;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border: 1px solid #ddd3bf;
+  border-radius: 999px;
+  color: #8a6a4a;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.inq-intro-btn:hover {
+  background: #f7f0e6;
+  border-color: #c2602f;
+  color: #c2602f;
+}

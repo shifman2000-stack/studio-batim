@@ -16,7 +16,7 @@ import { describeTemplateChanges } from '../../../lib/quoteV2/templateSync'
    הנקודה שבה עינב ממילא עוצרת לחשוב (החלטה 35).
    ═══════════════════════════════════════════════════════════════════════ */
 
-export default function SendDialog({ content, template, link, sending, error, onSend, onClose, onCopy }) {
+export default function SendDialog({ content, template, link, sending, error, onSend, onClose, onCopy, gmailUrl }) {
   const [alsoTemplate, setAlsoTemplate] = useState(false)
 
   const checks = sendChecklist(content)
@@ -36,6 +36,11 @@ export default function SendDialog({ content, template, link, sending, error, on
           {phone
             ? <a className="qe-b wa" href={waLink(phone, names, link)} target="_blank" rel="noreferrer">שליחה בוואטסאפ</a>
             : <span className="qe-opt">אין טלפון בפנייה — אפשר רק להעתיק</span>}
+          {/* אותו מנגנון של v1: חלון כתיבה של Gmail עם הכתובות, נושא
+              וגוף בעברית שמכיל את הקישור. נפתח רק כשיש כתובת. */}
+          {gmailUrl && (
+            <a className="qe-b" href={gmailUrl} target="_blank" rel="noreferrer">שליחה במייל</a>
+          )}
           <button type="button" className="qe-b" onClick={() => onCopy(link)}>העתקת קישור</button>
           <button type="button" className="qe-b" onClick={onClose}>סגירה</button>
         </div>

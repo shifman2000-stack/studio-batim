@@ -43,6 +43,7 @@ import QuotePublic from './pages/QuotePublic'
 import QuoteRouter from './pages/QuoteRouter'
 import ResetPassword from './pages/ResetPassword'
 import QuoteBuilderPage from './pages/QuoteBuilderPage'
+import QuoteOpen from './pages/QuoteOpen'
 import QuoteV2Lab from './pages/lab/QuoteV2Lab'
 import QuoteV2PrintLab from './pages/lab/QuoteV2PrintLab'
 import QuoteV2New from './pages/lab/QuoteV2New'
@@ -158,6 +159,9 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reports/parent-project-models" element={<ParentProjectModelsReport />} />
           <Route path="/reports/site-health" element={<SiteHealthReport />} />
           <Route path="/quote-builder/:inquiryId" element={<QuoteBuilderPage />} />
+          {/* הדלת היחידה להצעה של פנייה — מנתבת לפי הסכימה של ההצעה
+              הקיימת, ויוצרת טיוטת v2 כשאין עדיין הצעה. ראו QuoteOpen. */}
+          <Route path="/quote-open/:inquiryId" element={<QuoteOpen />} />
         </Route>
       </Routes>
     </BrowserRouter>

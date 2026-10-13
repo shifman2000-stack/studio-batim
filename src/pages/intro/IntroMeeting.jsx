@@ -1,0 +1,186 @@
+// src/pages/intro/IntroMeeting.jsx
+//
+// "פגישת היכרות" — the screen Einav opens on a TV during a first meeting
+// with a client. Opened from the Inquiries list in a new tab.
+//
+// ── ACCESS ───────────────────────────────────────────────────────────
+// Gated on HAVING A profiles row — any staff member, admin or employee.
+// Same live read, same no-wrapper-component shape as every other staff
+// route in main.jsx (StaffQuestionnaireView, ProjectsKanban, Reports):
+// the role is read on mount, never taken from something cached earlier.
+//
+// Outside <Layout /> deliberately: no header, no nav, no DEV bar. The
+// screen owns the whole viewport and carries its own navigation.
+//
+// ── READ-ONLY ────────────────────────────────────────────────────────
+// This screen makes exactly one query — the inquiry's name — and writes
+// nothing, ever. Area 01 renders ProjectGantt with isAdmin={false}, so
+// its click handler returns before it reaches the database.
+//
+// ── NAVIGATION ───────────────────────────────────────────────────────
+// The areas are component state, not routes. During a meeting the back
+// control must be instant and must never land on a browser-history
+// surprise mid-sentence; a route per area would also put the client's
+// inquiry id into three more URLs for no gain.
+
+import { useEffect, useLayoutEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../../supabaseClient'
+import Logo from '../../components/Logo'
+import { BlockDrawing } from '../../components/gantt/blockArt'
+import ProjectGantt from '../../components/ProjectGantt'
+import './IntroMeeting.css'
+
+/* The three doors. Kept here rather than inline so the home screen reads
+   as a list of three equals — which is what it is. */
+const DOORS = [
+  { key: 'stages', num: '01', title: 'שלבי ההתקדמות',
+    sub: 'איך נראה התהליך, מהפגישה הראשונה ועד שנדלק האור' },
+  { key: 'programma', num: '02', title: 'הפרוגרמה',
+    sub: 'השאלון ובונה הבית: מה אתם צריכים, ואיך זה נראה' },
+  { key: 'tech', num: '03', title: 'טכנולוגיה מתקדמת',
+    sub: 'אפליקציית הלקוח ומשקפי ה-VR' },
+]
+
+/* One size factor for the whole screen — the same device as --cpj-k on
+   the client map and --pg-k on the staff stages sheet. The baseline is
+   a 1440-wide laptop, so a 1920 TV reads ~33% larger and a 1366 laptop
+   shrinks instead of scrolling. Clamped at both ends: below 0.78 the
+   headings stop being readable from across a room, above 1.45 the three
+   doors stop fitting side by side. */
+const K_BASE = 1440
+const kFor = (w) => Math.min(1.45, Math.max(0.78, w / K_BASE))
+
+/* The brick of the stages sheet and the client map, drawn large. The
+   viewBox is the drawing's FULL extent (faces span x ∓18, y −9…17; the
+   shadow reaches 19/19), so nothing is cropped. All three doors use the
+   SAME neutral state class on purpose: the numbers carry the order, and
+   a coloured brick here would promise a status this screen doesn't have. */
+function DoorBrick() {
+  return (
+    <svg className="im-door-brick cpj-block--future" viewBox="-19 -10 38 30"
+      aria-hidden="true" focusable="false">
+      <BlockDrawing />
+    </svg>
+  )
+}
+
+function Pane({ text }) {
+  return <div className="im-pane">{text}</div>
+}
+
+export default function IntroMeeting() {
+  const { inquiryId } = useParams()
+  const navigate = useNavigate()
+
+  const [status, setStatus] = useState('loading')   // loading | ready
+  const [name, setName] = useState('')
+  const [area, setArea] = useState(null)            // null = home
+
+  const [k, setK] = useState(() => kFor(typeof window === 'undefined' ? K_BASE : window.innerWidth))
+  useLayoutEffect(() => {
+    const onResize = () => setK(kFor(window.innerWidth))
+    onResize()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { navigate('/'); return }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles').select('id').eq('id', session.user.id).maybeSingle()
+      if (cancelled) return
+      if (profileErr || !profile) { navigate('/no-access'); return }
+
+      const { data: inq } = await supabase
+        .from('inquiries').select('first_name, last_name')
+        .eq('id', inquiryId).maybeSingle()
+      if (cancelled) return
+
+      /* The family name is what a client hears themselves called in the
+         room. Falls back to the first name, then to nothing at all —
+         never to a placeholder like "לקוח". */
+      const family = inq?.last_name?.trim() || inq?.first_name?.trim() || ''
+      setName(family)
+      setStatus('ready')
+    }
+    init()
+    return () => { cancelled = true }
+  }, [inquiryId, navigate])
+
+  if (status !== 'ready') return <Pane text="טוען…" />
+
+  const title = 'פגישת היכרות' + (name ? ` · משפחת ${name}` : '')
+  const door = DOORS.find(d => d.key === area)
+
+  return (
+    <div className="im-root" style={{ '--im-k': k }}>
+
+      <div className="im-top">
+        <Logo height={Math.round(28 * k)} />
+        <span className="im-top-sp" />
+        <span className="im-top-title">{title}</span>
+      </div>
+
+      {area === null ? (
+        <div className="im-home">
+          <div>
+            <p className="im-kicker">נעים להכיר</p>
+            <h1 className="im-head">בית נבנה<br /><em>לבנה אחר לבנה.</em></h1>
+          </div>
+
+          <div />
+
+          <div className="im-doors">
+            {DOORS.map(d => (
+              <button key={d.key} type="button" className="im-door"
+                onClick={() => setArea(d.key)}>
+                <span className="im-door-art">
+                  <DoorBrick />
+                  <span className="im-door-num">{d.num}</span>
+                </span>
+                <h2 className="im-door-title">{d.title}</h2>
+                <p className="im-door-sub">{d.sub}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="im-area" key={area}>
+          <div className="im-area-head">
+            <button type="button" className="im-back" onClick={() => setArea(null)}>
+              ← חזרה
+            </button>
+            <h2 className="im-area-title">{door.title}</h2>
+            <span className="im-area-sub">{door.sub}</span>
+          </div>
+
+          <div className="im-area-body">
+            {area === 'stages' && (
+              /* The staff sheet itself, unmodified. isAdmin={false} is
+                 what makes it read-only — handleDotClick returns on it
+                 before touching the database — and it also drops the
+                 "לחיצה על לבנה מחליפה…" hint, which has no meaning in
+                 front of a client.
+
+                 gantt_state is deliberately EMPTY: every stage falls back
+                 to 'future', so the sheet shows the process itself and not
+                 somebody else's progress. */
+              <ProjectGantt
+                project={{ id: `intro-${inquiryId}`, gantt_state: {} }}
+                isAdmin={false}
+              />
+            )}
+            {area !== 'stages' && (
+              <Pane text="בקרוב" />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

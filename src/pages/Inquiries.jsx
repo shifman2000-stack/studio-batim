@@ -1109,7 +1109,7 @@ export default function Inquiries() {
                 <th className="inq-col-phone">טלפון</th>
                 <th className="inq-col-date">תאריך פניה</th>
                 <th className="inq-col-action">טופס פניה</th>
-                <th className="inq-col-action">פגישת היכרות</th>
+                <th className="inq-col-action inq-col-intro">פגישת היכרות</th>
                 <th className="inq-col-action">הצעת מחיר</th>
                 <th className="inq-col-convert">הפוך לפרויקט</th>
                 <th className="inq-col-delete">×</th>
@@ -1160,14 +1160,26 @@ export default function Inquiries() {
                     )}
                   </td>
 
-                  {/* פגישת היכרות */}
-                  <td className="inq-col-action" onClick={e => e.stopPropagation()}>
+                  {/* פגישת היכרות — התאריך, ולצידו פתיחת מסך המצגת.
+                      שניהם באותה עמודה בכוונה: היא כבר נקראת כך, ושליפת
+                      עמודה שלמה בשביל כפתור אחד הייתה מצרה את השם
+                      והיישוב בטבלה צפופה ממילא. */}
+                  <td className="inq-col-action inq-col-intro" onClick={e => e.stopPropagation()}>
                     <input
                       type="date"
                       className="inq-date-input"
                       value={row.meeting_date ?? ''}
                       onChange={e => patchRow(row.id, { meeting_date: e.target.value || null })}
                     />
+                    <a
+                      className="inq-intro-btn"
+                      href={`/intro/${row.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="פתח מסך פגישת היכרות"
+                    >
+                      פגישת היכרות
+                    </a>
                   </td>
 
                   {/* הצעת מחיר */}

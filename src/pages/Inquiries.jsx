@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import RichTextEditor from '../components/meetings/RichTextEditor'
+import '../components/meetings/MeetingSummariesTab.css'
 import { generateUniqueAuthCode } from '../lib/generateAuthCode'
 import { signedQuoteOpenUrl, signedQuoteDownloadUrl } from '../lib/signedQuoteFile'
 import './Inquiries.css'
@@ -381,6 +383,9 @@ const todayISO = () => new Date().toISOString().slice(0, 10)
 
 const SOURCE_OPTIONS = ['המלצה', 'אתר', 'רשתות חברתיות', 'אחר']
 
+const INTRO_COL_HINT =
+  'סיכום פגישת ההיכרות עדיין לא זמין — יש להריץ את docs/sql/intro-meeting-summary.sql.'
+
 function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
   const isEdit = Boolean(row)
 
@@ -416,6 +421,27 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
   })
   const [contact2Phone, setContact2Phone] = useState(row?.contact2_phone ?? '')
   const [contact2Email, setContact2Email] = useState(row?.contact2_email ?? '')
+
+  /* ── סיכום פגישת ההיכרות ──────────────────────────────────────────
+     ⚠️ מוחזק ונשמר בנפרד מ-form, ובכוונה: העמודה נוספת ב-
+     docs/sql/intro-meeting-summary.sql, ועד שהיא תורץ כל שאילתה
+     שמזכירה אותה נכשלת. בתוך form היא הייתה מפילה את השמירה של
+     הפנייה כולה; כאן כשלון שלה נשאר שלה, והשאר נשמר כרגיל. */
+  const [introSummary, setIntroSummary] = useState('')
+  const [introSummaryReady, setIntroSummaryReady] = useState(false)
+  const [introSummaryErr, setIntroSummaryErr] = useState('')
+  useEffect(() => {
+    if (!row?.id) { setIntroSummaryReady(true); return undefined }
+    let cancelled = false
+    supabase.from('inquiries').select('intro_meeting_summary').eq('id', row.id).maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) setIntroSummaryErr(INTRO_COL_HINT)
+        else setIntroSummary(data?.intro_meeting_summary ?? '')
+        setIntroSummaryReady(true)
+      })
+    return () => { cancelled = true }
+  }, [row?.id])
 
   const [saving, setSaving]             = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -456,6 +482,12 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
     if (isEdit) {
       const { data, error } = await supabase
         .from('inquiries').update(payload).eq('id', row.id).select().single()
+      /* שמירה שנייה, נפרדת ומתירנית — ראו ההערה ליד ה-state. */
+      if (introSummaryReady && !introSummaryErr) {
+        const { error: sumErr } = await supabase.from('inquiries')
+          .update({ intro_meeting_summary: introSummary || null }).eq('id', row.id)
+        if (sumErr) setIntroSummaryErr(INTRO_COL_HINT)
+      }
       setSaving(false)
       if (!error && data) onSaved(data, false)
     } else {
@@ -698,6 +730,23 @@ function InquiryModal({ row, onClose, onSaved, onDeleted, onRequestConvert }) {
               value={form.notes}
               onChange={e => set('notes', e.target.value)} />
           </div>
+
+          {/* ── סיכום פגישת היכרות — רק לפנייה קיימת ── */}
+          {isEdit && (
+            <div className="inq-form-row">
+              <label className="inq-form-label">סיכום פגישת היכרות</label>
+              {introSummaryErr
+                ? <p className="inq-form-hint">{introSummaryErr}</p>
+                : introSummaryReady && (
+                  <RichTextEditor
+                    value={introSummary}
+                    onChange={setIntroSummary}
+                    ariaLabel="סיכום פגישת היכרות"
+                    placeholder="מה סוכם בפגישה…"
+                  />
+                )}
+            </div>
+          )}
 
           {/* ── קישור לטופס — new inquiry uses generated formToken; edit uses row.form_token ── */}
           {(() => {

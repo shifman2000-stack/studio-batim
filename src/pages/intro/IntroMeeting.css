@@ -151,8 +151,15 @@
   block-size: calc(96px * var(--im-k));
   display: flex;
   align-items: flex-end;
-  justify-content: space-between;
   gap: calc(12px * var(--im-k));
+}
+
+/* המספר ירד אל שורת הכותרת ויושב מימינה, על אותו קו בסיס. */
+.im-door-head {
+  display: flex;
+  align-items: baseline;
+  gap: calc(14px * var(--im-k));
+  margin: calc(18px * var(--im-k)) 0 calc(8px * var(--im-k));
 }
 
 .im-door-brick {
@@ -202,7 +209,7 @@
   font-family: 'Frank Ruhl Libre', serif;
   font-weight: 400;
   font-size: calc(27px * var(--im-k));
-  margin: calc(18px * var(--im-k)) 0 calc(8px * var(--im-k));
+  margin: 0;
 }
 
 .im-door-sub {
@@ -483,4 +490,140 @@
   font-size: calc(16px * var(--im-k));
   font-weight: 300;
   color: var(--im-muted);
+}
+
+
+/* ── אזור 02 — סיכום פגישה ── */
+.im-summary {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* העורך עוטף את עצמו בשכבה משלו (סרגל + שטח כתיבה); בלי להעביר
+   דרכה את העמודה, שטח הכתיבה נשאר בגובה המינימלי שלו וממלא רבע
+   מסך. */
+.im-summary > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.im-summary .rte-root {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: calc(17px * var(--im-k));
+}
+
+/* ── אזור 01 — טופס הפניה ── */
+.im-form {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--im-line);
+  border-radius: calc(14px * var(--im-k));
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   מפת השלבים — נכנסת למסך אחד תמיד
+   ══════════════════════════════════════════════════════════════════════ */
+
+.is-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-heads {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding-block-end: calc(6px * var(--im-k));
+  border-block-end: 1px solid var(--im-line);
+}
+
+.is-head {
+  text-align: center;
+  font-size: calc(14px * var(--im-k));
+  font-weight: 500;
+}
+
+/* ⚠️ זו התיבה הנמדדת. אין כאן overflow, ובכוונה: הגיאומטריה נגזרת
+   מהגובה שלה, ולכן אין לה מה לגלול. */
+.is-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.is-svg { position: absolute; inset: 0; overflow: visible; }
+
+.is-rail { stroke: var(--im-line); stroke-width: 1; }
+.is-edge { stroke: var(--im-muted); stroke-width: 1.1; stroke-dasharray: 4 3; }
+.is-arrow-head { fill: var(--im-muted); }
+
+/* הלבנה — ניטרלית, ונצבעת בטרה כשעוברים עליה. אותם סלקטורים של
+   מפת המסע, כדי שכל פאה ותא יקבלו את הגוון ולא רק החזית. */
+.is-brick .cpj-face        { fill: var(--im-paper); stroke: #d8d3c9; stroke-width: .65; }
+.is-brick .cpj-face--front { fill: #efece6; }
+.is-brick .cpj-cell        { fill: #ddd8cd; }
+.is-brick .cpj-cell-lip    { fill: #efece6; }
+.is-brick .cpj-cell-edge   { stroke: #d8d3c9; }
+.is-brick .cpj-shadow      { opacity: .08; }
+
+.is-brick.on .cpj-face--top   { fill: #eab08f; stroke: none; }
+.is-brick.on .cpj-face--front { fill: var(--im-terra); stroke: none; }
+.is-brick.on .cpj-face--side  { fill: var(--im-terra-d); stroke: none; }
+.is-brick.on .cpj-cell        { fill: var(--im-terra-d); }
+.is-brick.on .cpj-cell-lip    { fill: var(--im-terra); }
+.is-brick.on .cpj-cell-edge   { stroke: var(--im-terra-d); }
+.is-brick.on .cpj-shadow      { opacity: .18; }
+
+.is-brick .cpj-face,
+.is-brick .cpj-cell,
+.is-brick .cpj-cell-lip,
+.is-brick .cpj-cell-edge,
+.is-brick .cpj-shadow { transition: fill .18s, stroke .18s, opacity .18s; }
+
+/* השם וטווח הלחיצה. הטבעת היא אותה טבעת של בחירה במפת המסע —
+   שינוי של רקע ומסגרת, אף פעם לא של צבע הלבנה. */
+.is-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  color: var(--im-ink);
+  text-align: start;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background .18s, border-color .18s;
+}
+
+.is-cell.opens { cursor: pointer; }
+.is-cell:focus { outline: none; }
+
+.is-cell.on {
+  background: #f1ece6;
+  border-color: var(--im-terra);
+}
+
+.is-cell.on.opens span { color: var(--im-terra-d); font-weight: 500; }
+
+
+/* מסך ה-VR לבדו — הסרטון תופס את מה שנשאר, שלם ולא חתוך. */
+.im-vr-only {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }

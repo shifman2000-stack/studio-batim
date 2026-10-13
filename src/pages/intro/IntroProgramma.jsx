@@ -60,10 +60,10 @@ export default function IntroProgramma({ mode }) {
 export function ProgrammaModeSwitch({ mode, onMode }) {
   return (
     <span className="im-seg">
-      <button type="button" className={mode === 'phone' ? 'on' : ''}
-        onClick={() => onMode('phone')}>📱 כמו בטלפון</button>
       <button type="button" className={mode === 'wide' ? 'on' : ''}
         onClick={() => onMode('wide')}>🖥 מסך מלא</button>
+      <button type="button" className={mode === 'phone' ? 'on' : ''}
+        onClick={() => onMode('phone')}>📱 כמו בטלפון</button>
     </span>
   )
 }

@@ -40,7 +40,7 @@ const DOORS = [
     sub: 'איך נראה התהליך, מהפגישה הראשונה ועד שנדלק האור' },
   { key: 'programma', num: '02', title: 'הפרוגרמה',
     sub: 'השאלון ובונה הבית: מה אתם צריכים, ואיך זה נראה' },
-  { key: 'tech', num: '03', title: 'טכנולוגיה מתקדמת',
+  { key: 'tech', num: '03', title: 'טכנולוגיה',
     sub: 'אפליקציית הלקוח ומשקפי ה-VR' },
 ]
 
@@ -80,7 +80,7 @@ export default function IntroMeeting() {
   const [area, setArea] = useState(null)            // null = home
   /* The view switch of area 02. It lives up here so it survives leaving
      the area and coming back during one meeting. */
-  const [programmaMode, setProgrammaMode] = useState('phone')
+  const [programmaMode, setProgrammaMode] = useState('wide')
 
   const [k, setK] = useState(() => kFor(typeof window === 'undefined' ? K_BASE : window.innerWidth))
   useLayoutEffect(() => {
@@ -155,18 +155,19 @@ export default function IntroMeeting() {
         </div>
       ) : (
         <div className="im-area" key={area}>
+          {/* ⚠️ סדר ה-DOM הוא גם הסדר החזותי: המסך dir="rtl", ולכן
+              הילד האחרון בשורה יושב בפינה השמאלית. "חזור" אחרון,
+              ולכן שמאלי — וכך בשלושת האזורים. */}
           <div className="im-area-head">
-            <button type="button" className="im-back" onClick={() => setArea(null)}>
-              ← חזרה
-            </button>
             <h2 className="im-area-title">{door.title}</h2>
             <span className="im-area-sub">{door.sub}</span>
+            <span className="im-area-sp" />
             {area === 'programma' && (
-              <>
-                <span style={{ flex: 1 }} />
-                <ProgrammaModeSwitch mode={programmaMode} onMode={setProgrammaMode} />
-              </>
+              <ProgrammaModeSwitch mode={programmaMode} onMode={setProgrammaMode} />
             )}
+            <button type="button" className="im-back" onClick={() => setArea(null)}>
+              חזור
+            </button>
           </div>
 
           <div className="im-area-body">

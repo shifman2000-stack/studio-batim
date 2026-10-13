@@ -248,6 +248,8 @@
   margin-block-end: calc(14px * var(--im-k));
 }
 
+.im-area-sp { flex: 1; }
+
 .im-area-title {
   font-family: 'Frank Ruhl Libre', serif;
   font-weight: 400;
@@ -409,6 +411,14 @@
 }
 
 /* ── אזור 03 ── */
+
+/* חצי ה-VR מקבל קצת יותר רוחב משני הצדדים השווים של אזור 02:
+   הסרטון רחב (16:9) ונחתך-לא-נחתך לפי הרוחב בלבד, ולכן זה הדבר
+   היחיד שבאמת מגדיל אותו. */
+.im-two--tech {
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+}
+
 .im-tech-points {
   flex: none;
   display: flex;
@@ -454,27 +464,23 @@
   gap: calc(12px * var(--im-k));
 }
 
+/* ⚠️ contain ולא cover: הסרטון הוא הדבר היחיד שנשאר בחצי הזה, והוא
+   אמור להיראות שלם. cover היה ממלא את הקופסה וחותך את הקצוות —
+   ובסרטון של סיור בבית הקצוות הם בדיוק מה שמראים. */
 .im-vr video {
   inline-size: 100%;
+  block-size: 100%;
   min-height: 0;
   flex: 1;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: calc(16px * var(--im-k));
   background: #1c1a18;
 }
 
-.im-vr-still {
-  inline-size: 100%;
-  flex: none;
-  block-size: calc(150px * var(--im-k));
-  object-fit: cover;
-  border-radius: calc(14px * var(--im-k));
-}
-
 .im-vr-cap {
   flex: none;
-  margin: 0;
-  font-family: 'Frank Ruhl Libre', serif;
-  font-weight: 400;
-  font-size: calc(20px * var(--im-k));
+  margin: calc(-4px * var(--im-k)) 0 calc(14px * var(--im-k));
+  font-size: calc(16px * var(--im-k));
+  font-weight: 300;
+  color: var(--im-muted);
 }

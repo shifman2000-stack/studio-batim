@@ -30,7 +30,7 @@ export default function IntroTech() {
   useDemoReads()
 
   return (
-    <div className="im-two">
+    <div className="im-two im-two--tech">
       {/* ימין — האפליקציה */}
       <section className="im-panel">
         <h3 className="im-panel-title">אפליקציית הלקוח</h3>
@@ -56,7 +56,14 @@ export default function IntroTech() {
       {/* שמאל — VR */}
       <section className="im-panel">
         <h3 className="im-panel-title">משקפי VR</h3>
+        {/* צמוד לכותרת, מעל הסרטון. */}
+        <p className="im-vr-cap">מסתובבים בבית לפני שהונחה הלבנה הראשונה</p>
         <div className="im-vr">
+          {/* ⚠️ muted is not decoration: a browser refuses to autoplay a
+              video that can make noise, and this file still carries an
+              audio track.
+              The poster is the still, and only that — it covers the
+              moment before the first frame decodes, and is gone after. */}
           <video
             src="/intro/vr.mp4"
             poster="/intro/vr-studio.jpg"
@@ -64,12 +71,7 @@ export default function IntroTech() {
             muted
             loop
             playsInline
-            /* ⚠️ muted is not decoration: a browser refuses to autoplay a
-               video that can make noise, and this file still carries an
-               audio track. */
           />
-          <p className="im-vr-cap">מסתובבים בבית לפני שהונחה הלבנה הראשונה</p>
-          <img className="im-vr-still" src="/intro/vr-studio.jpg" alt="" />
         </div>
       </section>
     </div>

@@ -1097,6 +1097,12 @@ export default function ClientProgrammingQuestionnaire({
      Shape: { questionnairePending, housePending, onEnterQuestionnaire,
               onEnterHouse } — one object so it cannot be half-wired. */
   staffNotifications = null,
+  /* ── איזה מסך נפתח ראשון ─────────────────────────────────────────────
+     ברירת המחדל 'hub' היא ההתנהגות של כל ארבעת ההקשרים הקיימים, ולכן
+     אף אחד מהם לא משתנה. מסך פגישת ההיכרות הוא היחיד שמעביר כאן ערך:
+     שם השאלון ובונה הבית מוצגים זה לצד זה, וריבוע בחירה בין שניהם
+     בתוך לוח שכבר מוקדש לאחד מהם היה שלב מיותר מול לקוח. */
+  initialView = 'hub',
 } = {}) {
   /* ClientContext is null when we render OUTSIDE a ClientRoute (the
      admin split-screen case). Reading it via useContext is safe —
@@ -1209,7 +1215,7 @@ export default function ClientProgrammingQuestionnaire({
        'house'         — the interactive house-builder (Stage C-2 / C-3).
      Local only — does not persist across mounts; entering the screen
      always starts on the hub. */
-  const [view, setView] = useState('hub')
+  const [view, setView] = useState(initialView)
 
   /* Reset scroll to the top on every step change (הבא/הקודם, or the
      step-number pills) — the SAME approach HouseBuilderV2 uses for its

@@ -29,6 +29,8 @@ import { supabase } from '../../supabaseClient'
 import Logo from '../../components/Logo'
 import { BlockDrawing } from '../../components/gantt/blockArt'
 import ProjectGantt from '../../components/ProjectGantt'
+import IntroProgramma, { ProgrammaModeSwitch } from './IntroProgramma'
+import IntroTech from './IntroTech'
 import './IntroMeeting.css'
 
 /* The three doors. Kept here rather than inline so the home screen reads
@@ -76,6 +78,9 @@ export default function IntroMeeting() {
   const [status, setStatus] = useState('loading')   // loading | ready
   const [name, setName] = useState('')
   const [area, setArea] = useState(null)            // null = home
+  /* The view switch of area 02. It lives up here so it survives leaving
+     the area and coming back during one meeting. */
+  const [programmaMode, setProgrammaMode] = useState('phone')
 
   const [k, setK] = useState(() => kFor(typeof window === 'undefined' ? K_BASE : window.innerWidth))
   useLayoutEffect(() => {
@@ -128,12 +133,10 @@ export default function IntroMeeting() {
 
       {area === null ? (
         <div className="im-home">
-          <div>
+          <div className="im-home-top">
             <p className="im-kicker">נעים להכיר</p>
             <h1 className="im-head">בית נבנה<br /><em>לבנה אחר לבנה.</em></h1>
           </div>
-
-          <div />
 
           <div className="im-doors">
             {DOORS.map(d => (
@@ -145,6 +148,7 @@ export default function IntroMeeting() {
                 </span>
                 <h2 className="im-door-title">{d.title}</h2>
                 <p className="im-door-sub">{d.sub}</p>
+                <span className="im-door-rule" />
               </button>
             ))}
           </div>
@@ -157,6 +161,12 @@ export default function IntroMeeting() {
             </button>
             <h2 className="im-area-title">{door.title}</h2>
             <span className="im-area-sub">{door.sub}</span>
+            {area === 'programma' && (
+              <>
+                <span style={{ flex: 1 }} />
+                <ProgrammaModeSwitch mode={programmaMode} onMode={setProgrammaMode} />
+              </>
+            )}
           </div>
 
           <div className="im-area-body">
@@ -175,9 +185,9 @@ export default function IntroMeeting() {
                 isAdmin={false}
               />
             )}
-            {area !== 'stages' && (
-              <Pane text="בקרוב" />
-            )}
+            {area === 'programma' && <IntroProgramma mode={programmaMode} />}
+
+            {area === 'tech' && <IntroTech />}
           </div>
         </div>
       )}

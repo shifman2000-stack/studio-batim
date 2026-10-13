@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { latestQuoteOf } from '../lib/quoteV2/launch'
 import RichTextEditor from '../components/meetings/RichTextEditor'
 import '../components/meetings/MeetingSummariesTab.css'
 import { generateUniqueAuthCode } from '../lib/generateAuthCode'
@@ -100,7 +101,10 @@ function openQuote(inquiryId, quote) {
   const signedUrl = quote?.status === 'signed'
     ? signedQuoteOpenUrl(quote.signed_file_url)
     : ''
-  const target = signedUrl || `/quote-builder/${inquiryId}`
+  /* ⚠️ /quote-open ולא /quote-builder: המסך הזה לא יודע — ולא צריך
+     לדעת — אם ההצעה היא v1 או v2. QuoteOpen מנתב לפי הסכימה של
+     ההצעה עצמה, ויוצר טיוטת v2 כשאין עדיין הצעה. */
+  const target = signedUrl || `/quote-open/${inquiryId}`
   window.open(target, '_blank', 'noopener,noreferrer')
 }
 
@@ -890,8 +894,14 @@ export default function Inquiries() {
     ])
     if (inquiriesData) setRows(inquiriesData)
     if (quotesData) {
+      /* ⚠️ ההצעה עם quote_number הגבוה ביותר, ולא האחרונה שחזרה
+         מהמסד. לפנייה יכולות להיות כמה הצעות — שלב 0 השאיר הצעות
+         v1 מתחת להצעת v2 — ובלי הבחירה הזו הסטטוס, ה-tooltip
+         והקישור בשורה היו מגיעים משרירותית מאחת מהן. */
+      const byInquiry = {}
+      quotesData.forEach(q => { (byInquiry[q.inquiry_id] ??= []).push(q) })
       const qMap = {}
-      quotesData.forEach(q => { qMap[q.inquiry_id] = q })
+      Object.entries(byInquiry).forEach(([inqId, list]) => { qMap[inqId] = latestQuoteOf(list) })
 
       // quote_id → inquiry_id, built once instead of an Object.keys().find()
       // per version row.

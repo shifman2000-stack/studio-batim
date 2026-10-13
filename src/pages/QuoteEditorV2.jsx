@@ -19,6 +19,7 @@ import { buildTemplateUpdate } from '../lib/quoteV2/templateSync'
 import { stagesOf, termGroupsOf } from '../lib/quoteV2/validate'
 import * as ops from '../lib/quoteV2/editorOps'
 import { applyEdits } from '../lib/quoteV2/templateAssist'
+import { quoteGmailUrl } from '../lib/quoteV2/launch'
 import {
   sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes, grammarRebase,
   buildTemplateFromEditor, describeTemplateDiff,
@@ -337,6 +338,42 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     } finally { setSending(false) }
   }
 
+  /* ── ביטול שליחה ─────────────────────────────────────────────────
+     אותם שלושה צעדים של v1, ובאותו סדר: מאפסים את הטוקן של הגרסה
+     ששלחה ומארכבים אותה, ואז מחזירים את ההצעה ל-draft. התוצאה אצל
+     הלקוח זהה — הקישור מפסיק למצוא גרסה, בדיוק כמו ב-v1.
+
+     ⚠️ רק כשההצעה לא חתומה. הצעה חתומה היא מסמך, והכפתור הזה אפילו
+     לא מרונדר שם (readOnly), אבל התנאי חוזר גם כאן כי זו שאלה של
+     נתונים ולא של כפתור. */
+  const doUnsend = async () => {
+    if (signed || !quoteId) return
+    setBusy('unsend')
+    try {
+      const { data: vers, error: vErr } = await supabase
+        .from('quote_versions').select('id')
+        .eq('quote_id', quoteId)
+        .not('form_token', 'is', null)
+        .order('version_number', { ascending: false })
+      if (vErr) throw vErr
+      for (const v of vers ?? []) {
+        const { error: aErr } = await supabase.from('quote_versions')
+          .update({ form_token: null, is_archived: true }).eq('id', v.id)
+        if (aErr) throw aErr
+      }
+      const { error: sErr } = await supabase.from('quotes')
+        .update({ status: 'draft', updated_at: new Date().toISOString() }).eq('id', quoteId)
+      if (sErr) throw sErr
+
+      setQuote(q => ({ ...q, status: 'draft' }))
+      setLastSent(null)
+      setDialog(null)
+      flash('בוטלה השליחה ✓')
+    } catch (e) {
+      flash('שגיאה בביטול השליחה: ' + (e?.message || String(e)))
+    } finally { setBusy('') }
+  }
+
   /* צמצום/הרחבה של העוזר — נזכר למשתמש הנוכחי. */
   const setChat = (collapsed) => {
     setChatCollapsed(collapsed)
@@ -524,6 +561,12 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
                 ↺ התחלה מחדש מהתבנית
               </button>
             )}
+            {!readOnly && quote?.status === 'sent' && (
+              <button type="button" className="qe-b" title="מבטל את הקישור ומחזיר את ההצעה לטיוטה"
+                onClick={() => setDialog({ kind: 'unsend' })}>
+                ביטול שליחה
+              </button>
+            )}
             {!readOnly && (
               <button type="button" className="qe-b pri" onClick={() => { setLink(''); setSendError(''); setDialog({ kind: 'send' }) }}>
                 שליחה ללקוח
@@ -666,6 +709,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
           content={content} template={template} link={link}
           sending={sending} error={sendError}
           onSend={doSend} onCopy={copy}
+          gmailUrl={link && inquiry?.email ? quoteGmailUrl({ inquiry, link }) : ''}
           onClose={() => { setDialog(null); setLink('') }}
         />
       )}
@@ -741,6 +785,22 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
           onYes={() => { update(c => ops.removeGroup(c, dialog.group.id)); setDialog(null); flash('הנושא נמחק') }}
           onClose={() => setDialog(null)}
         />
+      )}
+
+      {dialog?.kind === 'unsend' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>לבטל את השליחה?</h3>
+          <p>
+            הקישור שנשלח ללקוח יפסיק לעבוד, וההצעה תחזור לטיוטה פתוחה לעריכה.
+            שליחה חוזרת תיצור גרסה חדשה. מה שהלקוח כבר חתם עליו לא מושפע.
+          </p>
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" disabled={busy === 'unsend'} onClick={doUnsend}>
+              {busy === 'unsend' ? 'מבטל…' : 'ביטול שליחה'}
+            </button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>חזרה</button>
+          </div>
+        </Modal>
       )}
 
       {dialog?.kind === 'reset' && (

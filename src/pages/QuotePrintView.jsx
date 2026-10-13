@@ -36,6 +36,29 @@ export default function QuotePrintView() {
         return
       }
 
+      /* ⚠️ שומר סכימה. התבנית של v1 לא יודעת לרנדר content_v2, והיא
+         הייתה מייצרת מסמך חלקי ושקט במקום להיכשל. הצעת v2 מודפסת
+         מהמסלול שלה, לפי הטוקן של הגרסה — ולכן אם אין טוקן פעיל
+         (טיוטה שלא נשלחה) אין מה להדפיס, ואומרים את זה. */
+      if (Number(quote.draft_content?.schema) === 2) {
+        /* ⚠️ המסלול הזה נטען גם ע״י Puppeteer בלי התחברות, ולכן
+           השאילתה הזו עשויה לחזור ריקה בגלל RLS ולא בגלל שאין
+           גרסה. בשני המקרים התשובה הנכונה היא לא לרנדר — ולומר
+           למה, במקום להוציא מסמך חלקי. */
+        const { data: ver } = await supabase
+          .from('quote_versions').select('form_token')
+          .eq('quote_id', quoteId)
+          .not('form_token', 'is', null)
+          .order('version_number', { ascending: false })
+          .limit(1).maybeSingle()
+        if (ver?.form_token) {
+          window.location.replace(`/quote-tower-print/${ver.form_token}`)
+          return
+        }
+        setError('זו הצעה בפורמט החדש. המסמך שלה נמצא בכתובת /quote-tower-print עם הטוקן של הגרסה שנשלחה.')
+        return
+      }
+
       // Merge saved draft_content onto current defaults — identical to QuoteBuilder's logic
       const base   = buildInitialData(inq)
       const merged = quote.draft_content

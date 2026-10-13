@@ -29,6 +29,13 @@ export default function QuotePrintSigned() {
     const load = async () => {
       const { data: result, error } = await supabase.rpc('get_quote_by_token', { p_token: token })
       const ver = Array.isArray(result) && result.length > 0 ? result[0] : null
+      /* ⚠️ שומר סכימה — אותו נימוק של QuotePrintView: content_v2 לא
+         מרונדר בפריסת v1. הפן הכתוב של v2 חי ב-/quote-tower-print
+         עם אותו טוקן בדיוק. */
+      if (!error && Number(ver?.content?.schema) === 2) {
+        window.location.replace(`/quote-tower-print/${token}`)
+        return
+      }
       if (!error && ver?.content) setData(ver.content)
     }
     load()

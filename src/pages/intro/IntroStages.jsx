@@ -26,7 +26,7 @@ const COL_LABELS = ['שלב א׳ – תכנון', 'שלב ב׳ – רישוי', 
 /* The two stages that lead somewhere today. Everything else is hover
    only — deliberately: a door that opens onto nothing is worse than a
    stage that is plainly just a stage. */
-const OPENS = { programma: 'programma', tlat_meimad: 'vr' }
+const OPENS = { programma: 'programma', bchira_skitsa: 'sketch', tlat_meimad: 'vr' }
 
 export default function IntroStages({ onOpen }) {
   const boxRef = useRef(null)

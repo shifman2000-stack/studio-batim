@@ -33,6 +33,7 @@ import Logo from '../../components/Logo'
 import { BlockDrawing } from '../../components/gantt/blockArt'
 import IntroProgramma, { ProgrammaModeSwitch } from './IntroProgramma'
 import IntroVr from './IntroVr'
+import IntroSketch from './IntroSketch'
 import IntroStages from './IntroStages'
 import IntroSummary from './IntroSummary'
 import InquiryForm from '../InquiryForm'
@@ -49,11 +50,29 @@ const DOORS = [
     sub: 'כל התהליך במפה אחת, מהפגישה הראשונה ועד שנדלק האור' },
 ]
 
+/* ⚠️ sub עדיין חי — הוא מה שמופיע בשורת הכותרת של האזור הפתוח.
+   מה שירד הוא רק הצגתו מתחת לדלת במסך הבית. */
+
+/**
+ * "אור ומרינה" — השם הפרטי של הפונה, ועוד המילה הראשונה בשם איש
+ * הקשר השני אם יש כזה. המילה הראשונה בלבד, כי השדה הוא שם מלא
+ * וכותרת ענק עם שתי משפחות קוראת רע.
+ *
+ * ⚠️ הסינון הוא על ערכים ריקים ולא על undefined בלבד: פנייה עם
+ * contact2_name שהוא רווח אחד הייתה מייצרת "אור ו" תלוי באוויר.
+ */
+function residentsOf(inq) {
+  const first = (inq?.first_name || '').trim()
+  const second = (inq?.contact2_name || '').trim().split(/\s+/)[0] || ''
+  return [first, second].filter(Boolean).join(' ו')
+}
+
 /* ⚠️ תתי-מסכים, לא דלתות: מגיעים אליהם רק מתוך השלב שמוביל אליהם
    במפה, ולכן הם לא מופיעים במסך הבית. */
 const SUB = {
   programma: { title: 'הפרוגרמה', sub: 'השאלון ובונה הבית: מה אתם צריכים, ואיך זה נראה' },
   vr:        { title: 'משקפי VR', sub: '' },
+  sketch:    { title: 'סקיצה', sub: '' },
 }
 
 /* One size factor for the whole screen — the same device as --cpj-k on
@@ -89,6 +108,8 @@ export default function IntroMeeting() {
 
   const [status, setStatus] = useState('loading')   // loading | ready
   const [name, setName] = useState('')
+  /* מי גר בבית — מה שמופיע בכותרת הגדולה. */
+  const [residents, setResidents] = useState('')
   const [area, setArea] = useState(null)            // null = home
   const [sub, setSub] = useState(null)              // תת-מסך מתוך מפת השלבים
   /* The view switch of area 02. It lives up here so it survives leaving
@@ -115,7 +136,7 @@ export default function IntroMeeting() {
       if (profileErr || !profile) { navigate('/no-access'); return }
 
       const { data: inq } = await supabase
-        .from('inquiries').select('first_name, last_name')
+        .from('inquiries').select('first_name, last_name, contact2_name')
         .eq('id', inquiryId).maybeSingle()
       if (cancelled) return
 
@@ -124,6 +145,7 @@ export default function IntroMeeting() {
          never to a placeholder like "לקוח". */
       const family = inq?.last_name?.trim() || inq?.first_name?.trim() || ''
       setName(family)
+      setResidents(residentsOf(inq))
       setStatus('ready')
     }
     init()
@@ -149,8 +171,12 @@ export default function IntroMeeting() {
       {area === null && !sub ? (
         <div className="im-home">
           <div className="im-home-top">
-            <p className="im-kicker">נעים להכיר</p>
-            <h1 className="im-head">בית נבנה<br /><em>לבנה אחר לבנה.</em></h1>
+            {/* שתי שורות באותו גודל: הראשונה שחורה, השנייה בטרה עם
+                השמות. אין כאן kicker — "נעים להכיר" הוא הכותרת עצמה
+                עכשיו, ולהשאיר גם אותו למעלה היה לכפול את אותו משפט. */}
+            <h1 className="im-head">
+              נעים להכיר{residents && <><br /><em>{residents}</em></>}
+            </h1>
           </div>
 
           <div className="im-doors">
@@ -167,7 +193,6 @@ export default function IntroMeeting() {
                   <span className="im-door-num">{d.num}</span>
                   <h2 className="im-door-title">{d.title}</h2>
                 </span>
-                <p className="im-door-sub">{d.sub}</p>
                 <span className="im-door-rule" />
               </button>
             ))}
@@ -205,6 +230,8 @@ export default function IntroMeeting() {
             {sub === 'programma' && <IntroProgramma mode={programmaMode} />}
 
             {sub === 'vr' && <IntroVr />}
+
+            {sub === 'sketch' && <IntroSketch />}
           </div>
         </div>
       )}

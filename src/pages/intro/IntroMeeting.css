@@ -86,6 +86,8 @@
   align-self: start;
 }
 
+/* נשאר בקובץ אף שאינו בשימוש במסך הבית — אם יחזור kicker, זה
+   הגודל והמרווח שלו. */
 .im-kicker {
   font-size: calc(13px * var(--im-k));
   letter-spacing: .22em;
@@ -155,11 +157,13 @@
 }
 
 /* המספר ירד אל שורת הכותרת ויושב מימינה, על אותו קו בסיס. */
+/* ⚠️ המרווח התחתון גדל מ-8 ל-18: מתחת לכותרת כבר אין שורת תיאור,
+   והקו שמתחת לדלת היה נצמד אליה. */
 .im-door-head {
   display: flex;
   align-items: baseline;
   gap: calc(14px * var(--im-k));
-  margin: calc(18px * var(--im-k)) 0 calc(8px * var(--im-k));
+  margin: calc(18px * var(--im-k)) 0 calc(18px * var(--im-k));
 }
 
 .im-door-brick {
@@ -639,4 +643,22 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+
+/* ── מסך הסקיצה ──
+   חצי גובה מסך, ממורכז, ולא נחתך. */
+.im-sketch {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.im-sketch img {
+  height: 50vh;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }

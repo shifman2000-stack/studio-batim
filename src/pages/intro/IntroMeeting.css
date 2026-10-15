@@ -86,6 +86,8 @@
   align-self: start;
 }
 
+/* נשאר בקובץ אף שאינו בשימוש במסך הבית — אם יחזור kicker, זה
+   הגודל והמרווח שלו. */
 .im-kicker {
   font-size: calc(13px * var(--im-k));
   letter-spacing: .22em;
@@ -155,11 +157,13 @@
 }
 
 /* המספר ירד אל שורת הכותרת ויושב מימינה, על אותו קו בסיס. */
+/* ⚠️ המרווח התחתון גדל מ-8 ל-18: מתחת לכותרת כבר אין שורת תיאור,
+   והקו שמתחת לדלת היה נצמד אליה. */
 .im-door-head {
   display: flex;
   align-items: baseline;
   gap: calc(14px * var(--im-k));
-  margin: calc(18px * var(--im-k)) 0 calc(8px * var(--im-k));
+  margin: calc(18px * var(--im-k)) 0 calc(18px * var(--im-k));
 }
 
 .im-door-brick {
@@ -212,20 +216,6 @@
   margin: 0;
 }
 
-.im-door-sub {
-  font-size: calc(16px * var(--im-k));
-  font-weight: 300;
-  line-height: 1.55;
-  color: var(--im-muted);
-  margin: 0;
-  /* שתי שורות לכל היותר — התיאורים באורך שונה, והמסך לא אמור לזוז
-     בגללם. אזור הלבנה והכותרת ממילא מיושרים מעליהם. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-
 /* ── אזור פנימי ──
    נכנס ברכות ותופס את כל מה שמתחת לסרגל. */
 .im-area {
@@ -262,12 +252,6 @@
   font-weight: 400;
   font-size: calc(30px * var(--im-k));
   margin: 0;
-}
-
-.im-area-sub {
-  font-size: calc(15px * var(--im-k));
-  font-weight: 300;
-  color: var(--im-muted);
 }
 
 .im-back {
@@ -307,7 +291,6 @@
   font-size: 16px;
   direction: rtl;
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════
    אזורים 02 ו-03
@@ -492,7 +475,6 @@
   color: var(--im-muted);
 }
 
-
 /* ── אזור 02 — סיכום פגישה ── */
 .im-summary {
   flex: 1;
@@ -632,11 +614,27 @@
 
 .is-cell.on.opens span { color: var(--im-terra-d); font-weight: 500; }
 
-
 /* מסך ה-VR לבדו — הסרטון תופס את מה שנשאר, שלם ולא חתוך. */
 .im-vr-only {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* ── מסך הסקיצה ──
+   חצי גובה מסך, ממורכז, ולא נחתך. */
+.im-sketch {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.im-sketch img {
+  height: 50vh;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }

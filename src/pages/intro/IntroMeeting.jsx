@@ -42,16 +42,10 @@ import './IntroMeeting.css'
 /* The three doors. Kept here rather than inline so the home screen reads
    as a list of three equals — which is what it is. */
 const DOORS = [
-  { key: 'details', num: '01', title: 'פרטים אישיים',
-    sub: 'הטופס שמילאתם, פתוח לתיקונים — כאן ועכשיו' },
-  { key: 'summary', num: '02', title: 'סיכום פגישה',
-    sub: 'מה סוכם היום, נכתב מולכם ונשמר לפנייה' },
-  { key: 'stages', num: '03', title: 'שלבי התקדמות',
-    sub: 'כל התהליך במפה אחת, מהפגישה הראשונה ועד שנדלק האור' },
+  { key: 'details', num: '01', title: 'פרטים אישיים' },
+  { key: 'summary', num: '02', title: 'סיכום פגישה' },
+  { key: 'stages',  num: '03', title: 'שלבי התקדמות' },
 ]
-
-/* ⚠️ sub עדיין חי — הוא מה שמופיע בשורת הכותרת של האזור הפתוח.
-   מה שירד הוא רק הצגתו מתחת לדלת במסך הבית. */
 
 /**
  * "אור ומרינה" — השם הפרטי של הפונה, ועוד המילה הראשונה בשם איש
@@ -70,9 +64,9 @@ function residentsOf(inq) {
 /* ⚠️ תתי-מסכים, לא דלתות: מגיעים אליהם רק מתוך השלב שמוביל אליהם
    במפה, ולכן הם לא מופיעים במסך הבית. */
 const SUB = {
-  programma: { title: 'הפרוגרמה', sub: 'השאלון ובונה הבית: מה אתם צריכים, ואיך זה נראה' },
-  vr:        { title: 'משקפי VR', sub: '' },
-  sketch:    { title: 'סקיצה', sub: '' },
+  programma: { title: 'הפרוגרמה' },
+  vr:        { title: 'משקפי VR' },
+  sketch:    { title: 'סקיצה' },
 }
 
 /* One size factor for the whole screen — the same device as --cpj-k on
@@ -205,7 +199,6 @@ export default function IntroMeeting() {
               ולכן שמאלי — וכך בשלושת האזורים. */}
           <div className="im-area-head">
             <h2 className="im-area-title">{door.title}</h2>
-            <span className="im-area-sub">{door.sub}</span>
             <span className="im-area-sp" />
             {sub === 'programma' && (
               <ProgrammaModeSwitch mode={programmaMode} onMode={setProgrammaMode} />

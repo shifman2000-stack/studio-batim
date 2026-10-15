@@ -216,20 +216,6 @@
   margin: 0;
 }
 
-.im-door-sub {
-  font-size: calc(16px * var(--im-k));
-  font-weight: 300;
-  line-height: 1.55;
-  color: var(--im-muted);
-  margin: 0;
-  /* שתי שורות לכל היותר — התיאורים באורך שונה, והמסך לא אמור לזוז
-     בגללם. אזור הלבנה והכותרת ממילא מיושרים מעליהם. */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-
 /* ── אזור פנימי ──
    נכנס ברכות ותופס את כל מה שמתחת לסרגל. */
 .im-area {
@@ -266,12 +252,6 @@
   font-weight: 400;
   font-size: calc(30px * var(--im-k));
   margin: 0;
-}
-
-.im-area-sub {
-  font-size: calc(15px * var(--im-k));
-  font-weight: 300;
-  color: var(--im-muted);
 }
 
 .im-back {
@@ -311,7 +291,6 @@
   font-size: 16px;
   direction: rtl;
 }
-
 
 /* ══════════════════════════════════════════════════════════════════════
    אזורים 02 ו-03
@@ -496,7 +475,6 @@
   color: var(--im-muted);
 }
 
-
 /* ── אזור 02 — סיכום פגישה ── */
 .im-summary {
   flex: 1;
@@ -636,7 +614,6 @@
 
 .is-cell.on.opens span { color: var(--im-terra-d); font-weight: 500; }
 
-
 /* מסך ה-VR לבדו — הסרטון תופס את מה שנשאר, שלם ולא חתוך. */
 .im-vr-only {
   flex: 1;
@@ -644,7 +621,6 @@
   display: flex;
   flex-direction: column;
 }
-
 
 /* ── מסך הסקיצה ──
    חצי גובה מסך, ממורכז, ולא נחתך. */

@@ -1,9 +1,16 @@
 import { useCallback } from 'react'
+import './SignCard.css'
 import useSignaturePad from '../../hooks/useSignaturePad'
 import { isFilled } from '../../lib/quoteV2/resolve'
 
 /* ═══════════════════════════════════════════════════════════════════════
-   SignCard — כרטיס החתימה בפן השיווקי
+   SignCard — כרטיס החתימה
+
+   ⚠️ עד שלב ב׳ הוא רונדר בפן השיווקי (QuoteJourneyV2). החתימה עברה
+   אל המסמך המלא: הלקוח קורא את מה שהוא חותם עליו ואז חותם, באותו
+   עמוד. הרכיב עצמו לא שוכתב — אותם שדות, אותה ולידציה, אותו
+   אובייקט שנשלח לשרת. מה שהשתנה: מי מרכיב אותו, ושמות המחלקות,
+   שעברו ל-qs- יחד עם הגיליון שהוא מייבא עכשיו בעצמו.
 
    שני מצבים:
    · בלי client  → תצוגה בלבד (מעבדה). השדות מושבתים, הכפתור מת.
@@ -13,6 +20,14 @@ import { isFilled } from '../../lib/quoteV2/resolve'
    כלל השליחה (D.0 במסמך): צ׳קבוקס + כל החותמים חתמו. שני לקוחות →
    שתי חתימות, בדיוק כמו ב-v1.
    ═══════════════════════════════════════════════════════════════════════ */
+
+/* ⚠️ כתוב בקוד ולא נקרא מ-section.ctaLabel, כפי שהיה. ctaLabel הוא
+   עכשיו נוסח הכפתור שמוביל מהמסע אל המסמך המלא, ושני הכפתורים לא
+   יכולים לחלוק שדה אחד — "לחתימה על ההצעה המלאה לחצו כאן" על
+   כפתור השליחה קורא כאילו הוא מוביל למקום אחר. בפועל שום דבר
+   לא זז: אין ctaLabel בתבניות השמורות, ולכן זה הנוסח שהכפתור
+   הציג גם קודם. */
+const SUBMIT_LABEL = 'מניחים את הלבנה הראשונה ←'
 
 /* onPatch ולא onChange עם האובייקט המלא: שני פדים ושני שדות שם
    יכולים להתעדכן באותו tick, וכל עדכון שמחושב מ-value של הרינדור
@@ -24,10 +39,10 @@ function SignerPad({ label, value, onPatch, disabled, placeholder }) {
   })
 
   return (
-    <div className="qj-signer">
-      {label && <div className="qj-signer-label">{label}</div>}
+    <div className="qs-signer">
+      {label && <div className="qs-signer-label">{label}</div>}
 
-      <div className="qj-row">
+      <div className="qs-row">
         <label>
           שם מלא
           <input
@@ -47,14 +62,14 @@ function SignerPad({ label, value, onPatch, disabled, placeholder }) {
         </label>
       </div>
 
-      <div className="qj-pad">
+      <div className="qs-pad">
         {disabled ? (
-          <div className="qj-padbox">{placeholder}</div>
+          <div className="qs-padbox">{placeholder}</div>
         ) : (
           <>
-            <canvas ref={canvasRef} className="qj-padcanvas" {...handlers} />
-            {!inked && <div className="qj-padph">{placeholder}</div>}
-            <button type="button" className="qj-padclear" onClick={clear}>ניקוי</button>
+            <canvas ref={canvasRef} className="qs-padcanvas" {...handlers} />
+            {!inked && <div className="qs-padph">{placeholder}</div>}
+            <button type="button" className="qs-padclear" onClick={clear}>ניקוי</button>
           </>
         )}
       </div>
@@ -85,13 +100,13 @@ export default function SignCard({ section, t, clientCount, clients = [], client
 
   if (live && client.submitted) {
     return (
-      <section className="qj-sign">
-        <div className="qj-card">
-          <div className="qj-done">
+      <section className="qs-sign">
+        <div className="qs-card">
+          <div className="qs-done">
             <h3>{t(section.doneHeadline)}</h3>
             <p>{t(section.doneBody)}</p>
             {client.signedFileUrl && (
-              <a className="qj-donelink" href={client.signedFileUrl} target="_blank" rel="noreferrer">
+              <a className="qs-donelink" href={client.signedFileUrl} target="_blank" rel="noreferrer">
                 ⇣ הורדת ההצעה החתומה
               </a>
             )}
@@ -102,11 +117,11 @@ export default function SignCard({ section, t, clientCount, clients = [], client
   }
 
   return (
-    <section className="qj-sign">
-      <h2 className="qj-serif">{t(section.headline)}</h2>
-      <p className="qj-sub">{t(section.subtitle)}</p>
+    <section className="qs-sign">
+      <h2>{t(section.headline)}</h2>
+      <p className="qs-sub">{t(section.subtitle)}</p>
 
-      <div className="qj-card">
+      <div className="qs-card">
         {Array.from({ length: clientCount }).map((_, i) => (
           <SignerPad
             key={i}
@@ -121,7 +136,7 @@ export default function SignCard({ section, t, clientCount, clients = [], client
           />
         ))}
 
-        <label className="qj-consent">
+        <label className="qs-consent">
           <input
             type="checkbox"
             checked={consent}
@@ -132,25 +147,25 @@ export default function SignCard({ section, t, clientCount, clients = [], client
         </label>
 
         <button
-          className="qj-go"
+          className="qs-go"
           type="button"
           disabled={!canSubmit}
           onClick={() => client?.onSubmit?.()}
         >
           {!live ? 'תצוגה מקדימה — החתימה מושבתת'
             : client.submitting ? 'שולחים…'
-              : t(section.ctaLabel) || 'מניחים את הלבנה הראשונה ←'}
+              : SUBMIT_LABEL}
         </button>
 
         {live && !canSubmit && !client.submitting && (
-          <div className="qj-why">
+          <div className="qs-why">
             {!allSigned && 'כדי לשלוח צריך למלא שם ולחתום'}
             {allSigned && !consent && 'צריך לסמן שקראתם את ההצעה המלאה'}
           </div>
         )}
-        {live && client.error && <div className="qj-why qj-err">{client.error}</div>}
+        {live && client.error && <div className="qs-why qs-err">{client.error}</div>}
 
-        <div className="qj-legal">{t(section.legal)}</div>
+        <div className="qs-legal">{t(section.legal)}</div>
       </div>
     </section>
   )

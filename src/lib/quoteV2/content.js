@@ -15,6 +15,14 @@ import { deriveFirstNames, isFilled } from './resolve.js'
    מצב, ו-quote_versions.content הוא ההקפאה הסופית.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* ⚠️ נוסח ברירת המחדל של הכפתור שמוביל מהמסע אל ההצעה המלאה.
+   הוא יושב כאן ולא בשני המקומות שצריכים אותו — QuoteJourneyV2
+   שמרנדר את הכפתור, והעורך שמציג אותו כערך התחלתי בשדה
+   sec_sign.ctaLabel — כי שני נוסחים שונים היו אומרים שהמסך מראה
+   לעינב טקסט אחד והלקוח מקבל אחר. אין ctaLabel בתבניות השמורות
+   (נבדק ב-Prod), ולכן זה מה שכל ההצעות מציגות עד שמישהו יערוך. */
+export const SIGN_CTA_FALLBACK = 'לחתימה על ההצעה המלאה {לחץ|לחצו} כאן'
+
 /** d.M.yy — הפורמט שמופיע בהצעת 29.9 ובמוקאפים. */
 export function formatQuoteDate(d = new Date()) {
   return `${d.getDate()}.${d.getMonth() + 1}.${String(d.getFullYear()).slice(2)}`

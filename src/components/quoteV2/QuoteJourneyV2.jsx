@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
-import { varsOf, clientCountOf } from '../../lib/quoteV2/content'
+import { varsOf, clientCountOf, SIGN_CTA_FALLBACK } from '../../lib/quoteV2/content'
 import Money from './Money'
 import Logo from '../Logo'
 
@@ -14,7 +14,8 @@ import Logo from '../Logo'
    מה הוא לא: לא שומר, לא קורא ל-API, ולא נוגע בשום הצעה קיימת.
 
    סדר הפן השיווקי קבוע כאן בקוד ולא נגזר מסדר המערך —
-   פתיחה → שלבים → שכר טרחה → ומה אם → רוצים עוד → PDF.
+   פתיחה → שלבים → שכר טרחה → ומה אם → רוצים עוד → PDF → אל ההצעה
+   המלאה. החתימה עצמה כבר אינה כאן — היא במסמך המלא.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── פריסת שש שכבות הציור על N שלבים ────────────────────────────────
@@ -46,8 +47,10 @@ function Greeting({ text }) {
  * @param {object} content      content_v2
  * @param {object} [vars]       ברירת מחדל: content.vars (הערכים הקפואים)
  * @param {number} [clientCount] ברירת מחדל: content.clients.length
- * @param {object} [client]     מצב החתימה האמיתי. בלעדיו זו תצוגה בלבד:
- *                              הטוגלים מקומיים והכפתורים מושבתים (מעבדה).
+ * @param {object} [client]     החיבור אל ההצעה החיה: כפתור ה-PDF,
+ *                              הקישור אל המסמך המלא (fullHref) והאם
+ *                              היא כבר נחתמה (signed). בלעדיו זו
+ *                              תצוגה בלבד והכפתורים מושבתים (מעבדה).
  */
 export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
   const scrollRef = useRef(null)
@@ -365,13 +368,34 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
         </div>
       )}
 
-      {/* ── ⚠️ אין כאן חתימה ───────────────────────────────────────
-          כרטיס החתימה ירד מהפן השיווקי, על מצב ה"נחתם" שלו. הוא
-          עובר למסמך המלא (QuoteTowerV2) בשלב הבא, ולכן SignCard,
-          SignerPad, useSignaturePad ו-finalize-quote-v2 נשארו
-          בקוד כפי שהם — וגם ה-CSS שלהם ב-QuoteJourneyV2.css,
-          שהוא הגיליון שמהם הם מתעצבים. המסע נגמר אחרי כפתור
-          ה-PDF; בינתיים אין בו דרך לחתום, וזה מכוון. */}
+      {/* ── אל ההצעה המלאה ─────────────────────────────────────────
+          ⚠️ כאן ישב כרטיס החתימה. החתימה עברה אל המסמך המלא, כדי
+          שהלקוח יחתום על מה שהוא קורא ולא על תקציר שלו; מה שנשאר
+          כאן הוא הכפתור שמוביל לשם. ‎#sign גורם ל-/full לגלול אל
+          בלוק האישור, כך שהלחיצה נוחתת על הפעולה ולא בראש מסמך
+          בן ארבעה עמודים.
+
+          בלי client אין טוקן ואין לאן לנווט — בדיוק כמו כפתור
+          ה-PDF שמעליו, הכפתור מרונדר מושבת כדי שהתצוגה המקדימה
+          בעורך תראה את הנוסח במקומו. */}
+      {S.signing && (
+        <div className={'qj-cta' + (live && client.signed ? ' qj-signed' : '')}>
+          {live && client.fullHref ? (
+            <a href={client.signed ? client.fullHref : client.fullHref + '#sign'}>
+              {client.signed
+                ? 'ההצעה נחתמה · לצפייה במסמך החתום'
+                : t(isFilled(S.signing.ctaLabel) ? S.signing.ctaLabel : SIGN_CTA_FALLBACK)}
+            </a>
+          ) : (
+            <>
+              <button type="button" disabled>
+                {t(isFilled(S.signing.ctaLabel) ? S.signing.ctaLabel : SIGN_CTA_FALLBACK)}
+              </button>
+              <span className="qj-soon">בתצוגה מקדימה הכפתור מושבת</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── כותרת תחתונה. פרטי הסטודיו קבועים בקוד (החלטה 32). ── */}
       <footer className="qj-foot">

@@ -8,6 +8,7 @@ import SectionOpening from '../components/quoteV2/editor/SectionOpening'
 import SectionPrice from '../components/quoteV2/editor/SectionPrice'
 import SectionStages from '../components/quoteV2/editor/SectionStages'
 import SectionTerms from '../components/quoteV2/editor/SectionTerms'
+import SectionSigning from '../components/quoteV2/editor/SectionSigning'
 import LibraryDrawer from '../components/quoteV2/editor/LibraryDrawer'
 import PreviewModal from '../components/quoteV2/editor/PreviewModal'
 import SendDialog from '../components/quoteV2/editor/SendDialog'
@@ -224,6 +225,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const opening = ops.sectionByType(content, 'opening')
   const scope = ops.sectionByType(content, 'scope')
   const extras = ops.sectionByType(content, 'extras')
+  const signing = ops.sectionByType(content, 'signing')
   const stages = useMemo(() => stagesOf(content), [content])
   const allStages = ops.sectionByType(content, 'stages')?.items ?? []
   const groups = useMemo(() => termGroupsOf(content), [content])
@@ -667,6 +669,10 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
           onRemoveTerm={t => setDialog({ kind: 'rmTerm', term: t })}
           onTermUp={id => update(c => ops.moveTerm(c, id, -1))}
           onTermDown={id => update(c => ops.moveTerm(c, id, 1))}
+        />
+
+        <SectionSigning
+          signing={signing} vars={vars} nClients={nClients} readOnly={readOnly} f={f}
         />
       </div>
 

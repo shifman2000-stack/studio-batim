@@ -25,7 +25,12 @@ const MSG = {
   fontFamily: 'Heebo, sans-serif', direction: 'rtl',
 }
 
-export default function QuoteRouter() {
+/**
+ * @param {'journey'|'full'} [view] איזה מבט של v2 לפתוח. ⚠️ לא רלוונטי
+ *   ל-v1: ל-QuotePublic אין מסמך מלא נפרד, ו-/quote/:token/full על
+ *   הצעת v1 נופל אל אותו מסך שהיה — עדיף מ-404 על קישור שנשלח.
+ */
+export default function QuoteRouter({ view = 'journey' }) {
   const { token } = useParams()
   const [schema, setSchema] = useState(undefined)   // undefined = עדיין בודקים
 
@@ -46,5 +51,5 @@ export default function QuoteRouter() {
   }, [token])
 
   if (schema === undefined) return <div style={MSG}>טוען…</div>
-  return schema === 2 ? <QuoteSignV2 /> : <QuotePublic />
+  return schema === 2 ? <QuoteSignV2 view={view} /> : <QuotePublic />
 }

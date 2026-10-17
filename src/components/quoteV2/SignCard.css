@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SignCard — כרטיס החתימה
+
+   ⚠️ הכללים האלה ישבו עד עכשיו ב-QuoteJourneyV2.css, כי שם הכרטיס
+   רונדר. הוא עבר למסמך המלא (QuoteTowerV2), והגיליון עבר איתו —
+   SignCard מייבא אותו בעצמו, כך שמי שמרכיב אותו לא צריך לדעת
+   באיזה גיליון הסגנון חבוי.
+
+   מה השתנה חוץ מהמיקום: הפלטה. במסע הכרטיס היה קרם על רקע לילה,
+   וכאן הוא יושב על גיליון בהיר — אז הוא פאנל מסוגר ולא כרטיס צף.
+   הערכים נגזרים מטוקני המגדל (--qt-*), עם נפילה אחורה לערכים
+   מפורשים כדי שהכרטיס ייראה נכון גם מחוץ ל-.qt-doc.
+
+   ⚠️ שום כלל כאן אינו נכנס להדפסה: SignCard מרונדר רק במצב לקוח,
+   ו-QuoteTowerPrint לא מעביר prop client. הקובץ הזה כן נטען בצינור
+   ההדפסה (הוא חלק מהבאנדל), ולכן כל הסלקטורים מתחילים ב-.qs- —
+   אין להם אלמנט לתפוס שם.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qs-sign {
+  --qs-ink: var(--qt-ink, #1c1a18);
+  --qs-muted: var(--qt-muted, #6f6a60);
+  --qs-line: var(--qt-line, #e8e5df);
+  --qs-terra: var(--qt-terra-d, #c2602f);
+  --qs-paper: #fffdfa;
+
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--qs-ink);
+  direction: rtl;
+  text-align: start;
+}
+.qs-sign h2 {
+  font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
+  font-size: 22px; line-height: 1.2; margin: 0 0 4px; color: var(--qs-ink);
+}
+.qs-sub { color: var(--qs-muted); font-size: 13.5px; line-height: 1.7; margin: 0 0 18px; }
+
+.qs-card {
+  background: var(--qs-paper);
+  border: 1px solid var(--qs-line);
+  border-radius: 14px;
+  padding: 22px 20px 20px;
+  color: var(--qs-ink);
+}
+.qs-card .qs-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.qs-card label {
+  flex: 1; min-width: 180px; display: block;
+  font-size: 11px; letter-spacing: .14em; color: var(--qs-muted);
+}
+.qs-card input {
+  display: block; width: 100%; margin-top: 6px; border: 0;
+  border-bottom: 1.5px solid var(--qs-ink); background: transparent;
+  font: inherit; font-size: 16px; letter-spacing: 0; padding: 6px 2px;
+  color: var(--qs-ink); outline: none;
+}
+.qs-card input:focus { border-bottom-color: var(--qs-terra); }
+
+.qs-pad { margin-top: 20px; position: relative; }
+.qs-pad .qs-padbox,
+.qs-pad .qs-padcanvas {
+  width: 100%; height: 150px; display: flex;
+  align-items: center; justify-content: center;
+  background: #f8f3ea; border-radius: 12px;
+  border: 1.5px dashed #c8bfb0;
+  color: #a39c90; font-size: 15px; font-family: 'Frank Ruhl Libre', serif;
+}
+/* touch-action:none הוא מה שמונע מגלילת iOS "לגנוב" את המגע באמצע
+   קו. בלעדיו החתימה נקטעת ברגע שהאצבע זזה אנכית (G.2 במסמך). */
+.qs-pad .qs-padcanvas { display: block; touch-action: none; cursor: crosshair; }
+.qs-pad .qs-padph {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  color: #a39c90; font-size: 15px; font-family: 'Frank Ruhl Libre', serif;
+  pointer-events: none;
+}
+.qs-pad .qs-padclear {
+  position: absolute; top: 8px; left: 10px;
+  font: inherit; font-size: 12px; color: #8a8680;
+  background: none; border: 0; cursor: pointer; padding: 2px 6px;
+}
+.qs-signer + .qs-signer { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--qs-line); }
+.qs-signer-label {
+  font-size: 11px; letter-spacing: .16em; color: var(--qs-terra); margin-bottom: 10px;
+}
+
+/* הסלקטור כולל את .qs-card ואת label בכוונה: `.qs-card label` הוא
+   0,1,1 והיה גובר על `.qs-consent` לבדו (0,1,0), מה שהפך את השורה
+   ל-display:block והפיל את הטקסט מתחת לתיבת הסימון. */
+.qs-card label.qs-consent {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin-top: 22px; font-size: 13.5px; line-height: 1.5;
+  color: #4a463f; letter-spacing: normal; min-width: 0; flex: none;
+}
+.qs-card label.qs-consent input {
+  width: 18px; height: 18px; margin: 2px 0 0; flex: none;
+  accent-color: var(--qs-ink);
+}
+
+.qs-go {
+  margin-top: 18px; width: 100%; border: 0; border-radius: 12px;
+  background: var(--qs-ink); color: #f3efe7; font: inherit;
+  font-size: 17px; padding: 15px; cursor: pointer; display: flex;
+  justify-content: center; gap: 10px; align-items: center;
+}
+.qs-go:disabled { opacity: .35; cursor: default; }
+.qs-why {
+  margin-top: 10px; text-align: center;
+  font-size: 12.5px; color: var(--qs-muted); line-height: 1.5;
+}
+.qs-why.qs-err { color: #b4442c; }
+.qs-legal {
+  font-size: 12px; color: var(--qs-muted); margin-top: 12px;
+  line-height: 1.6; text-align: center;
+}
+
+/* ---------- אחרי החתימה ---------- */
+.qs-done { display: block; text-align: center; padding: 26px 10px 10px; }
+.qs-done h3 {
+  font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
+  font-size: 28px; margin: 0 0 6px; color: var(--qs-ink);
+}
+.qs-done p { color: var(--qs-muted); margin: 0; line-height: 1.7; }
+.qs-donelink {
+  display: inline-block; margin-top: 18px; padding: 10px 18px;
+  border: 1px solid rgba(28,26,24,.25); border-radius: 99px;
+  color: var(--qs-ink); text-decoration: none; font-size: 13.5px;
+}
+
+/* ---------- טלפון ---------- */
+@media (max-width: 560px) {
+  .qs-sign { margin-top: 24px; padding-top: 20px; }
+  .qs-card { padding: 18px 14px 16px; border-radius: 12px; }
+  .qs-card .qs-row { gap: 10px; }
+  /* min-width של 180px הכריח שתי העמודות להישאר זו לצד זו ודחף
+     גלילה אופקית ב-390px; כאן הן נערמות. */
+  .qs-card label { min-width: 100%; }
+  .qs-done h3 { font-size: 24px; }
+}

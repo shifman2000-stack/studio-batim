@@ -34,8 +34,8 @@ const STUDIO = {
   signerTitle: 'סטודיו בתים · הנדסאית אדריכלות',
 }
 
-/* הלבנה האיזומטרית מהמוקאפ, שתי גרסאות צבע. פוליגונים בלבד —
-   אין כאן <text>, ולכן גם לא בעיית העברית ההפוכה ב-WebKit.
+/* הלבנה האיזומטרית מהמוקאפ. פוליגונים בלבד — אין כאן <text>,
+   ולכן גם לא בעיית העברית ההפוכה ב-WebKit.
    ⚠️ המוקאפ משתמש ב-<symbol> + <use>. כאן הפוליגונים מצוירים
    בתוך כל <svg> מחדש, כי ב-Chrome headless התוכן של <use> לא
    צויר ב-PDF והלבנים יצאו ריקות. הפרדת ה-defs מהשימוש היא
@@ -43,12 +43,25 @@ const STUDIO = {
    זול יותר מלנסות להבין למה. */
 const BRICK_COLORS = {
   sand:  { left: '#a89f90', front: '#c8bfb0', top: '#ddd5c8', seam: '#968c7c' },
-  /* הלבנה האחרונה — סוף הפרויקט — בטרקוטה של המסע, לא בירוק. */
   terra: { left: '#b45a2c', front: '#d9774a', top: '#e89a73', seam: '#9c4c24' },
 }
 
-function Brick({ w = 46, accent = false, style, className }) {
-  const c = accent ? BRICK_COLORS.terra : BRICK_COLORS.sand
+/* ⚠️ הגוון נקבע **לפי פרק**, לא לפי מקום ברשימה. קודם הלבנה
+   האחרונה בכל רשימה יצאה בטרקוטה (accent={i === last}), וכך
+   באותו מסמך היו שלוש רשימות שכל אחת מסתיימת בצבע אחר בלי
+   שהצבע אומר משהו. עכשיו: 02 טרקוטה, 03 חול, 04 והסעיף
+   האופציונלי חיוורות. ‎pale היא אותה לבנת חול בשקיפות 55%,
+   בדיוק מה שהסעיף האופציונלי הציג מאז ומתמיד. */
+const BRICK_VARIANTS = {
+  terra: { colors: BRICK_COLORS.terra, opacity: 1 },
+  sand:  { colors: BRICK_COLORS.sand,  opacity: 1 },
+  pale:  { colors: BRICK_COLORS.sand,  opacity: 0.55 },
+}
+
+function Brick({ w = 46, variant = 'sand', style, className }) {
+  const v = BRICK_VARIANTS[variant] ?? BRICK_VARIANTS.sand
+  const c = v.colors
+  style = v.opacity === 1 ? style : { opacity: v.opacity, ...style }
   return (
     <svg
       className={'qt-brick' + (className ? ' ' + className : '')}
@@ -225,7 +238,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           {stages.map((st, i) => (
             <div className="qt-pay" key={st.id ?? i}>
               <span className="qt-pc">{st.pct}%</span>
-              <Brick w={40} accent={i === stages.length - 1} />
+              <Brick w={40} variant="terra" />
               <div className="qt-mid">
                 <small>שלב {i + 1}</small>
                 <b>{t(st.formalName)}</b>
@@ -264,7 +277,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           {stages.map((st, i) => (
             <div className="qt-stage" key={st.id ?? i}>
               <div className="qt-side">
-                <Brick w={46} accent={i === stages.length - 1} />
+                <Brick w={46} variant="sand" />
                 <div className="qt-no">שלב {i + 1}</div>
                 <h3>{t(st.formalName)}</h3>
               </div>
@@ -289,7 +302,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           {isFilled(S.terms.pdfIntro) && <p className="qt-lead">{t(S.terms.pdfIntro)}</p>}
           {groups.map((g, gi) => (
             <div className="qt-tg" key={g.id ?? gi}>
-              <h3><Brick w={26} />{t(g.title)}</h3>
+              <h3><Brick w={26} variant="pale" />{t(g.title)}</h3>
               {(g.items ?? []).map((item, ii) => {
                 const labelled = isFilled(item.formalTitle)
                 return (
@@ -315,7 +328,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           (QuoteJourneyV2) הסדר לא השתנה. */}
       {S.extras && isFilled(S.extras.pdfBody) && (
         <div className="qt-optional">
-          <Brick w={46} style={{ opacity: .55 }} />
+          <Brick w={46} variant="pale" />
           <div>
             {isFilled(S.extras.pdfEyebrow) && <div className="qt-tag">{t(S.extras.pdfEyebrow)}</div>}
             {isFilled(S.extras.pdfTitle) && <h4>{t(S.extras.pdfTitle)}</h4>}
@@ -376,18 +389,22 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             )}
           </div>
 
+          {/* ⚠️ החתימה יושבת **בתוך** תא החותם, מתחת לשם. קודם היא
+              הייתה אחות של .qt-who בתוך flex עם space-between, ולכן
+              נזרקה אל הקצה הנגדי של העמוד — שם וחתימה בשני צדי
+              הדף אינם נקראים כיחידה אחת.
+              התמונה עצמה היא קובץ אמיתי ולא שרבוט SVG; הנתיב מוחלט
+              מהשורש, ולכן הוא נפתר מול אותו origin גם כשהדף נטען
+              ב-Puppeteer, ו-api/_quoteTowerPdf ממתין לטעינת
+              התמונות לפני ההדפסה. object-fit:contain כדי שלא
+              תיחתך לעולם. */}
           <div className="qt-closing">
             <div className="qt-who">
               {isFilled(S.signing.closing) ? t(S.signing.closing) : 'בברכה,'}
               <b>עינב שיפמן</b>
-              {STUDIO.signerTitle}
+              <img className="qt-sig" src="/quote/einav-signature.png" alt="" />
+              <span className="qt-role">{STUDIO.signerTitle}</span>
             </div>
-            {/* ⚠️ כאן היה שרבוט SVG גנרי. זו החתימה האמיתית.
-                הנתיב מוחלט מהשורש, ולכן הוא נפתר מול אותו origin גם
-                כשהדף נטען ב-Puppeteer; הפונקציה ב-api/_quoteTowerPdf
-                ממתינה לטעינת התמונות לפני ההדפסה. object-fit:contain
-                כדי שלא תיחתך לעולם. */}
-            <img className="qt-sig" src="/quote/einav-signature.png" alt="" />
           </div>
         </>
       )}

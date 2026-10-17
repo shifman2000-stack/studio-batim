@@ -284,10 +284,9 @@
   font-size: 11px; color: var(--qt-muted); letter-spacing: .12em;
 }
 .qt-signer { font-size: 11px; letter-spacing: .16em; color: var(--qt-terra-d); margin-top: 26px; }
-.qt-closing {
-  margin-top: 36px; display: flex;
-  justify-content: space-between; align-items: flex-end; gap: 20px;
-}
+/* ⚠️ אין יותר space-between: לתא החותם יש ילד אחד, והחתימה
+   בתוכו. הכול נצמד לצד ההתחלה — ימין בתוך dir=rtl. */
+.qt-closing { margin-top: 36px; }
 .qt-closing .qt-who { font-size: 13px; color: var(--qt-muted); }
 .qt-closing .qt-who b {
   display: block; font-family: 'Frank Ruhl Libre', serif;
@@ -295,12 +294,18 @@
 }
 /* ⚠️ התמונה היא 1341x728 שקופה. height:auto עם object-fit:contain
    מציג אותה שלמה תמיד; ה-max-width באחוזים הוא מה שמקטין אותה
-   בטלפון בלי לחתוך — ברוחב צר .qt-closing מועך את הילד השני,
-   ובלי max-width הוא היה גולש מהמלבן. */
+   בטלפון בלי לחתוך. השוליים השליליים מקרבים אותה אל השם —
+   לקובץ עצמו יש אוויר סביב הכתב. */
 .qt-sig {
-  width: 200px; max-width: 42%; height: auto;
-  object-fit: contain; flex: none; display: block;
+  width: 200px; max-width: 70%; height: auto;
+  object-fit: contain; display: block;
+  /* ⚠️ שלילי למעלה בלבד. ‎-10px למטה קירבו את שורת התפקיד עד
+     שהיא נגעה בזנב הקו הכחול של החתימה. */
+  margin: -6px 0 8px -8px;
 }
+/* התפקיד חוזר מתחת לחתימה, ולכן הוא זקוק ל-display משלו — הוא
+   היה טקסט חופשי בתוך .qt-who ועכשיו יש אלמנט חוצץ לפניו. */
+.qt-closing .qt-role { display: block; }
 
 /* ---------- לבנים ---------- */
 .qt-brick { display: inline-block; vertical-align: middle; flex: none; }

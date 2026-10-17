@@ -398,11 +398,12 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
       )}
 
       {/* ── כותרת תחתונה. פרטי הסטודיו קבועים בקוד (החלטה 32). ── */}
+      {/* ⚠️ הלוגו ושורת הקשר הם אחים ישירים של ה-flex, בלי div
+          עוטף. קודם הם ישבו בתוך אחד, ולכן ל-flex היה ילד אחד
+          בלבד ו-space-between שלו לא עשה דבר — שניהם נערמו. */}
       <footer className="qj-foot">
-        <div>
-          <Logo height={18} tone="light" />
-          <span className="qj-contact">עינב שיפמן · קיבוץ נגבה · 052-9593927 · einav.studiob@gmail.com</span>
-        </div>
+        <Logo height={18} tone="light" />
+        <span className="qj-contact">עינב שיפמן · קיבוץ נגבה · 052-9593927 · einav.studiob@gmail.com</span>
       </footer>
     </div>
   )

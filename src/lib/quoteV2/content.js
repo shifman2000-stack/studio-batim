@@ -21,7 +21,7 @@ import { deriveFirstNames, isFilled } from './resolve.js'
    sec_sign.ctaLabel — כי שני נוסחים שונים היו אומרים שהמסך מראה
    לעינב טקסט אחד והלקוח מקבל אחר. אין ctaLabel בתבניות השמורות
    (נבדק ב-Prod), ולכן זה מה שכל ההצעות מציגות עד שמישהו יערוך. */
-export const SIGN_CTA_FALLBACK = 'לחתימה על ההצעה המלאה {לחץ|לחצו} כאן'
+export const SIGN_CTA_FALLBACK = 'להצעת המחיר המפורטת {לחץ|לחצו} כאן'
 
 /** d.M.yy — הפורמט שמופיע בהצעת 29.9 ובמוקאפים. */
 export function formatQuoteDate(d = new Date()) {

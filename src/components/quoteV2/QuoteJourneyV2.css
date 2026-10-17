@@ -318,7 +318,27 @@
   justify-content: space-between; align-items: center;
   flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--qj-muted);
 }
-.qj-foot .qj-contact { direction: ltr; text-align: start; display: block; margin-top: 10px; }
+/* שורה אחת: הלוגו ראשון ב-DOM ולכן הוא בימין (ה-flex כאן יושב
+   בתוך dir="rtl"), ושורת הקשר נדחפת אל השמאל ב-space-between.
+   ⚠️ margin-top ירד — הוא מה שהוריד את השורה מתחת ללוגו. */
+.qj-foot .qj-contact { direction: ltr; text-align: start; margin-top: 0; }
+
+/* ⚠️ שני הכיוונים מפורשים, ולא מושארים ל-flex-wrap. שתי השורות
+   יחד תופסות כ-578px, ולכן עם wrap בלבד הן היו נשברות לשתי שורות
+   עד רוחב של כ-625px — כלומר הגבול היה נקבע באורך הטקסט ולא
+   במספר שהוחלט עליו. */
+@media (min-width: 600px) {
+  .qj-foot { flex-wrap: nowrap; }
+  /* הלוגו לא נמעך; אם צר, שורת הקשר היא שנשברת פנימית לשתי
+     שורות טקסט — והשורה עצמה נשארת אחת. */
+  .qj-foot > :first-child { flex: none; }
+  .qj-foot .qj-contact { min-width: 0; }
+}
+@media (max-width: 599px) {
+  /* הלוגו למעלה, שורת הקשר מתחתיו. ‎flex-start בעמודה הוא תחילת
+     ציר הרוחב, כלומר ימין — אותו צד שבו הלוגו יושב בשורה אחת. */
+  .qj-foot { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
 
 /* ---------- house drawing ---------- */
 .qj-house * { vector-effect: non-scaling-stroke; }

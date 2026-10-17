@@ -145,8 +145,15 @@
 }
 .qj-cap.qj-on { opacity: 1; }
 
+/* ⚠️ גובה הפרק הוא גם הרווח בין הפרקים: התוכן ממורכז אנכית, וכל
+   מה שנשאר הוא אוויר. היה 86vh כשמתחת לכל פרק ישבו שלושה צ׳יפים;
+   הם ירדו, והאוויר נשאר. 68vh מקצר את הרווח בכ-40% בשני הרוחבים.
+   ⚠️ אסור לרדת מתחת לכ-12vh: ה-IntersectionObserver שמקדם את ציור
+   הבית מסתכל על רצועה של 10% מגובה מכל הגלילה (rootMargin בן
+   -45%/-45% ב-QuoteJourneyV2.jsx), ופרק נמוך ממנה עלול להיחצות
+   בלי שיידלק. */
 .qj-chap {
-  min-height: 86vh; padding: 60px 24px 40px;
+  min-height: 68vh; padding: 60px 24px 40px;
   display: flex; flex-direction: column; justify-content: center;
   max-width: 560px; margin: 0 auto;
 }
@@ -177,24 +184,6 @@
   color: var(--qj-sage); margin-bottom: 4px;
 }
 .qj-got div { font-family: 'Frank Ruhl Libre', serif; font-size: 19px; line-height: 1.45; }
-.qj-facts { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-.qj-facts > span {
-  font-size: 13px; padding: 7px 12px; border-radius: 99px;
-  border: 1px solid var(--qj-line); color: #cfc7b8;
-  /* inline-flex עם align-items:center מיישר את האייקון לאמצע הטקסט
-     גם כשהצ׳יפ גולש לשתי שורות (משך הזמן של שלב 4 הוא משפט שלם).
-     max-width מונע מצ׳יפ ארוך לדחוף גלילה אופקית ב-390px. */
-  display: inline-flex; align-items: center; gap: 7px;
-  max-width: 100%; min-width: 0;
-}
-.qj-facts > span > span { min-width: 0; }
-.qj-facts span b { color: var(--qj-glow); font-weight: 500; }
-
-/* הגודל ועובי הקו מגיעים מ-CHIP_ICON ב-JSX, במקום אחד לשלושתם.
-   כאן נשאר רק מה ש-lucide לא נותן: flex:none כדי שהאייקון לא
-   יימעך כשהטקסט ארוך, ועמעום קל שיישב מתחת לטקסט ולא מעליו. */
-.qj-facts .qj-chip-icon { flex: none; opacity: .72; }
-
 @media (min-width: 900px) {
   .qj-story {
     display: flex; flex-direction: row-reverse; align-items: flex-start;
@@ -258,42 +247,6 @@
 .qj-segl b { display: block; color: var(--qj-cream); font-weight: 400; font-size: 12.5px; }
 .qj-segl .qj-seglabel { display: block; }
 
-/* ---------- שורה לכל שלב, מתחת לפסים ---------- */
-.qj-steps { max-width: 720px; margin: 34px auto 0; }
-.qj-step {
-  padding: 16px 0;
-  border-top: 1px solid var(--qj-line);
-}
-.qj-step:last-child { border-bottom: 1px solid var(--qj-line); }
-
-/* השם: מספר דו-ספרתי ואחריו התווית הקצרה — אותה תווית בדיוק
-   שמתחת לפס שמעל, כדי ששתי הרשימות ייקראו כאחת. */
-.qj-step-name {
-  display: flex; align-items: baseline; gap: 10px;
-  font-family: 'Frank Ruhl Libre', serif; font-size: 19px;
-  color: var(--qj-cream);
-}
-.qj-step-name b {
-  font-family: 'Playfair Display', serif; font-weight: 400;
-  font-size: 15px; color: var(--qj-terra); letter-spacing: .04em;
-}
-
-/* הצ׳יפים כאן הם אותם צ׳יפים — רק המרווח העליון קטן יותר, כי
-   מעליהם שורת שם ולא פסקה. */
-.qj-steps .qj-facts { margin-top: 10px; }
-
-@media (min-width: 760px) {
-  /* ברוחב נוח השם והצ׳יפים יושבים באותה שורה: השם בעמודה קבועה
-     מימין, והצ׳יפים זורמים משמאלו. */
-  .qj-step {
-    display: grid;
-    grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
-    gap: 20px;
-    align-items: baseline;
-  }
-  .qj-steps .qj-facts { margin-top: 0; }
-}
-
 /* ---------- what if ---------- */
 .qj-whatif { max-width: 760px; margin: 0 auto; padding: 40px 24px 70px; }
 .qj-whatif h2, .qj-extras h2, .qj-sign h2 {
@@ -337,7 +290,10 @@
   font-size: 12px; color: var(--qj-muted);
 }
 
-/* ---------- sign ---------- */
+/* ---------- sign ----------
+   ⚠️ המסע כבר לא מרנדר את הכללים האלה: SignCard ירד ממנו. הם
+   נשארים כי SignCard.jsx עצמו נשאר, הוא לא מייבא CSS משלו, והוא
+   מתעצב מכאן — כשהוא יחזור במסמך המלא, זה מה שילביש אותו. */
 .qj-sign { max-width: 760px; margin: 0 auto; padding: 40px 24px 70px; }
 .qj-card {
   background: var(--qj-cream); color: var(--qj-night);

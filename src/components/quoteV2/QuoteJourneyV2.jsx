@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock, Banknote, CalendarDays } from 'lucide-react'
 import './QuoteJourneyV2.css'
 import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
-import { computePayments } from '../../lib/quoteV2/payments'
 import { varsOf, clientCountOf } from '../../lib/quoteV2/content'
 import Money from './Money'
-import SignCard from './SignCard'
 import Logo from '../Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -17,7 +14,7 @@ import Logo from '../Logo'
    מה הוא לא: לא שומר, לא קורא ל-API, ולא נוגע בשום הצעה קיימת.
 
    סדר הפן השיווקי קבוע כאן בקוד ולא נגזר מסדר המערך —
-   פתיחה → שלבים → שכר טרחה → ומה אם → רוצים עוד → PDF → חתימה.
+   פתיחה → שלבים → שכר טרחה → ומה אם → רוצים עוד → PDF.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── פריסת שש שכבות הציור על N שלבים ────────────────────────────────
@@ -28,16 +25,6 @@ function layerForStage(index, total) {
   if (total <= 1) return 6
   return 1 + Math.round((index * 5) / (total - 1))
 }
-
-/* ── אייקוני צ׳יפי השלב ────────────────────────────────────────────
-   שלושתם מ-lucide-react, שכבר בפרויקט ומשמש אותו במקומות אחרים —
-   כך "אותה משפחה" מובטח מעצם המקור ולא מהקפדה ידנית. התכונות
-   המשותפות יושבות בקבוע אחד: אותו גודל, אותו עובי קו, ו-lucide
-   מצייר stroke=currentColor, כלומר הם לוקחים את צבע הצ׳יפ.
-
-   SVG ולא אמוג׳י: ⏱ מרונדר בגופן המערכת, משנה גודל וצבע בין
-   מכשירים, ובאנדרואיד יוצא צבעוני ושובר את הטיפוגרפיה האחידה. */
-const CHIP_ICON = { size: 13, strokeWidth: 1.75, className: 'qj-chip-icon', 'aria-hidden': true }
 
 /** מפריד את המילה האחרונה כדי להדגיש אותה, כמו "לכם <b>בית.</b>" במוקאפ. */
 function Greeting({ text }) {
@@ -96,13 +83,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
   )
   const fee = Number(v.fee) || 0
   const total = stages.length
-  /* אותה גזירה בדיוק כמו בפן הכתוב. קודם זה היה Math.round מקומי
-     כאן ו-floor+השלמה שם — זהה עבור התבנית הנוכחית, אבל בשכר טרחה
-     שלא מתחלק יפה הצ׳יפ בטלפון וה-PDF היו מציגים סכומים שונים. */
-  const amounts = useMemo(
-    () => computePayments(fee, stages.map(s => s.pct)),
-    [fee, stages]
-  )
 
   /* ── ההתקדמות: איזה פרק נמצא באמצע המסך ──────────────────────────
      root הוא מכל הגלילה שלנו ולא ה-viewport, כדי שהמסע יעבוד גם
@@ -337,42 +317,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
                   </div>
                 ))}
               </div>
-
-              {/* ── שורה לכל שלב ──────────────────────────────────────
-                  הצ׳יפים שירדו מתחת לשלבים, במקום אחד שבו אפשר
-                  להשוות ביניהם. ⚠️ התווית כאן היא בדיוק זו של הפס
-                  שמעל — מספר ו-shortLabel — כדי ששתי הרשימות ייקראו
-                  כאותה רשימה ולא כשתיים. */}
-              <div className="qj-steps">
-                {stages.map((st, i) => (
-                  <div className="qj-step" key={st.id ?? i}>
-                    <div className="qj-step-name">
-                      <b>{String(i + 1).padStart(2, '0')}</b>
-                      {isFilled(st.shortLabel) && <span>{t(st.shortLabel)}</span>}
-                    </div>
-                    <div className="qj-facts">
-                      {isFilled(st.duration) && (
-                        <span><Clock {...CHIP_ICON} />{t(st.duration).split('\n')[0]}</span>
-                      )}
-                      {st.pct > 0 && (
-                        <span>
-                          <Banknote {...CHIP_ICON} />
-                          <span>
-                            תשלום <b>{st.pct}%</b>
-                            {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
-                                "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
-                                מתווסף לאחוז. */}
-                            {fee > 0 && <> · <Money value={amounts[i]} /> + מע״מ</>}
-                          </span>
-                        </span>
-                      )}
-                      {isFilled(st.trigger) && (
-                        <span><CalendarDays {...CHIP_ICON} />{t(st.trigger)}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </>
           )}
         </section>
@@ -421,16 +365,13 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
         </div>
       )}
 
-      {/* ── חתימה ── */}
-      {S.signing && (
-        <SignCard
-          section={S.signing}
-          t={t}
-          clientCount={nClients}
-          clients={content?.clients ?? []}
-          client={client}
-        />
-      )}
+      {/* ── ⚠️ אין כאן חתימה ───────────────────────────────────────
+          כרטיס החתימה ירד מהפן השיווקי, על מצב ה"נחתם" שלו. הוא
+          עובר למסמך המלא (QuoteTowerV2) בשלב הבא, ולכן SignCard,
+          SignerPad, useSignaturePad ו-finalize-quote-v2 נשארו
+          בקוד כפי שהם — וגם ה-CSS שלהם ב-QuoteJourneyV2.css,
+          שהוא הגיליון שמהם הם מתעצבים. המסע נגמר אחרי כפתור
+          ה-PDF; בינתיים אין בו דרך לחתום, וזה מכוון. */}
 
       {/* ── כותרת תחתונה. פרטי הסטודיו קבועים בקוד (החלטה 32). ── */}
       <footer className="qj-foot">

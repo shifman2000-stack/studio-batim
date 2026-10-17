@@ -347,10 +347,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
       {/* ══ אישור ההצעה ══ */}
       {S.signing && (
         <>
-          {/* ⚠️ ה-id מרונדר רק במצב לקוח. הוא היעד של ‎#sign בכפתור
-              שמגיע מהמסע, ובהדפסה אין לו למי לשרת — ומה שלא נחוץ
-              שם, לא מרונדר שם. */}
-          <div className="qt-approve" id={live ? 'sign' : undefined}>
+          <div className="qt-approve">
             <h2>{isFilled(S.signing.pdfTitle) ? t(S.signing.pdfTitle) : 'אישור ההצעה'}</h2>
             {isFilled(S.signing.pdfText) && <p className="qt-txt">{t(S.signing.pdfText)}</p>}
             {/* לפני החתימה — שורות ריקות, כולל קו ת.ז. (החלטה 33).

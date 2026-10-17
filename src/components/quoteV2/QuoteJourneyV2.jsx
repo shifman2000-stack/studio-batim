@@ -371,9 +371,9 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
       {/* ── אל ההצעה המלאה ─────────────────────────────────────────
           ⚠️ כאן ישב כרטיס החתימה. החתימה עברה אל המסמך המלא, כדי
           שהלקוח יחתום על מה שהוא קורא ולא על תקציר שלו; מה שנשאר
-          כאן הוא הכפתור שמוביל לשם. ‎#sign גורם ל-/full לגלול אל
-          בלוק האישור, כך שהלחיצה נוחתת על הפעולה ולא בראש מסמך
-          בן ארבעה עמודים.
+          כאן הוא הכפתור שמוביל לשם — אל **ראש** המסמך. ⚠️ בתחילה
+          הוא הצביע על ‎#sign, כלומר נחת ישר על בלוק החתימה ודילג
+          על המסמך שעליו חותמים — בדיוק מה שההעברה באה לתקן.
 
           בלי client אין טוקן ואין לאן לנווט — בדיוק כמו כפתור
           ה-PDF שמעליו, הכפתור מרונדר מושבת כדי שהתצוגה המקדימה
@@ -381,7 +381,7 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
       {S.signing && (
         <div className={'qj-cta' + (live && client.signed ? ' qj-signed' : '')}>
           {live && client.fullHref ? (
-            <a href={client.signed ? client.fullHref : client.fullHref + '#sign'}>
+            <a href={client.fullHref}>
               {client.signed
                 ? 'ההצעה נחתמה · לצפייה במסמך החתום'
                 : t(isFilled(S.signing.ctaLabel) ? S.signing.ctaLabel : SIGN_CTA_FALLBACK)}

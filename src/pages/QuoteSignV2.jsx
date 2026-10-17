@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import QuoteJourneyV2 from '../components/quoteV2/QuoteJourneyV2'
@@ -91,24 +91,6 @@ export default function QuoteSignV2({ token: tokenProp, version: versionProp, vi
     setResponse({ ...EMPTY_RESPONSE, ...(version.content?.clientResponse ?? {}) })
   }, [version])
 
-  /* ── ‎#sign ─────────────────────────────────────────────────────
-     המסע מוביל לכאן אל בלוק האישור ולא אל ראש המסמך. הגלילה לא
-     יכולה לקרות לפני שהתוכן מרונדר, ולכן היא תלויה ב-version ולא
-     רק בטעינת הדף. scrollRef הוא מכל הגלילה — ‎scrollIntoView
-     מטפס אליו לבד, אבל בלי המכל הזה אין לאן לגלול בכלל, כי
-     index.css נועל את גלילת המסמך. */
-  const scrollRef = useRef(null)
-  const scrolled = useRef(false)
-  useEffect(() => {
-    if (!full || !version || scrolled.current) return
-    if (window.location.hash !== '#sign') return
-    const id = requestAnimationFrame(() => {
-      document.getElementById('sign')?.scrollIntoView({ block: 'start' })
-      scrolled.current = true
-    })
-    return () => cancelAnimationFrame(id)
-  }, [full, version])
-
   const handleDownloadPdf = async () => {
     setPdfBusy(true)
     setPdfError('')
@@ -191,7 +173,7 @@ export default function QuoteSignV2({ token: tokenProp, version: versionProp, vi
 
   if (full) {
     return (
-      <div style={SHELL_FULL} ref={scrollRef} dir="rtl" lang="he">
+      <div style={SHELL_FULL} dir="rtl" lang="he">
         {/* ⚠️ הכפתור יושב כאן ולא בתוך QuoteTowerV2 בכוונה: המגדל הוא
             גם המסמך שמודפס ל-PDF, וכפתור ניווט בתוכו היה תלוי בכך
             שמישהו זוכר להסתיר אותו שם. מחוץ לו אין מה לשכוח. */}

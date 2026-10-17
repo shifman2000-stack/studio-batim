@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import './QuoteTowerV2.css'
-import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
+import { resolveText, isFilled, deriveFirstNames } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
 import { varsOf, clientCountOf, signersOf, isSignedContent } from '../../lib/quoteV2/content'
 import Money from './Money'
@@ -153,6 +153,13 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
   if (!content) return null
 
   const clientLine = isFilled(v.firstNames) ? v.firstNames : '—'
+  /* שורת המזמינים שבשער. אחרי החתימה היא נבנית מהשמות שהוקלדו
+     ולפניה משמות הפנייה — ובשני המקרים באותו חיבור ב-"ו", כדי
+     שהמסמך החתום ייראה כמו זה שנשלח. חותם בלי שם נופל חזרה
+     לשורת הפנייה במקום להציג קו ריק. */
+  const signedLine = isSigned
+    ? (deriveFirstNames(signers.map(sg => sg.name)) || clientLine)
+    : clientLine
   const dateLine = isFilled(v.date) ? v.date : ''
   const metaLine = [clientLine, v.settlement].filter(isFilled).join(' · ')
 
@@ -184,15 +191,14 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
         <div className="qt-parties">
           <div className="qt-pc">
             <h5>{nClients > 1 ? 'המזמינים' : 'המזמין'}</h5>
-            {/* אחרי החתימה — השם שהלקוח הקליד, שורה לכל מזמין; לפניה
-                שורת השמות מהפנייה. ⚠️ הת.ז. ירדה מכאן — גם הקו הריק
-                וגם הערך החתום. היא ממשיכה להופיע בבלוק אישור ההצעה
-                שבסוף, שהוא המקום שבו היא מחייבת. */}
-            {isSigned
-              ? signers.map((sg, i) => (
-                <div className="qt-psigner" key={i}>{sg.name || '—'}</div>
-              ))
-              : clientLine}
+            {/* ⚠️ שורה אחת בשני המצבים. אחרי החתימה זה מה שהלקוחות
+                הקלידו, לפניה שמות הפנייה — אבל תמיד באותה צורה:
+                deriveFirstNames מחבר אותם ב-"ו", בדיוק כמו
+                ‎{{firstNames}} שמזין את clientLine. קודם המצב החתום
+                רינדר div לכל חותם, ולכן המסמך החתום נראה אחרת מזה
+                שנשלח — רשימה אנכית ורווח לפני שורת הכתובת.
+                הת.ז. אינה כאן; היא בבלוק אישור ההצעה שבסוף. */}
+            {signedLine}
             {/* ⚠️ שם וכתובת בלבד. הטלפון והמייל ירדו — הם פרטי קשר
                 ולא צד להסכם, והם מופיעים בפנייה ובמייל שאליו מצורף
                 המסמך. */}

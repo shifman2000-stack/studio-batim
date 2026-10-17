@@ -98,10 +98,11 @@
 .qt-run .qt-meta { font-size: 11px; color: var(--qt-muted); letter-spacing: .14em; }
 
 /* ---------- עמוד השער ---------- */
-/* ⚠️ בלי min-height ובלי margin-top:auto. השער היה עמודת flex
-   בגובה עמוד מלא שדחפה את המלבנים לתחתיתו; עכשיו הכול נצמד
-   למעלה וזורם רגיל. */
-.qt-cover { break-after: page; page-break-after: always; }
+/* ⚠️ אין כאן break-after. השער לא תופס עמוד משלו: אחרי שהמגדל
+   וסכום שכר הטרחה ירדו ממנו נשארו בו כותרת ושני מלבנים, ושבירה
+   כפויה אחריהם הותירה שני שלישים של עמוד ריקים. פרק 01 ממשיך
+   ישר מתחת למלבנים, והדפדפן שובר היכן שצריך — הכללים ב-@media
+   print הם שמונעים כותרת יתומה בתחתית עמוד. */
 .qt-cover .qt-run { border-bottom: 0; }
 
 /* ⚠️ 54px היה המרווח כשלצד הכותרת עמד מגדל גבוה שקבע את גובה
@@ -156,9 +157,9 @@
 }
 .qt-parties .qt-m { color: var(--qt-muted); }
 .qt-parties .qt-ltr { direction: ltr; display: inline-block; }
-/* ⚠️ .qt-idline ו-.qt-idval ירדו יחד עם שורת הת.ז. שבמלבן
-   "המזמינים". בבלוק אישור ההצעה הת.ז. מעוצבת ב-.qt-sigvals. */
-.qt-psigner + .qt-psigner { margin-top: 4px; }
+/* ⚠️ .qt-idline, .qt-idval ו-.qt-psigner ירדו. הת.ז. יצאה
+   מהמלבן הזה (היא בבלוק אישור ההצעה), ושורת המזמינים היא
+   טקסט אחד בשני המצבים — אין יותר אלמנט לכל חותם. */
 
 /* ---------- כותרת פרק ---------- */
 .qt-ch { display: flex; align-items: flex-end; gap: 16px; margin: 32px 0 18px; }
@@ -341,6 +342,10 @@
   /* ② שבירות עמוד. בלי אלה כותרת פרק נוחתת בתחתית עמוד והתוכן
      שלה בעמוד הבא, ושלב נחצה באמצע פסקת "התהליך". */
   .qt-ch { break-after: avoid; page-break-after: avoid; break-inside: avoid; }
+  /* ⚠️ נוסף כשהשער הפסיק לתפוס עמוד משלו: מרגע שהתוכן ממשיך
+     מתחתיו, גבול עמוד יכול ליפול בתוך בלוק המלבנים — מצב שלא
+     היה אפשרי כשהשער ישב לבדו בעמוד הראשון. */
+  .qt-cover { break-inside: avoid; page-break-inside: avoid; }
   .qt-stage { break-inside: avoid; page-break-inside: avoid; }
   .qt-pay { break-inside: avoid; page-break-inside: avoid; }
   .qt-term { break-inside: avoid; page-break-inside: avoid; }

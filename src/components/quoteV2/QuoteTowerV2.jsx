@@ -389,10 +389,11 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             )}
           </div>
 
-          {/* ⚠️ החתימה יושבת **בתוך** תא החותם, מתחת לשם. קודם היא
-              הייתה אחות של .qt-who בתוך flex עם space-between, ולכן
-              נזרקה אל הקצה הנגדי של העמוד — שם וחתימה בשני צדי
-              הדף אינם נקראים כיחידה אחת.
+          {/* ⚠️ שלושת שורות הטקסט הן גוש אחד רצוף, והחתימה **לצידו**
+              ולא בתוכו. היא עברה כאן שני סיבובים: קודם הייתה בקצה
+              הנגדי של הדף (space-between), ואז נדחפה בין השם לשורת
+              התפקיד — ששברה את הגוש לשניים. עכשיו הגוש שלם מימין
+              והחתימה משמאלו, ממורכזת אליו אנכית.
               התמונה עצמה היא קובץ אמיתי ולא שרבוט SVG; הנתיב מוחלט
               מהשורש, ולכן הוא נפתר מול אותו origin גם כשהדף נטען
               ב-Puppeteer, ו-api/_quoteTowerPdf ממתין לטעינת
@@ -402,9 +403,9 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             <div className="qt-who">
               {isFilled(S.signing.closing) ? t(S.signing.closing) : 'בברכה,'}
               <b>עינב שיפמן</b>
-              <img className="qt-sig" src="/quote/einav-signature.png" alt="" />
               <span className="qt-role">{STUDIO.signerTitle}</span>
             </div>
+            <img className="qt-sig" src="/quote/einav-signature.png" alt="" />
           </div>
         </>
       )}

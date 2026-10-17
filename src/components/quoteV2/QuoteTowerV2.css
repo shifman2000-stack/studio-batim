@@ -284,28 +284,37 @@
   font-size: 11px; color: var(--qt-muted); letter-spacing: .12em;
 }
 .qt-signer { font-size: 11px; letter-spacing: .16em; color: var(--qt-terra-d); margin-top: 26px; }
-/* ⚠️ אין יותר space-between: לתא החותם יש ילד אחד, והחתימה
-   בתוכו. הכול נצמד לצד ההתחלה — ימין בתוך dir=rtl. */
-.qt-closing { margin-top: 36px; }
+/* ⚠️ אין כאן space-between: גוש הטקסט והחתימה צמודים זה לזה
+   בצד ההתחלה — ימין בתוך dir=rtl — ולא נפרשים לשני קצות הדף.
+   הילד הראשון ב-DOM הוא הטקסט, ולכן הוא בימין והחתימה משמאלו. */
+.qt-closing {
+  margin-top: 36px;
+  display: flex; align-items: center; gap: 20px;
+}
 .qt-closing .qt-who { font-size: 13px; color: var(--qt-muted); }
 .qt-closing .qt-who b {
   display: block; font-family: 'Frank Ruhl Libre', serif;
   font-weight: 400; font-size: 23px; color: var(--qt-ink);
 }
 /* ⚠️ התמונה היא 1341x728 שקופה. height:auto עם object-fit:contain
-   מציג אותה שלמה תמיד; ה-max-width באחוזים הוא מה שמקטין אותה
-   בטלפון בלי לחתוך. השוליים השליליים מקרבים אותה אל השם —
-   לקובץ עצמו יש אוויר סביב הכתב. */
+   מציג אותה שלמה תמיד, ו-flex:none מונע מה-flex למעוך אותה
+   לטובת הטקסט. ‎max-width:100% הוא רשת ביטחון לרוחב צר בלבד. */
 .qt-sig {
-  width: 200px; max-width: 70%; height: auto;
-  object-fit: contain; display: block;
-  /* ⚠️ שלילי למעלה בלבד. ‎-10px למטה קירבו את שורת התפקיד עד
-     שהיא נגעה בזנב הקו הכחול של החתימה. */
-  margin: -6px 0 8px -8px;
+  width: 200px; max-width: 100%; height: auto;
+  object-fit: contain; display: block; flex: none;
 }
-/* התפקיד חוזר מתחת לחתימה, ולכן הוא זקוק ל-display משלו — הוא
-   היה טקסט חופשי בתוך .qt-who ועכשיו יש אלמנט חוצץ לפניו. */
+/* ‎<b> שמעליו הוא display:block, ולכן גם התפקיד — כדי ששתי
+   השורות יישבו זו מתחת לזו בלי רווח ביניהן. */
 .qt-closing .qt-role { display: block; }
+
+/* ברוחב צר אין מקום לטקסט ולחתימה זה לצד זה: החתימה יורדת מתחת
+   לשורת התפקיד ונשארת צמודה לימין, כמו הטקסט שמעליה.
+   ⚠️ 479px ולא 560px כמו שאר הכללים של מצב לקוח: זה המקום שבו
+   הצמד באמת לא נכנס (200px חתימה + ~190px טקסט + 20 רווח), והוא
+   ממילא לא נוגע בהדפסה — שם הגיליון רחב מזה. */
+@media (max-width: 479px) {
+  .qt-closing { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
 
 /* ---------- לבנים ---------- */
 .qt-brick { display: inline-block; vertical-align: middle; flex: none; }

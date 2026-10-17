@@ -20,7 +20,7 @@ import Logo from '../Logo'
    question, marketingAnswer) אינם נקראים כאן כלל.
 
    סדר הפרקים קבוע בקוד ולא לפי סדר המערך:
-   תכולת השירות → תשלומים → שלבים → שירותים משלימים → תנאים → אישור.
+   תכולת השירות → תשלומים → שלבים → תנאים → שירותים משלימים → אישור.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* פרטי הסטודיו קבועים בקוד, כמו ב-v1 (QuotePreview.jsx:584-590)
@@ -180,8 +180,9 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
                 <div className="qt-psigner" key={i}>{sg.name || '—'}</div>
               ))
               : clientLine}
-            {isFilled(v.clientPhone) && <><br /><span className="qt-m qt-ltr">{v.clientPhone}</span></>}
-            {isFilled(v.clientEmail) && <><br /><span className="qt-m qt-ltr">{v.clientEmail}</span></>}
+            {/* ⚠️ שם וכתובת בלבד. הטלפון והמייל ירדו — הם פרטי קשר
+                ולא צד להסכם, והם מופיעים בפנייה ובמייל שאליו מצורף
+                המסמך. */}
             {isFilled(v.settlement) && <><br /><span className="qt-m">כתובת הנכס: {v.settlement}</span></>}
           </div>
           <div className="qt-pc">
@@ -281,18 +282,6 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
         </>
       )}
 
-      {/* ══ שירותים משלימים ══ */}
-      {S.extras && isFilled(S.extras.pdfBody) && (
-        <div className="qt-optional">
-          <Brick w={46} style={{ opacity: .55 }} />
-          <div>
-            {isFilled(S.extras.pdfEyebrow) && <div className="qt-tag">{t(S.extras.pdfEyebrow)}</div>}
-            {isFilled(S.extras.pdfTitle) && <h4>{t(S.extras.pdfTitle)}</h4>}
-            <p className="qt-txt">{t(S.extras.pdfBody)}</p>
-          </div>
-        </div>
-      )}
-
       {/* ══ 04 · מסגרת העבודה וגבולות אחריות ══ */}
       {S.terms && groups.length > 0 && (
         <>
@@ -316,6 +305,23 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             </div>
           ))}
         </>
+      )}
+
+      {/* ══ שירותים משלימים ══
+          ⚠️ הסעיף הזה ישב בין פרק 03 לפרק 04 ועבר לכאן, אל סוף
+          המסמך וממש לפני בלוק האישור. הוא אינו ממוספר ואינו
+          חלק מההצעה עצמה — הוא מה שאפשר להוסיף עליה, ולכן
+          מקומו אחרי שנגמר מה שכלול בה. ⚠️ בפן השיווקי
+          (QuoteJourneyV2) הסדר לא השתנה. */}
+      {S.extras && isFilled(S.extras.pdfBody) && (
+        <div className="qt-optional">
+          <Brick w={46} style={{ opacity: .55 }} />
+          <div>
+            {isFilled(S.extras.pdfEyebrow) && <div className="qt-tag">{t(S.extras.pdfEyebrow)}</div>}
+            {isFilled(S.extras.pdfTitle) && <h4>{t(S.extras.pdfTitle)}</h4>}
+            <p className="qt-txt">{t(S.extras.pdfBody)}</p>
+          </div>
+        </div>
       )}
 
       {/* ══ אישור ההצעה ══ */}

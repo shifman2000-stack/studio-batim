@@ -70,10 +70,6 @@
        מקבלת — 112px הם מידה של עמוד A4, לא של טלפון. */
     .qt-doc.qt-live .qt-hero { margin-top: 56px; }
     .qt-doc.qt-live .qt-cover h1 { font-size: 40px; }
-    /* ⚠️ בטלפון אין "עמוד": גובה של 248מ״מ היה מותיר ריק ארוך
-       לפני המלבנים, ולכן השער חוזר לזרימה רגילה. */
-    .qt-doc.qt-live .qt-cover { min-height: 0; display: block; }
-    .qt-doc.qt-live .qt-cover .qt-parties { margin-top: 44px; }
 
     /* שורת התשלום בנויה מארבע עמודות, שלוש מהן ברוחב קבוע:
        64 + 160 + 92 ועוד שלושה רווחים של 14 — 358px בדיוק, מול
@@ -102,23 +98,17 @@
 .qt-run .qt-meta { font-size: 11px; color: var(--qt-muted); letter-spacing: .14em; }
 
 /* ---------- עמוד השער ---------- */
-/* ⚠️ עמוד השער הוא עמוד שלם, ולכן הוא עמודת flex בגובה מינימלי
-   של כמעט כל תיבת התוכן של A4 (297 פחות שולי 18/20 = 259מ״מ;
-   248 כדי שעיגול לא ידחוף עמוד ריק אחריו). ‎margin-top:auto דוחף
-   את שני המלבנים לתחתית. בלי זה — אחרי שהמגדל וסכום שכר הטרחה
-   ירדו מכאן — הם נתלו באמצע העמוד עם חצי עמוד ריק מתחתיהם. */
-.qt-cover {
-  break-after: page; page-break-after: always;
-  min-height: 248mm; display: flex; flex-direction: column;
-}
-.qt-cover .qt-parties { margin-top: auto; }
+/* ⚠️ בלי min-height ובלי margin-top:auto. השער היה עמודת flex
+   בגובה עמוד מלא שדחפה את המלבנים לתחתיתו; עכשיו הכול נצמד
+   למעלה וזורם רגיל. */
+.qt-cover { break-after: page; page-break-after: always; }
 .qt-cover .qt-run { border-bottom: 0; }
 
 /* ⚠️ 54px היה המרווח כשלצד הכותרת עמד מגדל גבוה שקבע את גובה
    השורה. בלעדיו הכותרת נצמדה ללוגו; 112px מחזירים לה את מקומה
    בשליש העליון של עמוד השער. ה-flex נשאר — הוא מה שמחזיק את
    min-width:0 שמונע גלישה של שם ארוך. */
-.qt-hero { display: flex; gap: 26px; margin-top: 112px; align-items: flex-end; }
+.qt-hero { display: flex; gap: 26px; margin-top: 64px; align-items: flex-end; }
 .qt-hero-col { flex: 1; min-width: 0; }
 .qt-over { font-size: 12px; letter-spacing: .24em; color: var(--qt-terra-d); }
 .qt-cover h1 {
@@ -129,12 +119,12 @@
 
 /* ⚠️ הבלוק הזה ישב בעמוד השער ועבר לראש פרק 02. margin-top התאפס:
    מעליו עכשיו .qt-ch, שכבר מביא 18px משלו. */
+/* ⚠️ בלי קו עליון ובלי ריפוד. הקו הזה ישב בדיוק מתחת לכותרת
+   פרק 02 ונראה כמו קו של כותרת — בזמן שלאף כותרת פרק אחרת אין
+   אחד. ‎margin-bottom נשאר: מתחת לבלוק נוחתת פסקת ההקדמה של
+   הטבלה, והיא נצמדה לשורת "בתוספת מע״מ". */
 .qt-fee {
-  /* ⚠️ margin-bottom חדש. בשער מתחת לבלוק ישבו המלבנים עם מרווח
-     משלהם; כאן מתחתיו נוחתת פסקת ההקדמה של הטבלה, והיא נצמדה
-     לשורת "בתוספת מע״מ". */
   margin-top: 0; margin-bottom: 18px;
-  padding-top: 20px; border-top: 1px solid var(--qt-ink);
   display: flex; justify-content: space-between; align-items: flex-end; gap: 20px;
 }
 /* max-width: בלי זה justify-content:space-between מועך את תווית
@@ -144,9 +134,15 @@
 .qt-fee .qt-amt .q-money-sign { font-size: 22px; color: var(--qt-muted); }
 
 /* align-items:stretch (ברירת המחדל) הוא מה שמשווה את גובה שני
-   המלבנים ומותח את הקו ביניהם לכל הגובה; התוכן זורם מלמעלה. */
+   המלבנים ומותח את הקו ביניהם לכל הגובה; התוכן זורם מלמעלה.
+   ⚠️ שני קווים שחורים תוחמים את הבלוק מלמעלה ומלמטה, באותו
+   משקל וצבע של שאר הקווים השחורים במסמך, עם ריפוד זהה משני
+   הצדדים. */
 .qt-parties {
-  display: flex; align-items: stretch; margin-top: 72px;
+  display: flex; align-items: stretch; margin-top: 44px;
+  padding: 18px 0;
+  border-top: 1px solid var(--qt-ink);
+  border-bottom: 1px solid var(--qt-ink);
   font-size: 13px; line-height: 1.8;
 }
 .qt-parties .qt-pc { flex: 1; padding-inline-end: 24px; }

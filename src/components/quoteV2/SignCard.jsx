@@ -118,7 +118,10 @@ export default function SignCard({ section, t, clientCount, clients = [], client
 
   return (
     <section className="qs-sign">
-      <h2>{t(section.headline)}</h2>
+      {/* ⚠️ אין כאן כותרת. section.headline ("אז, מתחילים?") והקו
+          שמעליו ירדו: הכרטיס יושב בתוך בלוק "אישור ההצעה", שכבר
+          יש לו כותרת וקו משלו, ושתי כותרות זו מעל זו קראו כאילו
+          מתחיל כאן פרק חדש. המשפט שמתחתיהן נשאר. */}
       <p className="qs-sub">{t(section.subtitle)}</p>
 
       <div className="qs-card">

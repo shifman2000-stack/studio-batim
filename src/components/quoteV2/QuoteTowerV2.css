@@ -65,10 +65,15 @@
       box-shadow: none;
       font-size: 14.5px;
     }
-    /* המגדל שעל השער הוא ציור ברוחב קבוע; בטלפון הוא נדחק החוצה
-       ודוחף גלילה אופקית. */
-    .qt-doc.qt-live .qt-hero { display: block; }
-    .qt-doc.qt-live .qt-tower { margin: 24px auto 0; }
+    /* ⚠️ כאן ישבו שני כללים שהצילו את המגדל שעל השער מגלישה
+       אופקית. המגדל ירד, ובמקומם מספיק לקצר את המרווח שהכותרת
+       מקבלת — 112px הם מידה של עמוד A4, לא של טלפון. */
+    .qt-doc.qt-live .qt-hero { margin-top: 56px; }
+    .qt-doc.qt-live .qt-cover h1 { font-size: 40px; }
+    /* ⚠️ בטלפון אין "עמוד": גובה של 248מ״מ היה מותיר ריק ארוך
+       לפני המלבנים, ולכן השער חוזר לזרימה רגילה. */
+    .qt-doc.qt-live .qt-cover { min-height: 0; display: block; }
+    .qt-doc.qt-live .qt-cover .qt-parties { margin-top: 44px; }
 
     /* שורת התשלום בנויה מארבע עמודות, שלוש מהן ברוחב קבוע:
        64 + 160 + 92 ועוד שלושה רווחים של 14 — 358px בדיוק, מול
@@ -97,10 +102,23 @@
 .qt-run .qt-meta { font-size: 11px; color: var(--qt-muted); letter-spacing: .14em; }
 
 /* ---------- עמוד השער ---------- */
-.qt-cover { break-after: page; page-break-after: always; }
+/* ⚠️ עמוד השער הוא עמוד שלם, ולכן הוא עמודת flex בגובה מינימלי
+   של כמעט כל תיבת התוכן של A4 (297 פחות שולי 18/20 = 259מ״מ;
+   248 כדי שעיגול לא ידחוף עמוד ריק אחריו). ‎margin-top:auto דוחף
+   את שני המלבנים לתחתית. בלי זה — אחרי שהמגדל וסכום שכר הטרחה
+   ירדו מכאן — הם נתלו באמצע העמוד עם חצי עמוד ריק מתחתיהם. */
+.qt-cover {
+  break-after: page; page-break-after: always;
+  min-height: 248mm; display: flex; flex-direction: column;
+}
+.qt-cover .qt-parties { margin-top: auto; }
 .qt-cover .qt-run { border-bottom: 0; }
 
-.qt-hero { display: flex; gap: 26px; margin-top: 54px; align-items: flex-end; }
+/* ⚠️ 54px היה המרווח כשלצד הכותרת עמד מגדל גבוה שקבע את גובה
+   השורה. בלעדיו הכותרת נצמדה ללוגו; 112px מחזירים לה את מקומה
+   בשליש העליון של עמוד השער. ה-flex נשאר — הוא מה שמחזיק את
+   min-width:0 שמונע גלישה של שם ארוך. */
+.qt-hero { display: flex; gap: 26px; margin-top: 112px; align-items: flex-end; }
 .qt-hero-col { flex: 1; min-width: 0; }
 .qt-over { font-size: 12px; letter-spacing: .24em; color: var(--qt-terra-d); }
 .qt-cover h1 {
@@ -109,21 +127,14 @@
 }
 .qt-cover h1 em { font-style: normal; color: var(--qt-muted); }
 
-/* המגדל. הלבנים ממוקמות absolute מלמטה למעלה, והמרווח נגזר ממספר
-   השלבים — לא קשיח ל-6 כמו במוקאפ. */
-.qt-tower { position: relative; flex: none; width: 272px; }
-.qt-tower .qt-brickpos { position: absolute; left: 18px; }
-.qt-tower .qt-tl {
-  position: absolute; right: 0; width: 148px;
-  font-size: 11.5px; color: #4d4a45; line-height: 1.25; white-space: nowrap;
-}
-.qt-tower .qt-tl b {
-  display: block; font-family: 'Frank Ruhl Libre', serif; font-weight: 500;
-  color: var(--qt-terra-d); font-size: 14px; line-height: 1.1;
-}
-
+/* ⚠️ הבלוק הזה ישב בעמוד השער ועבר לראש פרק 02. margin-top התאפס:
+   מעליו עכשיו .qt-ch, שכבר מביא 18px משלו. */
 .qt-fee {
-  margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--qt-ink);
+  /* ⚠️ margin-bottom חדש. בשער מתחת לבלוק ישבו המלבנים עם מרווח
+     משלהם; כאן מתחתיו נוחתת פסקת ההקדמה של הטבלה, והיא נצמדה
+     לשורת "בתוספת מע״מ". */
+  margin-top: 0; margin-bottom: 18px;
+  padding-top: 20px; border-top: 1px solid var(--qt-ink);
   display: flex; justify-content: space-between; align-items: flex-end; gap: 20px;
 }
 /* max-width: בלי זה justify-content:space-between מועך את תווית
@@ -132,7 +143,12 @@
 .qt-fee .qt-amt { font-family: 'Playfair Display', serif; font-size: 60px; line-height: 1; }
 .qt-fee .qt-amt .q-money-sign { font-size: 22px; color: var(--qt-muted); }
 
-.qt-parties { display: flex; margin-top: 36px; font-size: 13px; line-height: 1.8; }
+/* align-items:stretch (ברירת המחדל) הוא מה שמשווה את גובה שני
+   המלבנים ומותח את הקו ביניהם לכל הגובה; התוכן זורם מלמעלה. */
+.qt-parties {
+  display: flex; align-items: stretch; margin-top: 72px;
+  font-size: 13px; line-height: 1.8;
+}
 .qt-parties .qt-pc { flex: 1; padding-inline-end: 24px; }
 .qt-parties .qt-pc + .qt-pc {
   border-inline-start: 1px solid var(--qt-line);
@@ -144,14 +160,9 @@
 }
 .qt-parties .qt-m { color: var(--qt-muted); }
 .qt-parties .qt-ltr { direction: ltr; display: inline-block; }
-/* החלטה 33: לפני החתימה ת.ז. היא קו ריק, בדיוק כמו בהצעת 29.9. */
-.qt-idline {
-  display: inline-block; width: 120px; border-bottom: 1px solid var(--qt-sand);
-  height: 14px; vertical-align: middle;
-}
-/* אחרי החתימה — שורה לכל מזמין, עם מה שהוא הקליד. */
-.qt-psigner + .qt-psigner { margin-top: 8px; }
-.qt-idval { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+/* ⚠️ .qt-idline ו-.qt-idval ירדו יחד עם שורת הת.ז. שבמלבן
+   "המזמינים". בבלוק אישור ההצעה הת.ז. מעוצבת ב-.qt-sigvals. */
+.qt-psigner + .qt-psigner { margin-top: 4px; }
 
 /* ---------- כותרת פרק ---------- */
 .qt-ch { display: flex; align-items: flex-end; gap: 16px; margin: 32px 0 18px; }
@@ -285,6 +296,14 @@
 .qt-closing .qt-who b {
   display: block; font-family: 'Frank Ruhl Libre', serif;
   font-weight: 400; font-size: 23px; color: var(--qt-ink);
+}
+/* ⚠️ התמונה היא 1341x728 שקופה. height:auto עם object-fit:contain
+   מציג אותה שלמה תמיד; ה-max-width באחוזים הוא מה שמקטין אותה
+   בטלפון בלי לחתוך — ברוחב צר .qt-closing מועך את הילד השני,
+   ובלי max-width הוא היה גולש מהמלבן. */
+.qt-sig {
+  width: 200px; max-width: 42%; height: auto;
+  object-fit: contain; flex: none; display: block;
 }
 
 /* ---------- לבנים ---------- */

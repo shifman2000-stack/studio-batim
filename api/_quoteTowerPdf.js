@@ -71,6 +71,14 @@ export async function renderTowerPdf({ req, token, title = '' }) {
     await page.waitForSelector('[data-ready="1"]', { timeout: 20000 })
     await page.emulateMediaType('print')
     await page.evaluateHandle('document.fonts.ready')
+    /* ⚠️ התוכן נטען ב-RPC אחרי שהדף עלה, ולכן התמונות שבתוכו
+       מתחילות להיטען רק אחרי ש-networkidle0 כבר חלף. חתימת עינב
+       היא קובץ של רבע מגה, ובלי ההמתנה הזו היא יכלה לצאת מה-PDF
+       ריקה. decode() נופל בחן על תמונה שבורה — עדיף מסמך בלי
+       חתימה מאשר בקשה שנתקעת עד ה-timeout. */
+    await page.evaluate(() => Promise.all(
+      [...document.images].map(img => (img.complete ? null : img.decode().catch(() => null)))
+    ))
     await new Promise(r => setTimeout(r, 500))
 
     const bytes = await page.pdf({

@@ -24,17 +24,13 @@
   --qs-terra: var(--qt-terra-d, #c2602f);
   --qs-paper: #fffdfa;
 
-  margin-top: 30px;
-  padding-top: 24px;
-  border-top: 1px solid var(--qs-ink);
+  /* ⚠️ בלי קו עליון ובלי padding. הקו והכותרת ירדו יחד — הכרטיס
+     ממשיך את בלוק "אישור ההצעה" שמעליו ואינו פרק בפני עצמו. */
+  margin-top: 16px;
   direction: rtl;
   text-align: start;
 }
-.qs-sign h2 {
-  font-family: 'Frank Ruhl Libre', serif; font-weight: 400;
-  font-size: 22px; line-height: 1.2; margin: 0 0 4px; color: var(--qs-ink);
-}
-.qs-sub { color: var(--qs-muted); font-size: 13.5px; line-height: 1.7; margin: 0 0 18px; }
+.qs-sub { color: var(--qs-muted); font-size: 13.5px; line-height: 1.7; margin: 0 0 14px; }
 
 .qs-card {
   background: var(--qs-paper);
@@ -129,7 +125,7 @@
 
 /* ---------- טלפון ---------- */
 @media (max-width: 560px) {
-  .qs-sign { margin-top: 24px; padding-top: 20px; }
+  .qs-sign { margin-top: 14px; }
   .qs-card { padding: 18px 14px 16px; border-radius: 12px; }
   .qs-card .qs-row { gap: 10px; }
   /* min-width של 180px הכריח שתי העמודות להישאר זו לצד זו ודחף

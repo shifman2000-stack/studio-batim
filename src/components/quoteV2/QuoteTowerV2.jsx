@@ -20,7 +20,7 @@ import Logo from '../Logo'
    question, marketingAnswer) אינם נקראים כאן כלל.
 
    סדר הפרקים קבוע בקוד ולא לפי סדר המערך:
-   תכולת השירות → תשלומים → שלבים → שירותים משלימים → תנאים → אישור.
+   תכולת השירות → תשלומים → שלבים → תנאים → שירותים משלימים → אישור.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* פרטי הסטודיו קבועים בקוד, כמו ב-v1 (QuotePreview.jsx:584-590)
@@ -34,8 +34,8 @@ const STUDIO = {
   signerTitle: 'סטודיו בתים · הנדסאית אדריכלות',
 }
 
-/* הלבנה האיזומטרית מהמוקאפ, שתי גרסאות צבע. פוליגונים בלבד —
-   אין כאן <text>, ולכן גם לא בעיית העברית ההפוכה ב-WebKit.
+/* הלבנה האיזומטרית מהמוקאפ. פוליגונים בלבד — אין כאן <text>,
+   ולכן גם לא בעיית העברית ההפוכה ב-WebKit.
    ⚠️ המוקאפ משתמש ב-<symbol> + <use>. כאן הפוליגונים מצוירים
    בתוך כל <svg> מחדש, כי ב-Chrome headless התוכן של <use> לא
    צויר ב-PDF והלבנים יצאו ריקות. הפרדת ה-defs מהשימוש היא
@@ -43,12 +43,25 @@ const STUDIO = {
    זול יותר מלנסות להבין למה. */
 const BRICK_COLORS = {
   sand:  { left: '#a89f90', front: '#c8bfb0', top: '#ddd5c8', seam: '#968c7c' },
-  /* הלבנה האחרונה — סוף הפרויקט — בטרקוטה של המסע, לא בירוק. */
   terra: { left: '#b45a2c', front: '#d9774a', top: '#e89a73', seam: '#9c4c24' },
 }
 
-function Brick({ w = 46, accent = false, style, className }) {
-  const c = accent ? BRICK_COLORS.terra : BRICK_COLORS.sand
+/* ⚠️ הגוון נקבע **לפי פרק**, לא לפי מקום ברשימה. קודם הלבנה
+   האחרונה בכל רשימה יצאה בטרקוטה (accent={i === last}), וכך
+   באותו מסמך היו שלוש רשימות שכל אחת מסתיימת בצבע אחר בלי
+   שהצבע אומר משהו. עכשיו: 02 טרקוטה, 03 חול, 04 והסעיף
+   האופציונלי חיוורות. ‎pale היא אותה לבנת חול בשקיפות 55%,
+   בדיוק מה שהסעיף האופציונלי הציג מאז ומתמיד. */
+const BRICK_VARIANTS = {
+  terra: { colors: BRICK_COLORS.terra, opacity: 1 },
+  sand:  { colors: BRICK_COLORS.sand,  opacity: 1 },
+  pale:  { colors: BRICK_COLORS.sand,  opacity: 0.55 },
+}
+
+function Brick({ w = 46, variant = 'sand', style, className }) {
+  const v = BRICK_VARIANTS[variant] ?? BRICK_VARIANTS.sand
+  const c = v.colors
+  style = v.opacity === 1 ? style : { opacity: v.opacity, ...style }
   return (
     <svg
       className={'qt-brick' + (className ? ' ' + className : '')}
@@ -76,30 +89,6 @@ function Chapter({ num, title, first }) {
     <div className={'qt-ch' + (first ? ' qt-ch--first' : '')}>
       <span className="qt-big">{num}</span>
       <h2>{title}</h2>
-    </div>
-  )
-}
-
-/* ── המגדל שעל השער ────────────────────────────────────────────────
-   המוקאפ קשיח ל-6 לבנים ב-bottom: 0/44/88/… . כאן המרווח נגזר
-   ממספר השלבים, כך שגובה המגדל נשאר קבוע (B.4). הלבנה האחרונה
-   בטרקוטה — היא סוף הפרויקט. */
-function Tower({ names }) {
-  const n = names.length
-  if (n === 0) return null
-  const step = n > 1 ? Math.min(44, 220 / (n - 1)) : 0
-  const height = Math.round((n - 1) * step + 104)
-  return (
-    <div className="qt-tower" style={{ height }}>
-      {names.map((name, i) => (
-        <Brick key={'b' + i} w={110} accent={i === n - 1} className="qt-brickpos"
-          style={{ bottom: Math.round(i * step) }} />
-      ))}
-      {names.map((name, i) => (
-        <div key={'l' + i} className="qt-tl" style={{ bottom: Math.round(i * step) + 20 }}>
-          <b>שלב {i + 1}</b>{name}
-        </div>
-      ))}
     </div>
   )
 }
@@ -178,6 +167,10 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           <div className="qt-meta">{['הצעת מחיר', dateLine].filter(Boolean).join(' · ')}</div>
         </div>
 
+        {/* ⚠️ כאן ישב מגדל הלבנים עם רשימת השלבים, ומתחתיו סכום
+            שכר הטרחה. המגדל ירד כליל; הסכום עבר לראש פרק 02,
+            שם ממילא מפורט לוח התשלומים. מה שנשאר בשער הוא
+            הכותרת ושני המלבנים, והמרווחים כוונו מחדש סביבם. */}
         <div className="qt-hero">
           <div className="qt-hero-col">
             <div className="qt-over">תכנון אדריכלי · רישוי · ליווי</div>
@@ -186,49 +179,30 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
               {isFilled(v.settlement) && <><br /><em>ב{v.settlement}</em></>}
             </h1>
           </div>
-          <Tower names={stages.map(s => t(s.formalName))} />
         </div>
-
-        {fee > 0 && (
-          <div className="qt-fee">
-            <div className="qt-k">
-              {isFilled(S.fee?.feeLabel) ? t(S.fee.feeLabel) : 'שכר טרחה'}
-              <br />{isFilled(S.fee?.vatNote) ? t(S.fee.vatNote) : 'בתוספת מע״מ'}
-            </div>
-            <div className="qt-amt"><Money value={fee} /></div>
-          </div>
-        )}
 
         <div className="qt-parties">
           <div className="qt-pc">
             <h5>{nClients > 1 ? 'המזמינים' : 'המזמין'}</h5>
-            {/* אחרי החתימה — השם והת.ז. שהלקוח הקליד, שורה לכל מזמין.
-                לפני כן בדיוק כמו קודם: שורת השמות מהפנייה וקו ת.ז. ריק.
-                אותו signersOf שמזין את בלוק אישור ההצעה (החלטה 33). */}
-            {isSigned ? signers.map((sg, i) => (
-              <div className="qt-psigner" key={i}>
-                {sg.name || '—'}<br />
-                <span className="qt-m">ת.ז.</span>{' '}
-                {sg.idNumber
-                  ? <span className="qt-idval">{sg.idNumber}</span>
-                  : <span className="qt-idline" />}
-              </div>
-            )) : (
-              <>
-                {clientLine}<br />
-                <span className="qt-m">ת.ז.</span> <span className="qt-idline" />
-              </>
-            )}
-            {isFilled(v.clientPhone) && <><br /><span className="qt-m qt-ltr">{v.clientPhone}</span></>}
-            {isFilled(v.clientEmail) && <><br /><span className="qt-m qt-ltr">{v.clientEmail}</span></>}
+            {/* אחרי החתימה — השם שהלקוח הקליד, שורה לכל מזמין; לפניה
+                שורת השמות מהפנייה. ⚠️ הת.ז. ירדה מכאן — גם הקו הריק
+                וגם הערך החתום. היא ממשיכה להופיע בבלוק אישור ההצעה
+                שבסוף, שהוא המקום שבו היא מחייבת. */}
+            {isSigned
+              ? signers.map((sg, i) => (
+                <div className="qt-psigner" key={i}>{sg.name || '—'}</div>
+              ))
+              : clientLine}
+            {/* ⚠️ שם וכתובת בלבד. הטלפון והמייל ירדו — הם פרטי קשר
+                ולא צד להסכם, והם מופיעים בפנייה ובמייל שאליו מצורף
+                המסמך. */}
             {isFilled(v.settlement) && <><br /><span className="qt-m">כתובת הנכס: {v.settlement}</span></>}
           </div>
           <div className="qt-pc">
             <h5>המתכנן</h5>
+            {/* ⚠️ שתי שורות בדיוק. הטלפון, המייל והכתובת ירדו. */}
             {STUDIO.name}<br />
-            <span className="qt-m">ע.מ {STUDIO.vat}</span><br />
-            <span className="qt-m qt-ltr">{STUDIO.phone} · {STUDIO.email}</span><br />
-            <span className="qt-m">{STUDIO.address}</span>
+            <span className="qt-m">ע.מ {STUDIO.vat}</span>
           </div>
         </div>
       </section>
@@ -245,12 +219,26 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
       {S.fee && stages.length > 0 && (
         <>
           <Chapter num="02" title={t(S.fee.pdfTitle)} />
+
+          {/* ⚠️ הסכום הגיע לכאן מעמוד השער. אותו תוכן ואותו עיצוב
+              בדיוק — רק המרווח העליון התאפס, כי מעליו כותרת פרק
+              ולא כותרת שער. */}
+          {fee > 0 && (
+            <div className="qt-fee">
+              <div className="qt-k">
+                {isFilled(S.fee?.feeLabel) ? t(S.fee.feeLabel) : 'שכר טרחה'}
+                <br />{isFilled(S.fee?.vatNote) ? t(S.fee.vatNote) : 'בתוספת מע״מ'}
+              </div>
+              <div className="qt-amt"><Money value={fee} /></div>
+            </div>
+          )}
+
           {isFilled(S.fee.tableIntro) && <p className="qt-lead">{t(S.fee.tableIntro)}</p>}
 
           {stages.map((st, i) => (
             <div className="qt-pay" key={st.id ?? i}>
               <span className="qt-pc">{st.pct}%</span>
-              <Brick w={40} accent={i === stages.length - 1} />
+              <Brick w={40} variant="terra" />
               <div className="qt-mid">
                 <small>שלב {i + 1}</small>
                 <b>{t(st.formalName)}</b>
@@ -289,7 +277,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           {stages.map((st, i) => (
             <div className="qt-stage" key={st.id ?? i}>
               <div className="qt-side">
-                <Brick w={46} accent={i === stages.length - 1} />
+                <Brick w={46} variant="sand" />
                 <div className="qt-no">שלב {i + 1}</div>
                 <h3>{t(st.formalName)}</h3>
               </div>
@@ -307,18 +295,6 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
         </>
       )}
 
-      {/* ══ שירותים משלימים ══ */}
-      {S.extras && isFilled(S.extras.pdfBody) && (
-        <div className="qt-optional">
-          <Brick w={46} style={{ opacity: .55 }} />
-          <div>
-            {isFilled(S.extras.pdfEyebrow) && <div className="qt-tag">{t(S.extras.pdfEyebrow)}</div>}
-            {isFilled(S.extras.pdfTitle) && <h4>{t(S.extras.pdfTitle)}</h4>}
-            <p className="qt-txt">{t(S.extras.pdfBody)}</p>
-          </div>
-        </div>
-      )}
-
       {/* ══ 04 · מסגרת העבודה וגבולות אחריות ══ */}
       {S.terms && groups.length > 0 && (
         <>
@@ -326,7 +302,7 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
           {isFilled(S.terms.pdfIntro) && <p className="qt-lead">{t(S.terms.pdfIntro)}</p>}
           {groups.map((g, gi) => (
             <div className="qt-tg" key={g.id ?? gi}>
-              <h3><Brick w={26} />{t(g.title)}</h3>
+              <h3><Brick w={26} variant="pale" />{t(g.title)}</h3>
               {(g.items ?? []).map((item, ii) => {
                 const labelled = isFilled(item.formalTitle)
                 return (
@@ -342,6 +318,23 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             </div>
           ))}
         </>
+      )}
+
+      {/* ══ שירותים משלימים ══
+          ⚠️ הסעיף הזה ישב בין פרק 03 לפרק 04 ועבר לכאן, אל סוף
+          המסמך וממש לפני בלוק האישור. הוא אינו ממוספר ואינו
+          חלק מההצעה עצמה — הוא מה שאפשר להוסיף עליה, ולכן
+          מקומו אחרי שנגמר מה שכלול בה. ⚠️ בפן השיווקי
+          (QuoteJourneyV2) הסדר לא השתנה. */}
+      {S.extras && isFilled(S.extras.pdfBody) && (
+        <div className="qt-optional">
+          <Brick w={46} variant="pale" />
+          <div>
+            {isFilled(S.extras.pdfEyebrow) && <div className="qt-tag">{t(S.extras.pdfEyebrow)}</div>}
+            {isFilled(S.extras.pdfTitle) && <h4>{t(S.extras.pdfTitle)}</h4>}
+            <p className="qt-txt">{t(S.extras.pdfBody)}</p>
+          </div>
+        </div>
       )}
 
       {/* ══ אישור ההצעה ══ */}
@@ -396,18 +389,23 @@ export default function QuoteTowerV2({ content, vars, clientCount, client }) {
             )}
           </div>
 
+          {/* ⚠️ שלושת שורות הטקסט הן גוש אחד רצוף, והחתימה **לצידו**
+              ולא בתוכו. היא עברה כאן שני סיבובים: קודם הייתה בקצה
+              הנגדי של הדף (space-between), ואז נדחפה בין השם לשורת
+              התפקיד — ששברה את הגוש לשניים. עכשיו הגוש שלם מימין
+              והחתימה משמאלו, ממורכזת אליו אנכית.
+              התמונה עצמה היא קובץ אמיתי ולא שרבוט SVG; הנתיב מוחלט
+              מהשורש, ולכן הוא נפתר מול אותו origin גם כשהדף נטען
+              ב-Puppeteer, ו-api/_quoteTowerPdf ממתין לטעינת
+              התמונות לפני ההדפסה. object-fit:contain כדי שלא
+              תיחתך לעולם. */}
           <div className="qt-closing">
             <div className="qt-who">
               {isFilled(S.signing.closing) ? t(S.signing.closing) : 'בברכה,'}
               <b>עינב שיפמן</b>
-              {STUDIO.signerTitle}
+              <span className="qt-role">{STUDIO.signerTitle}</span>
             </div>
-            <svg width="170" height="72" viewBox="0 0 190 80" aria-hidden="true">
-              <path d="M8 58 C30 20,46 66,62 40 S90 10,98 46 S120 70,136 30 S170 18,182 26"
-                fill="none" stroke="#2c3f73" strokeWidth="1.6" strokeLinecap="round" />
-              <path d="M40 64 C80 52,130 54,176 44"
-                fill="none" stroke="#2c3f73" strokeWidth="1.1" strokeLinecap="round" />
-            </svg>
+            <img className="qt-sig" src="/quote/einav-signature.png" alt="" />
           </div>
         </>
       )}

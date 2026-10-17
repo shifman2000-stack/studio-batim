@@ -64,15 +64,9 @@ function Greeting({ text }) {
  */
 export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
   const scrollRef = useRef(null)
-  const feeRef = useRef(null)
-  const feeRan = useRef(false)
   const chapterRefs = useRef([])
 
   const [stage, setStage] = useState(1)
-  const [feeSeen, setFeeSeen] = useState(false)
-  const [feeShown, setFeeShown] = useState(0)
-  /* טוגלים מקומיים — משמשים רק כשאין client (מצב מעבדה). */
-  const [localExtras, setLocalExtras] = useState({})
 
   /* הערכים הקפואים שבתוך ה-content הם מקור האמת. prop מפורש גובר
      עליהם רק במעבדה, שבה מחליפים לקוחות ושטחים בלי לגעת בנתונים. */
@@ -81,21 +75,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
   const live = !!client
 
   const t = (raw) => resolveText(raw, v, nClients)
-
-  const selectedExtras = live
-    ? (client.response?.extrasSelected ?? [])
-    : Object.keys(localExtras).filter(k => localExtras[k])
-
-  const toggleExtra = (key) => {
-    if (!live) { setLocalExtras(p => ({ ...p, [key]: !p[key] })); return }
-    client.setResponse(prev => {
-      const cur = prev?.extrasSelected ?? []
-      return {
-        ...prev,
-        extrasSelected: cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key],
-      }
-    })
-  }
 
   /* ── הסעיפים, לפי טיפוס. כל טיפוס מופיע פעם אחת (A.2). ── */
   const S = useMemo(() => {
@@ -115,7 +94,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
     () => (S.terms?.groups ?? []).flatMap(g => (g.items ?? []).filter(i => i?.enabled !== false)),
     [S]
   )
-  const extras = useMemo(() => (S.extras?.items ?? []).filter(x => x?.enabled !== false), [S])
   const fee = Number(v.fee) || 0
   const total = stages.length
   /* אותה גזירה בדיוק כמו בפן הכתוב. קודם זה היה Math.round מקומי
@@ -146,43 +124,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
     chapterRefs.current.filter(Boolean).forEach(el => io.observe(el))
     return () => io.disconnect()
   }, [total])
-
-  /* ── ספירת שכר הטרחה, פעם אחת ─────────────────────────────────────
-     השמירה על "רץ כבר" היא ב-ref ולא ב-state, ו-feeSeen **אינו**
-     בתלויות: אילו היה, setFeeSeen היה מריץ את האפקט מחדש, הניקוי
-     היה מבטל את ה-requestAnimationFrame, והמספר היה נתקע על 0. */
-  useEffect(() => {
-    const root = scrollRef.current
-    const el = feeRef.current
-    if (!root || !el || fee <= 0) return
-    /* שכר טרחה חדש = ספירה חדשה. בלי האיפוס הזה ה-ref נשאר דלוק
-       מהריצה הראשונה, הקולבק יוצא מיד, והמספר נתקע על הסכום הישן.
-       אצל הלקוח זה אף פעם לא קרה כי שכר הטרחה לא משתנה באמצע
-       הצפייה — זה צף רק בתצוגה המקדימה של העורך, שבה עינב משנה
-       אותו והמסע חי מתחתיה. */
-    feeRan.current = false
-    let raf = 0
-    const io = new IntersectionObserver(
-      entries => {
-        if (!entries[0].isIntersecting || feeRan.current) return
-        feeRan.current = true
-        setFeeSeen(true)
-        setStage(total)
-        const t0 = performance.now()
-        const T = 1400
-        const tick = (now) => {
-          const k = Math.min(1, (now - t0) / T)
-          const eased = 1 - Math.pow(1 - k, 3)
-          setFeeShown(Math.round(fee * eased))
-          if (k < 1) raf = requestAnimationFrame(tick)
-        }
-        raf = requestAnimationFrame(tick)
-      },
-      { root, threshold: 0.4 }
-    )
-    io.observe(el)
-    return () => { io.disconnect(); cancelAnimationFrame(raf) }
-  }, [fee, total])
 
   /* ── הפונטים. נטענים רק כל עוד המסע על המסך, ולא מ-index.html,
         כדי שלא לגעת בשאר האפליקציה. ⚠️ לפרודקשן זה יעבור ל-woff2
@@ -356,26 +297,6 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
                     <div>{t(st.storyDeliverable)}</div>
                   </div>
                 )}
-                <div className="qj-facts">
-                  {isFilled(st.duration) && (
-                    <span><Clock {...CHIP_ICON} />{t(st.duration).split('\n')[0]}</span>
-                  )}
-                  {st.pct > 0 && (
-                    <span>
-                      <Banknote {...CHIP_ICON} />
-                      <span>
-                        תשלום <b>{st.pct}%</b>
-                        {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
-                            "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
-                            מתווסף לאחוז. */}
-                        {fee > 0 && <> · <Money value={amounts[i]} /> + מע״מ</>}
-                      </span>
-                    </span>
-                  )}
-                  {isFilled(st.trigger) && (
-                    <span><CalendarDays {...CHIP_ICON} />{t(st.trigger)}</span>
-                  )}
-                </div>
               </section>
             ))}
           </div>
@@ -384,10 +305,13 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
 
       {/* ── שכר טרחה ── */}
       {S.fee && (
-        <section className={'qj-fee' + (feeSeen ? ' qj-seen' : '')} ref={feeRef}>
+        <section className="qj-fee">
           <div className="qj-q">{t(S.fee.question)}</div>
+          {/* ⚠️ הסכום הסופי מיד. קודם הוא נספר מ-0 תוך 1.4 שניות
+              בעקבות IntersectionObserver; הספירה ירדה, והסעיף פשוט
+              מופיע תוך כדי גלילה כמו כל סעיף אחר. */}
           <div className="qj-amt">
-            <Money value={feeShown} />
+            <Money value={fee} />
           </div>
           <div className="qj-vat">{t(S.fee.note)}</div>
 
@@ -413,6 +337,42 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
                   </div>
                 ))}
               </div>
+
+              {/* ── שורה לכל שלב ──────────────────────────────────────
+                  הצ׳יפים שירדו מתחת לשלבים, במקום אחד שבו אפשר
+                  להשוות ביניהם. ⚠️ התווית כאן היא בדיוק זו של הפס
+                  שמעל — מספר ו-shortLabel — כדי ששתי הרשימות ייקראו
+                  כאותה רשימה ולא כשתיים. */}
+              <div className="qj-steps">
+                {stages.map((st, i) => (
+                  <div className="qj-step" key={st.id ?? i}>
+                    <div className="qj-step-name">
+                      <b>{String(i + 1).padStart(2, '0')}</b>
+                      {isFilled(st.shortLabel) && <span>{t(st.shortLabel)}</span>}
+                    </div>
+                    <div className="qj-facts">
+                      {isFilled(st.duration) && (
+                        <span><Clock {...CHIP_ICON} />{t(st.duration).split('\n')[0]}</span>
+                      )}
+                      {st.pct > 0 && (
+                        <span>
+                          <Banknote {...CHIP_ICON} />
+                          <span>
+                            תשלום <b>{st.pct}%</b>
+                            {/* "+ מע״מ" נצמד לסכום ולכן מופיע רק כשיש סכום —
+                                "תשלום 20% + מע״מ" בלי מספר קורא כאילו המע״מ
+                                מתווסף לאחוז. */}
+                            {fee > 0 && <> · <Money value={amounts[i]} /> + מע״מ</>}
+                          </span>
+                        </span>
+                      )}
+                      {isFilled(st.trigger) && (
+                        <span><CalendarDays {...CHIP_ICON} />{t(st.trigger)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
         </section>
@@ -433,31 +393,16 @@ export default function QuoteJourneyV2({ content, vars, clientCount, client }) {
         </section>
       )}
 
-      {/* ── רוצים עוד? ── */}
-      {S.extras && extras.length > 0 && (
+      {/* ── רוצים עוד? ──
+          ⚠️ טקסט בלבד. קודם היו כאן כפתורי בחירה שכתבו אל
+          clientResponse.extrasSelected; הבחירה נשמרה ונחתמה, ואף אחד
+          לא ראה אותה — לא במסמך, לא במסכי הצוות ולא במייל. הפריטים
+          עצמם נשארים ב-content, והמסמך הכתוב ממשיך להציג אותם דרך
+          pdfEyebrow / pdfTitle / pdfBody. */}
+      {S.extras && (isFilled(S.extras.title) || isFilled(S.extras.subtitle)) && (
         <section className="qj-extras">
           <h2 className="qj-serif">{t(S.extras.title)}</h2>
           <p className="qj-sub">{t(S.extras.subtitle)}</p>
-          {extras.map((ex, i) => {
-            const key = ex.id ?? String(i)
-            const on = selectedExtras.includes(key)
-            return (
-              <button
-                type="button"
-                key={key}
-                className={'qj-extra' + (on ? ' qj-on' : '')}
-                aria-pressed={on}
-                disabled={live && client.submitted}
-                onClick={() => toggleExtra(key)}
-              >
-                <div className="qj-t">
-                  <b>{t(ex.title)}</b>
-                  <span>{t(ex.sub)}</span>
-                </div>
-                <div className="qj-tog" />
-              </button>
-            )
-          })}
         </section>
       )}
 

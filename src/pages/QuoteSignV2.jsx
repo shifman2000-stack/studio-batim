@@ -99,6 +99,11 @@ export default function QuoteSignV2({ token: tokenProp, version: versionProp }) 
     try {
       const payload = {
         ...response,
+        /* הפן השיווקי כבר לא מציג בחירת תוספות, ולכן שליחה חדשה
+           תמיד מגיעה בלי בחירה. השדה נשאר במבנה כי זה מה ש-
+           finalize-quote-v2 מצפה לו, ומה שכבר נשמר בהצעות קיימות
+           לא נוגעים בו. */
+        extrasSelected: [],
         consentCheckedAt: new Date().toISOString(),
         signatures: (response.signatures ?? []).map((sg, i) => ({
           ...sg, clientIndex: i, signedAtClient: sg?.signedAtClient ?? new Date().toISOString(),

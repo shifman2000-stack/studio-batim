@@ -21,7 +21,6 @@
   -webkit-overflow-scrolling: touch;
   position: relative;
 
-
   --qj-night: #16201d;
   --qj-panel: #1f2b27;
   --qj-panel2: #26342f;
@@ -225,10 +224,11 @@
 .qj-segs > div { border-radius: 6px; position: relative; background: var(--qj-panel2); overflow: hidden; }
 .qj-segs > div::before {
   content: ""; position: absolute; inset: 0;
-  background: var(--qj-terra); transform: scaleX(0); transform-origin: right;
-  transition: transform .9s cubic-bezier(.2, .7, .2, 1);
+  /* ⚠️ מלא מההתחלה. הפסים התמלאו בעבר כש-qj-seen נדלק מאותו
+     IntersectionObserver שהפעיל את ספירת שכר הטרחה; הספירה ירדה,
+     ובלי המילוי הזה הם היו נשארים ריקים לנצח. */
+  background: var(--qj-terra); transform-origin: right;
 }
-.qj-fee.qj-seen .qj-segs > div::before { transform: scaleX(1); }
 .qj-segs > div:nth-child(2)::before { transition-delay: .12s; background: #e08a59; }
 .qj-segs > div:nth-child(3)::before { transition-delay: .24s; background: #e59d68; }
 .qj-segs > div:nth-child(4)::before { transition-delay: .36s; background: #ebb078; }
@@ -258,6 +258,42 @@
 .qj-segl b { display: block; color: var(--qj-cream); font-weight: 400; font-size: 12.5px; }
 .qj-segl .qj-seglabel { display: block; }
 
+/* ---------- שורה לכל שלב, מתחת לפסים ---------- */
+.qj-steps { max-width: 720px; margin: 34px auto 0; }
+.qj-step {
+  padding: 16px 0;
+  border-top: 1px solid var(--qj-line);
+}
+.qj-step:last-child { border-bottom: 1px solid var(--qj-line); }
+
+/* השם: מספר דו-ספרתי ואחריו התווית הקצרה — אותה תווית בדיוק
+   שמתחת לפס שמעל, כדי ששתי הרשימות ייקראו כאחת. */
+.qj-step-name {
+  display: flex; align-items: baseline; gap: 10px;
+  font-family: 'Frank Ruhl Libre', serif; font-size: 19px;
+  color: var(--qj-cream);
+}
+.qj-step-name b {
+  font-family: 'Playfair Display', serif; font-weight: 400;
+  font-size: 15px; color: var(--qj-terra); letter-spacing: .04em;
+}
+
+/* הצ׳יפים כאן הם אותם צ׳יפים — רק המרווח העליון קטן יותר, כי
+   מעליהם שורת שם ולא פסקה. */
+.qj-steps .qj-facts { margin-top: 10px; }
+
+@media (min-width: 760px) {
+  /* ברוחב נוח השם והצ׳יפים יושבים באותה שורה: השם בעמודה קבועה
+     מימין, והצ׳יפים זורמים משמאלו. */
+  .qj-step {
+    display: grid;
+    grid-template-columns: minmax(140px, 200px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: baseline;
+  }
+  .qj-steps .qj-facts { margin-top: 0; }
+}
+
 /* ---------- what if ---------- */
 .qj-whatif { max-width: 760px; margin: 0 auto; padding: 40px 24px 70px; }
 .qj-whatif h2, .qj-extras h2, .qj-sign h2 {
@@ -286,32 +322,6 @@
 
 /* ---------- extras ---------- */
 .qj-extras { max-width: 760px; margin: 0 auto; padding: 30px 24px 60px; }
-.qj-extra {
-  display: flex; gap: 16px; align-items: center; padding: 18px 20px;
-  border-radius: 16px; background: var(--qj-panel);
-  border: 1px solid var(--qj-line); margin-bottom: 12px; cursor: pointer;
-  transition: border-color .3s, background .3s;
-  width: 100%; text-align: start; color: inherit; font: inherit;
-}
-.qj-extra .qj-t { flex: 1; }
-.qj-extra .qj-t b {
-  display: block; font-family: 'Frank Ruhl Libre', serif;
-  font-weight: 400; font-size: 19px;
-}
-.qj-extra .qj-t span { font-size: 13.5px; color: var(--qj-muted); }
-.qj-tog {
-  width: 46px; height: 26px; border-radius: 99px;
-  background: rgba(239, 231, 216, .18); position: relative; flex: none;
-  transition: background .3s;
-}
-.qj-tog::after {
-  content: ""; position: absolute; top: 3px; right: 3px;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--qj-cream); transition: right .3s;
-}
-.qj-extra.qj-on { border-color: var(--qj-terra); background: #2b2621; }
-.qj-extra.qj-on .qj-tog { background: var(--qj-terra); }
-.qj-extra.qj-on .qj-tog::after { right: 23px; }
 
 /* ---------- full-quote PDF button (decision 25) ---------- */
 .qj-fullpdf { max-width: 760px; margin: 0 auto; padding: 0 24px 10px; }

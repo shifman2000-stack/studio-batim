@@ -7,6 +7,10 @@ import { displayValue } from '../../../lib/quoteV2/linked'
 export default function SectionOpening({
   content, opening, scope, extras, vars, nClients, readOnly, hideClientFields,
   f, onClient, onRemoveSecond, onProperty,
+  /* ⚠️ ארבעת אלה כבר לא בשימוש כאן: ממשק עריכת פריטי התוספות ירד
+     מהמסך יחד עם הצגתם בפן השיווקי. הם נשארים בחתימה ובצד הקורא
+     כדי שהחזרת הממשק תהיה חיבור מחדש ולא בנייה מחדש — ops.toggleExtra,
+     ops.removeExtra ודיאלוג libExtra עדיין חיים ב-QuoteEditorV2. */
   onToggleExtra, onAddExtra, onRemoveExtra, onPatch,
 }) {
   const c0 = content?.clients?.[0] ?? {}
@@ -88,48 +92,26 @@ export default function SectionOpening({
             {...f.bind(scope.id, 'body', scope.body)}
           />
         )}
+
+        {/* ── "רוצים עוד?" ──
+            הפן השיווקי מציג כאן כותרת וכותרת משנה בלבד; פריטי
+            התוספות ירדו ממנו. שלושת שדות ה-PDF של הסעיף
+            (pdfEyebrow / pdfTitle / pdfBody) לא נערכים כאן —
+            המסמך הכתוב ממשיך להשתמש בהם כפי שהם. */}
+        {extras && (
+          <>
+            <LinkedField
+              label="כותרת ״רוצים עוד?״ בטלפון" disabled={readOnly}
+              {...f.bind(extras.id, 'title', extras.title)}
+            />
+            <LinkedField
+              label="כותרת משנה ״רוצים עוד?״ בטלפון" textarea rows={3} disabled={readOnly}
+              {...f.bind(extras.id, 'subtitle', extras.subtitle)}
+            />
+          </>
+        )}
       </div>
 
-      {extras && (extras.items ?? []).map(x => (
-        <div className="qe-toggle" key={x.id}>
-          <div className="qe-t">
-            <b>{x.title || 'תוספת'}</b>
-            <span>{x.sub}</span>
-          </div>
-          {!readOnly && (
-            <>
-              <button type="button" className="qe-ic" title="הסרה" onClick={() => onRemoveExtra(x.id)}>🗑</button>
-              <button
-                type="button"
-                className={'qe-tg' + (x.enabled === false ? '' : ' on')}
-                aria-label={x.enabled === false ? 'הדלקה' : 'כיבוי'}
-                onClick={() => onToggleExtra(x.id)}
-              />
-            </>
-          )}
-        </div>
-      ))}
-      {extras && !readOnly && (
-        <button type="button" className="qe-add" onClick={onAddExtra}>+ תוספת</button>
-      )}
-
-      {extras && (extras.items ?? []).some(x => x.enabled !== false) && !readOnly && (
-        <div className="qe-note">
-          תוספת כבויה נשארת בהצעה ולא מוצגת ללקוח. אפשר להדליק אותה שוב בכל רגע.
-        </div>
-      )}
-
-      {/* עריכת הכותרת והטקסט של התוספות עצמן — מתחת לטוגלים, כי זה
-          נדיר יותר מהדלקה וכיבוי. */}
-      {extras && !readOnly && (extras.items ?? []).map(x => (
-        <details key={'d' + x.id} style={{ padding: '0 20px 10px' }}>
-          <summary className="qe-opt" style={{ cursor: 'pointer' }}>עריכת הטקסט של ״{x.title || 'תוספת'}״</summary>
-          <div style={{ paddingTop: 8 }}>
-            <Field label="שם התוספת" value={x.title} onChange={v => onPatch(x.id, { title: v })} />
-            <Field label="תיאור קצר" value={x.sub} onChange={v => onPatch(x.id, { sub: v })} />
-          </div>
-        </details>
-      ))}
     </div>
   )
 }

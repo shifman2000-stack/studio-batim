@@ -4,6 +4,7 @@ import { resolveText, isFilled } from '../../lib/quoteV2/resolve'
 import { computePayments } from '../../lib/quoteV2/payments'
 import { varsOf, clientCountOf, signersOf, isSignedContent } from '../../lib/quoteV2/content'
 import Money from './Money'
+import SignCard from './SignCard'
 import Logo from '../Logo'
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -103,7 +104,16 @@ function Tower({ names }) {
   )
 }
 
-export default function QuoteTowerV2({ content, vars, clientCount }) {
+/**
+ * @param {object} [client] מצב ההצעה החיה — מה שהופך את המסמך
+ *   למסך לקוח אינטראקטיבי. ⚠️ **בלעדיו הרינדור זהה לחלוטין למה
+ *   שהיה**, וזה התנאי שמחזיק את ה-PDF: QuoteTowerPrint לא מעביר
+ *   client, ולכן כל מה שתלוי בו פשוט לא קיים בצינור ההדפסה.
+ *   כל תוספת אינטראקטיבית כאן חייבת להיות מאחורי `live`.
+ */
+export default function QuoteTowerV2({ content, vars, clientCount, client }) {
+  const live = !!client
+
   /* כמו בפן השיווקי: הערכים הקפואים שב-content הם מקור האמת, ו-prop
      מפורש גובר עליהם רק במעבדה. */
   const v = vars ?? varsOf(content)
@@ -159,7 +169,7 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
 
 
   return (
-    <div className="qt-doc" dir="rtl" lang="he">
+    <div className={'qt-doc' + (live ? ' qt-live' : '')} dir="rtl" lang="he">
 
       {/* ══ עמוד השער ══ */}
       <section className="qt-cover">
@@ -341,8 +351,12 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
             <h2>{isFilled(S.signing.pdfTitle) ? t(S.signing.pdfTitle) : 'אישור ההצעה'}</h2>
             {isFilled(S.signing.pdfText) && <p className="qt-txt">{t(S.signing.pdfText)}</p>}
             {/* לפני החתימה — שורות ריקות, כולל קו ת.ז. (החלטה 33).
-                אחרי החתימה — מה שהלקוח הקליד וצייר, באותן עמודות. */}
-            {signers.map((sg, i) => {
+                אחרי החתימה — מה שהלקוח הקליד וצייר, באותן עמודות.
+
+                ⚠️ במצב לקוח שעדיין לא נחתם אין שורות ריקות: במקומן
+                מגיע הכרטיס שמתחת, ושורת חתימה בעט מעל טופס חתימה
+                דיגיטלי רק שואלת על איזו מהן לחתום. */}
+            {live && !isSigned ? null : signers.map((sg, i) => {
               const signedAt = sg.signedAtClient
                 ? new Date(sg.signedAtClient).toLocaleDateString('he-IL')
                 : ''
@@ -365,6 +379,21 @@ export default function QuoteTowerV2({ content, vars, clientCount }) {
                 </div>
               )
             })}
+
+            {/* ⚠️ מצב לקוח בלבד — אותו SignCard, אותה ולידציה ואותו
+                אובייקט שנשלח לשרת; רק ההורה התחלף. אחרי שליחה
+                מוצלחת הוא מציג את doneHeadline/doneBody ואת הקישור
+                ל-PDF החתום, ולמעלה כאן כבר מופיעים הערכים החתומים,
+                כי QuoteSignV2 מיזג את התשובה אל ה-content. */}
+            {live && (
+              <SignCard
+                section={S.signing}
+                t={t}
+                clientCount={nClients}
+                clients={content?.clients ?? []}
+                client={client}
+              />
+            )}
           </div>
 
           <div className="qt-closing">

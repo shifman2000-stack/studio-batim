@@ -108,6 +108,13 @@ function openQuote(inquiryId, quote) {
   window.open(target, '_blank', 'noopener,noreferrer')
 }
 
+/* הצעה חתומה שעינב עוד לא פתחה. ⚠️ viewed_by_admin הוא NOT NULL
+   עם ברירת מחדל false, ולכן אין כאן מקרה של undefined מהמסד —
+   undefined פירושו רק שהשורה עוד לא נטענה. */
+function isNewSigned(quote) {
+  return !!quote && quote.status === 'signed' && quote.viewed_by_admin === false
+}
+
 function downloadSignedQuote(quote) {
   const url = signedQuoteDownloadUrl(quote?.signed_file_url, quote?.quote_number)
   if (!url) return
@@ -874,6 +881,26 @@ export default function Inquiries() {
     return () => document.removeEventListener('mousedown', handler)
   }, [confirmId])
 
+  /* ── סימון הצעה חתומה כנצפתה ──────────────────────────────────
+     נקראת כשעינב פותחת את ההצעה מהמסך הזה. ⚠️ הכתיבה מתבצעת דרך
+     הקליינט הרגיל ונשענת על מדיניות ה-RLS היחידה של quotes
+     ("quotes: admin all" — FOR ALL ל-authenticated, USING true),
+     שמתירה את העדכון לכל משתמש מחובר. אין כאן פונקציית שרת.
+
+     המצב המקומי מתעדכן מיד ולא ממתין לתשובה: הפתיחה נפתחת בלשונית
+     חדשה באותו tick, ותגית שנשארת דולקת עוד שנייה אחרי שלחצו
+     עליה נראית כמו באג. אם העדכון נכשל — התגית תחזור ברענון הבא,
+     וזה הכיוון הנכון להיכשל אליו. */
+  const markQuoteViewed = async (quote) => {
+    if (!isNewSigned(quote)) return
+    setQuotes(prev => (prev[quote.inquiry_id]?.id === quote.id
+      ? { ...prev, [quote.inquiry_id]: { ...prev[quote.inquiry_id], viewed_by_admin: true } }
+      : prev))
+    const { error } = await supabase
+      .from('quotes').update({ viewed_by_admin: true }).eq('id', quote.id)
+    if (error) console.error('viewed_by_admin update failed', error)
+  }
+
   /* ── Fetch ── */
   useEffect(() => {
     if (!checking) fetchAll()
@@ -884,7 +911,8 @@ export default function Inquiries() {
     const [{ data: inquiriesData }, { data: quotesData }, { data: versionsData }] = await Promise.all([
       supabase.from('inquiries').select('*').order('created_at', { ascending: false }),
       // quote_number feeds the signed PDF's download filename.
-      supabase.from('quotes').select('id, inquiry_id, status, updated_at, quote_number'),
+      // viewed_by_admin מזין את תגית "נחתם · חדש" בעמודת ההצעה.
+      supabase.from('quotes').select('id, inquiry_id, status, updated_at, quote_number, viewed_by_admin'),
       // ONE query for the whole table: the same rows carry both the
       // latest sent_at and the signed version's stored PDF url.
       supabase.from('quote_versions')
@@ -1245,8 +1273,26 @@ export default function Inquiries() {
                   <td className="inq-col-action" onClick={e => e.stopPropagation()}>
                     <QuoteIcon
                       quote={quotes[row.id] ?? null}
-                      onClick={() => openQuote(row.id, quotes[row.id] ?? null)}
+                      onClick={() => {
+                        markQuoteViewed(quotes[row.id])
+                        openQuote(row.id, quotes[row.id] ?? null)
+                      }}
                     />
+                    {/* ⚠️ נחתם ועינב עוד לא פתחה. הווי הירוק לבדו לא
+                        מבדיל בין הצעה שנחתמה הבוקר לאחת שנחתמה לפני
+                        חודש, ולכן התגית — והיא נעלמת ברגע שפותחים. */}
+                    {isNewSigned(quotes[row.id]) && (
+                      <button
+                        className="inq-newsigned"
+                        title="נחתם ועדיין לא נצפה — לחיצה פותחת ומסמנת כנצפה"
+                        onClick={() => {
+                          markQuoteViewed(quotes[row.id])
+                          openQuote(row.id, quotes[row.id] ?? null)
+                        }}
+                      >
+                        נחתם · חדש
+                      </button>
+                    )}
                     {/* Explicit save, next to the open action. Only for a
                         signed quote that actually has a stored file. */}
                     {quotes[row.id]?.signed_file_url && (

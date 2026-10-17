@@ -48,6 +48,39 @@
     padding: 18mm 16mm 20mm;
     box-shadow: 0 3px 16px rgba(40, 30, 20, .18);
   }
+
+  /* ---------- מצב לקוח ----------
+     ⚠️ הכללים האלה חיים בתוך @media screen ותלויים ב-.qt-live,
+     ש-QuoteTowerV2 מוסיף רק כשהוא מקבל prop client. צינור ההדפסה
+     לא מעביר client ומרנדר ב-media print — שתי סיבות בלתי תלויות
+     שבגללן שום דבר כאן לא נוגע ב-PDF.
+
+     המסמך תוכנן כגיליון A4: 210 מ״מ רוחב וריפוד של 16–20 מ״מ.
+     בטלפון זה משאיר פחות ממחצית הרוחב לטקסט. כאן הוא מפסיק
+     להתחזות לנייר ונעשה מסך. */
+  @media (max-width: 560px) {
+    .qt-doc.qt-live {
+      width: 100%;
+      padding: 20px 16px 36px;
+      box-shadow: none;
+      font-size: 14.5px;
+    }
+    /* המגדל שעל השער הוא ציור ברוחב קבוע; בטלפון הוא נדחק החוצה
+       ודוחף גלילה אופקית. */
+    .qt-doc.qt-live .qt-hero { display: block; }
+    .qt-doc.qt-live .qt-tower { margin: 24px auto 0; }
+
+    /* שורת התשלום בנויה מארבע עמודות, שלוש מהן ברוחב קבוע:
+       64 + 160 + 92 ועוד שלושה רווחים של 14 — 358px בדיוק, מול
+       358px פנויים ב-390. העמודה הגמישה נשארה בלי כלום והשורה
+       גלשה. כאן היא נשברת לשלוש שורות: מספר וסכום, שם, ומועד. */
+    .qt-doc.qt-live .qt-pay { flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+    .qt-doc.qt-live .qt-pay .qt-pc { order: 1; width: auto; font-size: 24px; }
+    .qt-doc.qt-live .qt-pay .qt-sum { order: 2; width: auto; flex: 1; text-align: end; }
+    .qt-doc.qt-live .qt-pay .qt-sum .qt-vat { display: inline; margin: 0 6px 0 0; }
+    .qt-doc.qt-live .qt-pay .qt-mid { order: 3; flex: 1 1 100%; }
+    .qt-doc.qt-live .qt-pay .qt-when { order: 4; flex: 1 1 100%; width: auto; }
+  }
 }
 .qt-doc *, .qt-doc *::before, .qt-doc *::after { box-sizing: border-box; }
 .qt-doc p { margin: 0; }

@@ -118,6 +118,9 @@ createRoot(document.getElementById('root')).render(
             schema ומרנדר את QuotePublic ללא שינוי לכל מה שאינו 2 —
             כולל שגיאה וטוקן שלא נמצא. ראו ההערה בראש הקובץ. */}
         <Route path="/quote/:token" element={<QuoteRouter />} />
+        {/* המסמך המלא של הלקוח, ובו החתימה. אותו QuoteRouter ואותה
+            טעינה — רק המבט שונה. */}
+        <Route path="/quote/:token/full" element={<QuoteRouter view="full" />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         {/* מעבדה להצעת מחיר v2 — admin בלבד, לא מקושר משום תפריט.
             מחוץ ל-<Layout> בכוונה: המסע תופס את כל המסך, כמו שהלקוח

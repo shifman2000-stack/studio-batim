@@ -17,7 +17,7 @@ import { dirname, resolve as resolvePath } from 'node:path'
 import { resolveText } from './resolve.js'
 import {
   SAMPLE, sampleVars, sampleClients, varNamesIn, hasAlternates, hasVariables,
-  detokenize, rebuildAlternates, rewrapOptional, toTemplateRaw, grammarBoxes,
+  detokenize, rebuildAlternates, rewrapOptional, rewrapAlternates, toTemplateRaw, grammarBoxes,
   grammarRebase, describeTemplateDiff, buildTemplateFromEditor,
 } from './templateEdit.js'
 
@@ -420,6 +420,101 @@ test('מבנה ערוך — שלב שנמחק ושלב שנוסף שורדים',
   const ids = content.sections.find(s => s.type === 'stages').items.map(i => i.id)
   assert.equal(ids.includes('st_x'), true)
   assert.equal(ids.length, st.items.length)
+})
+
+/* ═══════════════════════════════════════════════════════════════
+   רגרסיה: עריכת תיבה אחת בשדה דקדוקי
+   הבאג — עינב ערכה את תיבת היחיד בלבד, תיבת הרבים נשארה על
+   הנוסח הישן, ו-toTemplateRaw ניסה לגזור חלופות מהשוואה בין שני
+   משפטים שונים לגמרי. התוצאה: או נפילה חזרה לנוסח המקורי
+   (העריכה נעלמת), או חלופה לכל מילה שהשתנתה.
+   ═══════════════════════════════════════════════════════════════ */
+
+test('תיבת יחיד בלבד — העריכה נשמרת והחלופות שורדות', () => {
+  const orig = '{{firstNames}}, {בוא|בואו} נבנה {לך|לכם} בית.'
+  const { raw, warnings } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: 'לקוח1, בוא נבנה לך וילה.',
+    pluralText: undefined,
+  })
+  assert.equal(raw, '{{firstNames}}, {בוא|בואו} נבנה {לך|לכם} וילה.')
+  assert.equal(warnings.length, 0)
+})
+
+test('תיבת יחיד בלבד — הנוסח המקורי לא חוזר במקום העריכה', () => {
+  const orig = 'תודה, {{firstNames}}. ניצור {איתך|איתכם} קשר בימים הקרובים.'
+  const { raw } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: 'תודה, לקוח1. ניצור איתך קשר תוך יומיים.',
+    pluralText: undefined,
+  })
+  assert.equal(raw.includes('תוך יומיים'), true)
+  assert.equal(raw.includes('בימים הקרובים'), false)
+  assert.equal(raw.includes('{איתך|איתכם}'), true)
+})
+
+test('תיבת יחיד בלבד — מחיקת חלופה מדווחת, והעריכה לא נזרקת', () => {
+  const orig = '{{firstNames}}, {בוא|בואו} נבנה בית.'
+  const { raw, warnings } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: 'לקוח1, נתחיל לתכנן.',
+    pluralText: undefined,
+  })
+  assert.equal(raw, '{{firstNames}}, נתחיל לתכנן.')
+  assert.equal(warnings.length, 1)
+})
+
+test('תיבת רבים בלבד — הרבים מכתיב, והחלופות נתפרות עליו', () => {
+  const orig = '{{firstNames}}, {בוא|בואו} נבנה בית.'
+  const { raw } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: grammarBoxes(orig).singular,
+    pluralText: 'לקוח1 ולקוח2, בואו נבנה וילה.',
+    singularEdited: false,
+  })
+  assert.equal(raw, '{{firstNames}}, {בוא|בואו} נבנה וילה.')
+})
+
+test('שתי התיבות נערכו — ההרכבה עדיין לפי השוואה ביניהן', () => {
+  const orig = '{בוא|בואו} נבנה בית.'
+  const { raw } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: 'בוא נבנה וילה.',
+    pluralText: 'בואו נבנה וילה.',
+  })
+  assert.equal(raw, '{בוא|בואו} נבנה וילה.')
+})
+
+test('הלוך ושוב בלי שינוי — הנוסח יוצא זהה', () => {
+  const orig = 'שירותים. {סמן|סמנו} מה {מעניין אותך|מעניין אתכם}.'
+  const { raw } = toTemplateRaw({
+    originalRaw: orig,
+    singularText: grammarBoxes(orig).singular,
+    pluralText: undefined,
+  })
+  assert.equal(raw, orig)
+})
+
+test('rewrapAlternates — מדלג על חלופה שכבר בטקסט', () => {
+  const r = rewrapAlternates('{בוא|בואו} נבנה בית.', '{בוא|בואו} נבנה בית.')
+  assert.equal(r.raw, '{בוא|בואו} נבנה בית.')
+  assert.deepEqual(r.lost, [])
+})
+
+test('buildTemplateFromEditor — שדה דקדוקי עם תיבת יחיד בלבד נשמר', () => {
+  const c = editorContent()
+  const open = c.sections.find(s => s.type === 'opening')
+  const orig = template.sections.find(s => s.type === 'opening').greeting
+  open.greeting = grammarBoxes(orig).singular.replace('בית.', 'וילה.')
+  const { content } = buildTemplateFromEditor(c, {
+    edited: [open.id + '.greeting'],
+    origRaw: { [open.id + '.greeting']: orig },
+    sing: { [open.id + '.greeting']: open.greeting },
+  })
+  const out = content.sections.find(s => s.type === 'opening').greeting
+  assert.equal(out.includes('וילה.'), true)
+  assert.equal(out.includes('{בוא|בואו}'), true)
+  assert.equal(out.includes('{{firstNames}}'), true)
 })
 
 console.log('\n' + (failed === 0

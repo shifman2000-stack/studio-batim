@@ -108,7 +108,8 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const [busy, setBusy] = useState('')
   const pristine = useRef(null)        // תוכן התבנית כפי שנטען
   const origRaw = useRef({})           // נוסח מקורי לכל שדה שנערך
-  const plural = useRef({})            // הניסוח ברבים לשדות דקדוקיים
+  const plural = useRef({})            // תיבת הרבים — רק אם נערכה
+  const sing = useRef({})              // תיבת היחיד — רק אם נערכה
   const edited = useRef(new Set())     // נתיבי השדות שנערכו
 
   /* ── טעינה ───────────────────────────────────────────────────── */
@@ -250,20 +251,22 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         }
 
         if (hasAlternates(origRaw.current[path] ?? raw)) {
-          const stored = plural.current[path]
           const boxes = grammarBoxes(origRaw.current[path] ?? raw ?? '')
           return {
             value: raw,
             vars, clientCount: nClients,
             grammar: {
-              singular: edited.current.has(path) ? raw : boxes.singular,
-              plural: stored ?? boxes.plural,
+              /* מה שנערך גובר; מה שלא — מוצג פתור מהנוסח המקורי. */
+              singular: sing.current[path] ?? boxes.singular,
+              plural: plural.current[path] ?? boxes.plural,
+              /* ⚠️ נרשם **רק** מה שבאמת הוקלד. קודם כל עריכה זרעה
+                 את plural בנוסח הישן, והשמירה קיבלה שתי תיבות
+                 "ערוכות" — אחת חדשה ואחת ישנה — וניסתה לגזור מהן
+                 חלופות. זה בדיוק מה שאיבד את העריכות. */
               onChange: (which, v) => {
                 remember()
-                if (plural.current[path] === undefined) plural.current[path] = boxes.plural
                 if (which === 'plural') { plural.current[path] = v; update(c => ({ ...c })) }
-                else update(c => ops.patchById(c, id, { [field]: v }))
-                if (which === 'singular' && !edited.current.has(path)) edited.current.add(path)
+                else { sing.current[path] = v; update(c => ops.patchById(c, id, { [field]: v })) }
               },
             },
             onChange: () => {},
@@ -401,7 +404,11 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
       const reb = grammarRebase(t.after, origRaw.current[path] ?? t.before)
       if (reb) {
         origRaw.current[path] = reb.originalRaw
+        /* ההצעה כותבת את שני הניסוחים, ולכן שתי התיבות נחשבות
+           ערוכות — אחרת השמירה הייתה תופרת חלופות ישנות על נוסח
+           שההצעה כבר בנתה בשלמותו. */
         plural.current[path] = reb.plural
+        sing.current[path] = reb.singular
         next = ops.patchById(next, t.ownerId, { [t.field]: reb.singular })
       } else if (!(path in origRaw.current)) {
         origRaw.current[path] = t.before
@@ -419,6 +426,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     edited: [...edited.current],
     origRaw: origRaw.current,
     plural: plural.current,
+    sing: sing.current,
   })
 
   const openSaveConfirm = () => {
@@ -445,8 +453,16 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
       .select('id, content')
     if (uErr) throw new Error('שמירת התבנית נכשלה: ' + uErr.message)
     if (!uRows?.length) throw new Error('לא עודכנה אף שורה. ייתכן שאין הרשאה, או שהתבנית נמחקה.')
-    if (JSON.stringify(uRows[0].content) !== JSON.stringify(nextContent)) {
-      throw new Error('מה שנשמר במסד שונה ממה שנשלח. לא בוצע שינוי.')
+
+    /* ⚠️ האימות קורא את השורה **מחדש** ומשווה אותה למה שהעורך
+       עומד להציג, ולא ל-returning של ה-UPDATE. ה-returning מחזיר
+       את מה ששלחנו, ולכן הוא מאשר את עצמו: טריגר, ברירת מחדל או
+       כתיבה מקבילה שישנו את השורה אחריו לא היו נתפסים. */
+    const { data: reread, error: rErr } = await supabase.from('quote_templates')
+      .select('content').eq('id', tplRow.id).single()
+    if (rErr) throw new Error('האימות אחרי השמירה נכשל: ' + rErr.message)
+    if (JSON.stringify(reread?.content) !== JSON.stringify(nextContent)) {
+      throw new Error('מה שנקרא חזרה מהמסד שונה ממה שהעורך מציג. לא לסמוך על השמירה הזו.')
     }
 
     /* סיבוב גיבויים — אחרי שהשמירה הצליחה, ולא לפניה. */
@@ -465,7 +481,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
 
   const adoptTemplate = (nextContent, bks) => {
     pristine.current = nextContent
-    origRaw.current = {}; plural.current = {}; edited.current = new Set()
+    origRaw.current = {}; plural.current = {}; sing.current = {}; edited.current = new Set()
     setTemplate(nextContent)
     setContent(asEditable(nextContent, twoClients))
     setTplDirty(false)
@@ -473,6 +489,15 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   }
 
   const doSaveTemplate = async (next) => {
+    /* ⚠️ אין שינוי — אין כתיבה ואין גיבוי. שמירה שמייצרת גיבוי
+       זהה לתוכן השמור היא בדיוק מה שהסתיר את הבאג: המשתמשת ראתה
+       "נשמר", נוצר גיבוי, והתוכן נשאר כשהיה. */
+    if (JSON.stringify(next) === JSON.stringify(pristine.current)) {
+      setDialog(null)
+      setTplDirty(false)
+      flash('לא זוהו שינויים')
+      return
+    }
     setBusy('save')
     try {
       const previous = pristine.current

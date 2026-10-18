@@ -160,6 +160,39 @@ export function rebuildAlternates(singular, plural) {
   return { ok: true, raw: parts.join('') }
 }
 
+/**
+ * מחזיר את החלופות של נוסח המקור אל טקסט שנערך בתיבה אחת בלבד.
+ *
+ * ⚠️ זה המסלול שתופס את הבאג: כשעינב עורכת רק את תיבת היחיד,
+ * תיבת הרבים נשארת על הנוסח הישן — ו-rebuildAlternates, שמשווה
+ * בין שני הניסוחים, רואה שני משפטים שונים לגמרי. הוא או נכשל
+ * (והעריכה נזרקת) או "מצליח" ובונה חלופה לכל מילה שהשתנתה:
+ * ‎{בדיקה|שירותים} {·|שלא}… כאן אין השוואה בכלל. הטקסט שנערך הוא
+ * האמת, והחלופות מהנוסח הישן נתפרות עליו בחזרה — בדיוק כמו
+ * ‎rewrapOptional עושה לקטעים המותנים.
+ *
+ * @param {string} text        הטקסט שנערך, אחרי החזרת המשתנים
+ * @param {string} originalRaw נוסח התבנית לפני העריכה
+ * @param {'singular'|'plural'} side איזו משתי התיבות נערכה
+ */
+export function rewrapAlternates(text, originalRaw, side = 'singular') {
+  let out = String(text ?? '')
+  const lost = []
+  const pairs = []
+  String(originalRaw ?? '').replace(ALT_RE, (_m, s, p) => { pairs.push([s, p]); return '' })
+
+  for (const [s, p] of pairs) {
+    const whole = `{${s}|${p}}`
+    if (out.includes(whole)) continue
+    const mine = side === 'plural' ? p : s
+    /* מילה ריקה בצד שנערך (למשל ‎{|ו} ) אי אפשר לאתר בטקסט —
+       אין לה עוגן. היא נספרת כאבודה ולא מנוחשת. */
+    if (mine && out.includes(mine)) out = out.replace(mine, whole)
+    else lost.push(whole)
+  }
+  return { raw: out, lost }
+}
+
 /* ── החזרת קטעים מותנים ───────────────────────────────────────────── */
 
 /**
@@ -193,21 +226,37 @@ export function rewrapOptional(raw, originalRaw) {
  * @param {object}  a
  * @param {string}  a.originalRaw   הנוסח בתבנית לפני העריכה
  * @param {string}  a.singularText  הטקסט כפי שנערך, בלשון יחיד
- * @param {string}  [a.pluralText]  הטקסט כפי שנערך, בלשון רבים (רק לשדה דקדוקי)
+ * @param {string}  [a.pluralText]  הטקסט כפי שנערך, בלשון רבים.
+ *   ⚠️ ‎null/undefined פירושו **שתיבת הרבים לא נערכה**, וזה הבדל
+ *   מהותי: אז אין שני ניסוחים להשוות ביניהם, והחלופות של הנוסח
+ *   המקורי נתפרות בחזרה על הטקסט שנערך. ערך מחרוזת פירושו
+ *   שעינב ערכה את שתי התיבות, ואז ההרכבה היא השוואה ביניהן.
+ * @param {boolean} [a.singularEdited] האם תיבת היחיד נערכה. כשרק
+ *   תיבת הרבים נערכה, היא זו שמכתיבה את הטקסט.
  * @returns {{ raw: string, warnings: string[] }}
  */
-export function toTemplateRaw({ originalRaw, singularText, pluralText }) {
+export function toTemplateRaw({ originalRaw, singularText, pluralText, singularEdited = true }) {
   const warnings = []
   const names = varNamesIn(originalRaw)
   const vs = sampleVars(false)
   const vp = sampleVars(true)
 
-  const s = detokenize(singularText, vs, names)
   const alt = hasAlternates(originalRaw)
-  const p = alt ? detokenize(pluralText ?? singularText, vp, names) : s
+  const s = detokenize(singularText, vs, names)
 
   let raw
-  if (alt) {
+  if (alt && (pluralText == null || !singularEdited)) {
+    /* תיבה אחת נערכה. הטקסט שנערך הוא הבסיס, והחלופות נתפרות
+       עליו — ולא מחושבות מהשוואה לתיבה שלא נגעו בה. */
+    const side = pluralText == null ? 'singular' : 'plural'
+    const base = side === 'plural' ? detokenize(pluralText, vp, names) : s
+    const w = rewrapAlternates(base, originalRaw, side)
+    raw = w.raw
+    for (const seg of w.lost) {
+      warnings.push(`הניסוח "${resolveText(seg, vs, 1).trim()}" היה שונה בין לקוח אחד לשניים, ומעכשיו הוא אחיד`)
+    }
+  } else if (alt) {
+    const p = detokenize(pluralText, vp, names)
     const built = rebuildAlternates(s, p)
     if (!built.ok) {
       warnings.push(built.reason)
@@ -332,7 +381,12 @@ export function buildTemplateFromEditor(content, meta) {
   const warnings = []
   const edited = new Set(meta?.edited ?? [])
   const origRaw = meta?.origRaw ?? {}
+  /* ⚠️ שתי המפות האלה מחזיקות **רק מה שנערך בפועל**. מפתח חסר
+     פירושו שהתיבה ההיא לא נגעו בה — וזה מה שמבדיל בין "עינב
+     כתבה את אותו דבר" לבין "עינב לא נגעה". קודם plural נזרע
+     בנוסח הישן בכל עריכה, והאבחנה הזו אבדה. */
   const plural = meta?.plural ?? {}
+  const sing = meta?.sing ?? {}
 
   const convert = (ownerId, obj) => {
     const out = { ...obj }
@@ -341,10 +395,18 @@ export function buildTemplateFromEditor(content, meta) {
       const path = `${ownerId}.${k}`
       if (!edited.has(path)) continue
       const original = origRaw[path] ?? v
+      /* ⚠️ בשדה דקדוקי ה-content מחזיק את תיבת היחיד — אבל רק אם
+         היא נערכה. אם נערכה רק תיבת הרבים, ב-content עדיין יושב
+         נוסח התבנית הגולמי, ושליחתו כ"טקסט שנערך" הייתה מכניסה
+         את התחביר עצמו אל תוך הנוסח. */
+      const alt = hasAlternates(original)
+      const singularEdited = !alt || sing[path] !== undefined
       const r = toTemplateRaw({
         originalRaw: original,
-        singularText: v,
-        pluralText: plural[path] ?? v,
+        singularText: alt && !singularEdited ? grammarBoxes(original).singular : v,
+        /* undefined = תיבת הרבים לא נערכה. */
+        pluralText: plural[path],
+        singularEdited,
       })
       out[k] = r.raw
       for (const w of r.warnings) warnings.push(`${path}: ${w}`)

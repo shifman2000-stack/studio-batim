@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { pluralizeContent } from '../lib/quoteV2/plural'
+import { singularizeForClient } from '../lib/quoteV2/singularize'
 import '../components/quoteV2/editor/editor.css'
 
 import { Modal, Toast } from '../components/quoteV2/editor/bits'
@@ -22,7 +24,7 @@ import * as ops from '../lib/quoteV2/editorOps'
 import { applyEdits } from '../lib/quoteV2/templateAssist'
 import { quoteGmailUrl } from '../lib/quoteV2/launch'
 import {
-  sampleVars, sampleClients, SAMPLE, hasAlternates, grammarBoxes, grammarRebase,
+  sampleVars, sampleClients, SAMPLE,
   buildTemplateFromEditor, describeTemplateDiff,
 } from '../lib/quoteV2/templateEdit'
 
@@ -106,9 +108,10 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const [backups, setBackups] = useState([])
   const [tplDirty, setTplDirty] = useState(false)
   const [busy, setBusy] = useState('')
+  const [genderErr, setGenderErr] = useState('')
   const pristine = useRef(null)        // תוכן התבנית כפי שנטען
   const origRaw = useRef({})           // נוסח מקורי לכל שדה שנערך
-  const plural = useRef({})            // הניסוח ברבים לשדות דקדוקיים
+
   const edited = useRef(new Set())     // נתיבי השדות שנערכו
 
   /* ── טעינה ───────────────────────────────────────────────────── */
@@ -141,12 +144,17 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
         if (tpl.error || !tpl.data?.content?.sections) {
           setError('לא נמצאה תבנית ברירת מחדל.'); setState('error'); return
         }
-        pristine.current = tpl.data.content
+        /* ⚠️ הגנה על תבנית שעדיין לא עברה את הגירת הרבים
+           (docs/sql/template-plural-only.sql): כל {יחיד|רבים}
+           שנשאר בה מוצג ונשמר בצד הרבים. אחרי שה-SQL ירוץ אין
+           לזה מה לעשות, והוא נשאר כרשת ביטחון. */
+        const tplPlural = pluralizeContent(tpl.data.content)
+        pristine.current = tplPlural
         setTplRow({ id: tpl.data.id, name: tpl.data.name })
         setLibrary(lib.data ?? [])
         setBackups(bks.data ?? [])
-        setTemplate(tpl.data.content)
-        setContent(asEditable(tpl.data.content, true))
+        setTemplate(tplPlural)
+        setContent(asEditable(tplPlural, true))
         setState('ready')
         return
       }
@@ -242,32 +250,13 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
          כאן אין "מקושר/קפוא": כל שדה מוצג פתור עם נתוני הדוגמה,
          וההמרה חזרה לנוסח תבנית קורית בשמירה. מה שצריך לזכור הוא
          (א) מי נערך, ו-(ב) מה היה הנוסח לפני — בלעדיו אי אפשר
-         לדעת אילו משתנים וחלופות היו בשדה. */
+         לדעת אילו משתנים וקטעים מותנים היו בשדה.
+         ⚠️ תיבה אחת. התבנית כתובה ברבים כטקסט רגיל, והמרה ליחיד
+         קורית פעם אחת ביצירת הצעה ולא כאן. */
       if (isTpl) {
         const remember = () => {
           if (!(path in origRaw.current)) origRaw.current[path] = raw ?? ''
           edited.current.add(path)
-        }
-
-        if (hasAlternates(origRaw.current[path] ?? raw)) {
-          const stored = plural.current[path]
-          const boxes = grammarBoxes(origRaw.current[path] ?? raw ?? '')
-          return {
-            value: raw,
-            vars, clientCount: nClients,
-            grammar: {
-              singular: edited.current.has(path) ? raw : boxes.singular,
-              plural: stored ?? boxes.plural,
-              onChange: (which, v) => {
-                remember()
-                if (plural.current[path] === undefined) plural.current[path] = boxes.plural
-                if (which === 'plural') { plural.current[path] = v; update(c => ({ ...c })) }
-                else update(c => ops.patchById(c, id, { [field]: v }))
-                if (which === 'singular' && !edited.current.has(path)) edited.current.add(path)
-              },
-            },
-            onChange: () => {},
-          }
         }
 
         return {
@@ -393,23 +382,49 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
     let next = r.content
     for (const t of r.touched) {
       const path = `${t.ownerId}.${t.field}`
-      /* ⚠️ העוזר כותב נוסח תבנית, והעורך מציג נתוני דוגמה. בשדה
-         רגיל אין פער — התצוגה פותרת את הנוסח. בשדה דקדוקי יש:
-         שם ה-content מחזיק את תיבת היחיד הפתורה, ונוסח תבנית
-         גולמי היה מופיע בתיבה כמו שהוא. לכן שם הנוסח החדש הופך
-         לבסיס, ומה שנכנס ל-content הוא הפתרון שלו. */
-      const reb = grammarRebase(t.after, origRaw.current[path] ?? t.before)
-      if (reb) {
-        origRaw.current[path] = reb.originalRaw
-        plural.current[path] = reb.plural
-        next = ops.patchById(next, t.ownerId, { [t.field]: reb.singular })
-      } else if (!(path in origRaw.current)) {
-        origRaw.current[path] = t.before
-      }
+      /* ⚠️ אין יותר התאמת דקדוק. התבנית כתובה ברבים כטקסט רגיל,
+         ולכן נוסח שההצעה כותבת נכנס ל-content כמו שהוא; התצוגה
+         פותרת ממנו את {{המשתנים}} בדיוק כמו בכל שדה אחר. */
+      if (!(path in origRaw.current)) origRaw.current[path] = t.before
       edited.current.add(path)
     }
     update(next)
     if (r.skipped.length) flash(`${r.skipped.length} הצעות כבר לא תקפות ודולגו`)
+  }
+
+  /* ── הצעה ללקוח יחיד: המרת הנוסח ────────────────────────────
+     ⚠️ ההמרה רצה תמיד מהנוסח **ברבים** של התבנית, ולא מהתוכן
+     הנוכחי: המרה של טקסט שכבר הומר הייתה מצטברת על עצמה
+     ("בוא" → "בוא"), ובמעבר זכר↔נקבה היא הייתה ממירה נוסח
+     שכבר במגדר אחר. המחיר: עריכות ידניות בטקסט מוחלפות — ולכן
+     המתג שואל לפני. */
+  const singleClient = !isTpl && (content?.clients ?? []).length === 1
+  const clientGender = content?.clientGender === 'f' ? 'f' : 'm'
+
+  const runSingularize = async (g) => {
+    if (!template?.sections) { setGenderErr('אין תבנית לבנות ממנה.'); return }
+    setBusy('gender'); setGenderErr('')
+    try {
+      /* הבסיס: התבנית ברבים, עם נתוני ההצעה הזו. */
+      const base = {
+        ...content,
+        sections: JSON.parse(JSON.stringify(template.sections)),
+      }
+      const r = await singularizeForClient(base, {
+        firstName: content?.clients?.[0]?.firstName, gender: g,
+      })
+      if (!r.ok) { setGenderErr(r.error || 'ההמרה נכשלה.'); return }
+      const next = { ...r.content }
+      delete next.singularizePending
+      delete next.singularizeError
+      update(next)
+      setDialog(null)
+      flash(r.rejected?.length
+        ? `הנוסח הותאם · ${r.rejected.length} שדות נשארו ברבים`
+        : 'הנוסח הותאם')
+    } catch (e) {
+      setGenderErr(e?.message || 'ההמרה נכשלה.')
+    } finally { setBusy('') }
   }
 
   /* ── שמירת תבנית ──────────────────────────────────────────────
@@ -418,7 +433,6 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   const buildNext = () => buildTemplateFromEditor(content, {
     edited: [...edited.current],
     origRaw: origRaw.current,
-    plural: plural.current,
   })
 
   const openSaveConfirm = () => {
@@ -445,8 +459,16 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
       .select('id, content')
     if (uErr) throw new Error('שמירת התבנית נכשלה: ' + uErr.message)
     if (!uRows?.length) throw new Error('לא עודכנה אף שורה. ייתכן שאין הרשאה, או שהתבנית נמחקה.')
-    if (JSON.stringify(uRows[0].content) !== JSON.stringify(nextContent)) {
-      throw new Error('מה שנשמר במסד שונה ממה שנשלח. לא בוצע שינוי.')
+
+    /* ⚠️ האימות קורא את השורה **מחדש** ומשווה אותה למה שהעורך
+       עומד להציג, ולא ל-returning של ה-UPDATE. ה-returning מחזיר
+       את מה ששלחנו, ולכן הוא מאשר את עצמו: טריגר, ברירת מחדל או
+       כתיבה מקבילה שישנו את השורה אחריו לא היו נתפסים. */
+    const { data: reread, error: rErr } = await supabase.from('quote_templates')
+      .select('content').eq('id', tplRow.id).single()
+    if (rErr) throw new Error('האימות אחרי השמירה נכשל: ' + rErr.message)
+    if (JSON.stringify(reread?.content) !== JSON.stringify(nextContent)) {
+      throw new Error('מה שנקרא חזרה מהמסד שונה ממה שהעורך מציג. לא לסמוך על השמירה הזו.')
     }
 
     /* סיבוב גיבויים — אחרי שהשמירה הצליחה, ולא לפניה. */
@@ -465,7 +487,7 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
 
   const adoptTemplate = (nextContent, bks) => {
     pristine.current = nextContent
-    origRaw.current = {}; plural.current = {}; edited.current = new Set()
+    origRaw.current = {}; edited.current = new Set()
     setTemplate(nextContent)
     setContent(asEditable(nextContent, twoClients))
     setTplDirty(false)
@@ -473,6 +495,15 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
   }
 
   const doSaveTemplate = async (next) => {
+    /* ⚠️ אין שינוי — אין כתיבה ואין גיבוי. שמירה שמייצרת גיבוי
+       זהה לתוכן השמור היא בדיוק מה שהסתיר את הבאג: המשתמשת ראתה
+       "נשמר", נוצר גיבוי, והתוכן נשאר כשהיה. */
+    if (JSON.stringify(next) === JSON.stringify(pristine.current)) {
+      setDialog(null)
+      setTplDirty(false)
+      flash('לא זוהו שינויים')
+      return
+    }
     setBusy('save')
     try {
       const previous = pristine.current
@@ -617,6 +648,43 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
             {lastSent?.sent_at && (
               <> נשלחה גרסה {lastSent.version_number}; שליחה נוספת תיצור גרסה {lastSent.version_number + 1}.</>
             )}
+          </div>
+        )}
+
+        {/* ── לקוח יחיד: הנוסח הותאם ─────────────────────────────
+            התבנית כתובה ברבים, וההצעה הזו הומרה ליחיד ביצירתה.
+            הבאנר אומר את זה במפורש, כי הטקסט שמתחתיו נכתב על ידי
+            מודל ולא על ידי עינב — וכדאי שמישהו יעבור עליו. */}
+        {singleClient && !readOnly && (
+          <div className={'qe-tip' + (content?.singularizePending ? ' ro' : '')}>
+            {content?.singularizePending ? (
+              <>
+                ⚠️ הנוסח לא הותאם ללקוח יחיד וההצעה נפתחה בלשון רבים
+                {content?.singularizeError ? ` (${content.singularizeError})` : ''}.
+                <button type="button" className="qe-undo" style={{ marginInlineStart: 10 }}
+                  disabled={busy === 'gender'}
+                  onClick={() => runSingularize(null)}>
+                  {busy === 'gender' ? 'ממיר…' : 'נסה שוב'}
+                </button>
+              </>
+            ) : (
+              <>
+                הטקסט הותאם ללקוח יחיד ({clientGender === 'f' ? 'נקבה' : 'זכר'}) — כדאי לעבור עליו.
+                <span className="qe-gsw">
+                  <button type="button" className={clientGender === 'm' ? 'on' : ''}
+                    disabled={busy === 'gender'}
+                    onClick={() => (clientGender === 'm' ? null : setDialog({ kind: 'gender', g: 'm' }))}>
+                    זכר
+                  </button>
+                  <button type="button" className={clientGender === 'f' ? 'on' : ''}
+                    disabled={busy === 'gender'}
+                    onClick={() => (clientGender === 'f' ? null : setDialog({ kind: 'gender', g: 'f' }))}>
+                    נקבה
+                  </button>
+                </span>
+              </>
+            )}
+            {genderErr && <div style={{ color: '#c0653a', marginTop: 6 }}>{genderErr}</div>}
           </div>
         )}
 
@@ -828,6 +896,23 @@ export default function QuoteEditorV2({ mode = 'quote' }) {
               setDialog(null)
               flash('ההצעה נבנתה מחדש מהטופס')
             }}>בנייה מחדש</button>
+            <button type="button" className="qe-b" onClick={() => setDialog(null)}>ביטול</button>
+          </div>
+        </Modal>
+      )}
+
+      {dialog?.kind === 'gender' && (
+        <Modal onClose={() => setDialog(null)}>
+          <h3>המרת הנוסח ל{dialog.g === 'f' ? 'נקבה' : 'זכר'}</h3>
+          {/* ⚠️ האזהרה אינה נימוס. ההמרה רצה מהתבנית ברבים, ולכן
+              היא דורסת את כל הטקסט בהצעה — כולל מה שנערך ידנית. */}
+          <p>הטקסטים יומרו מחדש מהתבנית, ועריכות ידניות בטקסט יוחלפו.</p>
+          {genderErr && <div className="qe-warn" style={{ background: '#fae3da' }}>❌ {genderErr}</div>}
+          <div className="qe-row">
+            <button type="button" className="qe-b pri" disabled={busy === 'gender'}
+              onClick={() => runSingularize(dialog.g)}>
+              {busy === 'gender' ? 'ממיר…' : 'המרה'}
+            </button>
             <button type="button" className="qe-b" onClick={() => setDialog(null)}>ביטול</button>
           </div>
         </Modal>

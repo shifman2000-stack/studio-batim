@@ -27,11 +27,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 import { buildQuoteV2Content } from '../lib/quoteV2/content'
 import { V2_FOR_NEW_QUOTES, isV2Quote, latestQuoteOf } from '../lib/quoteV2/launch'
+import { singularizeForClient } from '../lib/quoteV2/singularize'
 
 export default function QuoteOpen() {
   const { inquiryId } = useParams()
   const navigate = useNavigate()
   const [error, setError] = useState('')
+  const [note, setNote] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -75,7 +77,21 @@ export default function QuoteOpen() {
         return
       }
 
-      const content = buildQuoteV2Content(tpl.content, inq, {})
+      let content = buildQuoteV2Content(tpl.content, inq, {})
+
+      /* ── מזמין אחד → המרה ליחיד ─────────────────────────────────
+         התבנית כתובה ברבים. הצעה עם מזמין אחד מומרת פעם אחת,
+         כאן, ומכאן והלאה הטקסט הוא טקסט רגיל שאפשר לערוך.
+         ⚠️ כישלון לא עוצר כלום: ההצעה נוצרת ברבים ומסומנת
+         ב-singularizePending, והעורך מציג "נסה שוב". */
+      if ((content.clients ?? []).length === 1) {
+        setNote('מתאים את הנוסח ללקוח יחיד…')
+        const r = await singularizeForClient(content, { firstName: content.clients[0]?.firstName })
+        if (cancelled) return
+        if (r.ok) content = r.content
+        else content = { ...content, singularizePending: true, singularizeError: r.error }
+      }
+      setNote('')
       /* max+1 over the inquiry's own quotes, falling back to 1 — the same
          number QuoteBuilder would have picked, so v1 and v2 numbers can
          never collide on one inquiry. */
@@ -100,7 +116,7 @@ export default function QuoteOpen() {
 
   return (
     <div dir="rtl" style={{ padding: 40, fontFamily: 'Heebo, sans-serif', color: error ? '#c0653a' : '#8a8680' }}>
-      {error || 'פותח את הצעת המחיר…'}
+      {error || note || 'פותח את הצעת המחיר…'}
     </div>
   )
 }

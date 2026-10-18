@@ -91,76 +91,13 @@ export function detokenize(text, vars, allowedNames) {
   return out
 }
 
-/* ── הרכבת חלופות דקדוק ───────────────────────────────────────────── */
+/* ⚠️ כאן ישבו tokenize, lcsMatrix, rebuildAlternates, grammarBoxes
+   ו-grammarRebase — כל מנגנון שתי התיבות. התבנית כתובה ברבים
+   כטקסט רגיל, והמרה ליחיד קורית פעם אחת ביצירת הצעה
+   (api/quote-singularize). hasAlternates נשאר, כי הוא מזהה תבנית
+   שעדיין לא עברה את ההגירה; ו-resolve.js ממשיך לפתור
+   {יחיד|רבים} בהצעות שכבר נשלחו ונחתמו. */
 
-/** פיצול לאסימונים ששומר על רווחים, כדי שההרכבה תחזיר טקסט זהה. */
-function tokenize(s) {
-  return String(s ?? '').split(/(\s+)/).filter(t => t !== '')
-}
-
-/** LCS על אסימונים — בסיס ל"מה משותף ומה שונה". */
-function lcsMatrix(a, b) {
-  const m = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) {
-      m[i][j] = a[i] === b[j] ? m[i + 1][j + 1] + 1 : Math.max(m[i + 1][j], m[i][j + 1])
-    }
-  }
-  return m
-}
-
-const FORBIDDEN = /[{}|]/
-
-/**
- * מרכיב נוסח אחד עם חלופות {יחיד|רבים} משני ניסוחים.
- *
- * מקטעים זהים נשארים כמו שהם, ומקטעים שנבדלים נעטפים בחלופה.
- *
- * ⚠️ ה-resolver לא מרשה `{`, `}` או `|` בתוך חלופה, ולכן אם מקטע
- * שנבדל מכיל אחד מהם (למשל {{משתנה}} שנכנס רק לצד אחד) אי אפשר
- * לבנות חלופה תקינה. במקרה כזה מחזירים ok:false והקורא משאיר את
- * הנוסח המקורי — עדיף נוסח ישן מנוסח שבור.
- */
-export function rebuildAlternates(singular, plural) {
-  const a = tokenize(singular)
-  const b = tokenize(plural)
-
-  if (singular === plural) return { ok: true, raw: String(singular ?? '') }
-
-  const m = lcsMatrix(a, b)
-  const parts = []
-  let i = 0, j = 0
-  let da = [], db = []
-
-  const flush = () => {
-    if (!da.length && !db.length) return null
-    const s = da.join(''), p = db.join('')
-    if (FORBIDDEN.test(s) || FORBIDDEN.test(p)) {
-      return `בנוסח הזה יש הבדל בין יחיד לרבים שנוגע במשתנה — לא ניתן לבנות ממנו חלופה`
-    }
-    parts.push(`{${s}|${p}}`)
-    da = []; db = []
-    return null
-  }
-
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      const err = flush(); if (err) return { ok: false, reason: err }
-      parts.push(a[i]); i++; j++
-    } else if (m[i + 1][j] >= m[i][j + 1]) {
-      da.push(a[i]); i++
-    } else {
-      db.push(b[j]); j++
-    }
-  }
-  while (i < a.length) { da.push(a[i]); i++ }
-  while (j < b.length) { db.push(b[j]); j++ }
-  const err = flush(); if (err) return { ok: false, reason: err }
-
-  return { ok: true, raw: parts.join('') }
-}
-
-/* ── החזרת קטעים מותנים ───────────────────────────────────────────── */
 
 /**
  * עוטף בחזרה ב-[[ ]] כל קטע מותנה מהנוסח המקורי שנשאר זהה בטקסט
@@ -190,76 +127,28 @@ export function rewrapOptional(raw, originalRaw) {
 /**
  * ממיר את מה שעינב רואה בחזרה לנוסח תבנית.
  *
+ * ⚠️ התבנית כתובה ברבים בלבד — אין יותר {יחיד|רבים} ואין שתי
+ * תיבות. מה שנשאר כאן הוא שתי המרות שאינן תלויות בדקדוק:
+ * ערכי הדוגמה חוזרים להיות {{משתנים}}, והקטעים המותנים חוזרים
+ * לסוגריים שלהם. הצעה ללקוח יחיד מומרת פעם אחת ביצירתה
+ * (api/quote-singularize), ולא דרך התבנית.
+ *
  * @param {object}  a
  * @param {string}  a.originalRaw   הנוסח בתבנית לפני העריכה
- * @param {string}  a.singularText  הטקסט כפי שנערך, בלשון יחיד
- * @param {string}  [a.pluralText]  הטקסט כפי שנערך, בלשון רבים (רק לשדה דקדוקי)
+ * @param {string}  a.text          הטקסט כפי שנערך
  * @returns {{ raw: string, warnings: string[] }}
  */
-export function toTemplateRaw({ originalRaw, singularText, pluralText }) {
+export function toTemplateRaw({ originalRaw, text }) {
   const warnings = []
   const names = varNamesIn(originalRaw)
-  const vs = sampleVars(false)
-  const vp = sampleVars(true)
+  const vs = sampleVars(true)
 
-  const s = detokenize(singularText, vs, names)
-  const alt = hasAlternates(originalRaw)
-  const p = alt ? detokenize(pluralText ?? singularText, vp, names) : s
-
-  let raw
-  if (alt) {
-    const built = rebuildAlternates(s, p)
-    if (!built.ok) {
-      warnings.push(built.reason)
-      return { raw: String(originalRaw ?? ''), warnings }
-    }
-    raw = built.raw
-  } else {
-    raw = s
-  }
-
+  const raw = detokenize(text, vs, names)
   const wrapped = rewrapOptional(raw, originalRaw)
   for (const seg of wrapped.lost) {
-    warnings.push(`הקטע "${resolveText(seg, vs, 1).trim()}" היה מותנה בשדה רשות, ומעכשיו יופיע תמיד`)
+    warnings.push(`הקטע "${resolveText(seg, vs, 2).trim()}" היה מותנה בשדה רשות, ומעכשיו יופיע תמיד`)
   }
   return { raw: wrapped.raw, warnings }
-}
-
-/** שני הניסוחים שמוצגים בשדה דקדוקי — יחיד ורבים, פתורים. */
-export function grammarBoxes(raw) {
-  return {
-    singular: resolveText(raw, sampleVars(false), 1),
-    plural: resolveText(raw, sampleVars(true), 2),
-  }
-}
-
-/**
- * מתרגמת נוסח תבנית חדש שנכנס לשדה **לא בהקלדה** (היום: הצעה של
- * העוזר שאושרה) למה שהעורך מציג.
- *
- * ⚠️ בשדה דקדוקי העורך לא מציג נוסח תבנית אלא שתי תיבות פתורות,
- * והערך שב-content הוא תיבת היחיד. מי שכותב לשם נוסח תבנית שובר
- * את ההנחה הזו: תיבת היחיד מציגה "{{firstNames}}" ותיבת הרבים
- * נשארת על הנוסח הישן. לכן הנוסח החדש הופך ל**בסיס** של השדה,
- * ומה שמוצג הוא הפתרון שלו — בדיוק כמו שדה שלא נגעו בו.
- *
- * originalRaw חוזר בכוונה כנוסח החדש ולא כישן: הוא מה שהשמירה
- * משתמשת בו כדי לדעת אילו משתנים וקטעים מותנים לשחזר, וקטעים
- * מותנים נמחקים בפתירה. עם הישן, קטע שההצעה הוסיפה או הסירה היה
- * נבנה מחדש לפי התבנית הקודמת.
- *
- * prevRaw הוא הנוסח שהשדה הציג קודם. הוא נחוץ רק למקרה הקצה שבו
- * ההצעה מורידה את החלופות משדה שהיה דקדוקי: גם אז התיבה שעל המסך
- * צריכה להציג טקסט פתור ולא תבנית.
- *
- * @returns {null|{originalRaw: string, singular: string, plural: string}}
- *          null כששני הנוסחים בלי חלופות — שם התצוגה ממילא פותרת
- *          את הנוסח, ואין מה לתקן.
- */
-export function grammarRebase(newRaw, prevRaw = newRaw) {
-  if (!hasAlternates(newRaw) && !hasAlternates(prevRaw)) return null
-  const { singular, plural } = grammarBoxes(newRaw)
-  return { originalRaw: String(newRaw ?? ''), singular, plural }
 }
 
 /* ── מה השתנה בתבנית ──────────────────────────────────────────────── */
@@ -332,7 +221,6 @@ export function buildTemplateFromEditor(content, meta) {
   const warnings = []
   const edited = new Set(meta?.edited ?? [])
   const origRaw = meta?.origRaw ?? {}
-  const plural = meta?.plural ?? {}
 
   const convert = (ownerId, obj) => {
     const out = { ...obj }
@@ -340,12 +228,7 @@ export function buildTemplateFromEditor(content, meta) {
       if (typeof v !== 'string' || TEXT_FIELDS_SKIP.has(k)) continue
       const path = `${ownerId}.${k}`
       if (!edited.has(path)) continue
-      const original = origRaw[path] ?? v
-      const r = toTemplateRaw({
-        originalRaw: original,
-        singularText: v,
-        pluralText: plural[path] ?? v,
-      })
+      const r = toTemplateRaw({ originalRaw: origRaw[path] ?? v, text: v })
       out[k] = r.raw
       for (const w of r.warnings) warnings.push(`${path}: ${w}`)
     }

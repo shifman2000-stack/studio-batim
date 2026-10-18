@@ -394,3 +394,16 @@
 @media (max-width: 760px) {
   .qe-chat { inset: 0; }
 }
+
+/* ── מתג המגדר בהצעה ללקוח יחיד ──
+   ⚠️ שני כפתורים ולא select: המצב הנוכחי צריך להיראות בלי
+   לפתוח כלום, כי הוא מה שהבאנר מדווח עליו. */
+.qe-gsw { display: inline-flex; gap: 0; margin-inline-start: 10px; vertical-align: middle; }
+.qe-gsw button {
+  font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer;
+  background: #fff; color: #6f6a60; border: 1px solid #ddd8d0;
+}
+.qe-gsw button:first-child { border-radius: 0 99px 99px 0; }
+.qe-gsw button:last-child { border-radius: 99px 0 0 99px; border-inline-start: 0; }
+.qe-gsw button.on { background: #1a1a18; color: #f3efe7; border-color: #1a1a18; }
+.qe-gsw button:disabled { opacity: .5; cursor: default; }

@@ -17,8 +17,8 @@ import { dirname, resolve as resolvePath } from 'node:path'
 import { resolveText } from './resolve.js'
 import {
   SAMPLE, sampleVars, sampleClients, varNamesIn, hasAlternates, hasVariables,
-  detokenize, rebuildAlternates, rewrapOptional, rewrapAlternates, toTemplateRaw, grammarBoxes,
-  grammarRebase, describeTemplateDiff, buildTemplateFromEditor,
+  detokenize, rewrapOptional, toTemplateRaw,
+  describeTemplateDiff, buildTemplateFromEditor,
 } from './templateEdit.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -87,36 +87,6 @@ test('ערך ריק לא מוחזר', () => {
   assert.equal(detokenize('טקסט', { settlement: '' }, ['settlement']), 'טקסט')
 })
 
-/* ── הרכבת חלופות ── */
-
-console.log('\n הרכבת חלופות דקדוק')
-test('מילה אחת שונה', () => {
-  const r = rebuildAlternates('בוא נבנה לך בית.', 'בואו נבנה לכם בית.')
-  assert.equal(r.ok, true)
-  assert.equal(r.raw, '{בוא|בואו} נבנה {לך|לכם} בית.')
-})
-test('טקסט זהה — בלי חלופות', () => {
-  const r = rebuildAlternates('אותו דבר', 'אותו דבר')
-  assert.equal(r.raw, 'אותו דבר')
-})
-test('הלוך ושוב: ההרכבה נפתרת חזרה לשני הניסוחים', () => {
-  const r = rebuildAlternates('מה אתה צריך, איך אתה חי', 'מה אתם צריכים, איך אתם חיים')
-  assert.equal(r.ok, true)
-  assert.equal(resolveText(r.raw, {}, 1), 'מה אתה צריך, איך אתה חי')
-  assert.equal(resolveText(r.raw, {}, 2), 'מה אתם צריכים, איך אתם חיים')
-})
-test('תוספת מילה רק ברבים', () => {
-  const r = rebuildAlternates('שלום', 'שלום לכולם')
-  assert.equal(r.ok, true)
-  assert.equal(resolveText(r.raw, {}, 1), 'שלום')
-  assert.equal(resolveText(r.raw, {}, 2), 'שלום לכולם')
-})
-test('משתנה בתוך מקטע שנבדל — נכשל בבירור ולא בשקט', () => {
-  const r = rebuildAlternates('של {{firstNames}}', 'של כולם')
-  assert.equal(r.ok, false)
-  assert.match(r.reason, /משתנה/)
-})
-
 /* ── קטעים מותנים ── */
 
 console.log('\n קטעים מותנים')
@@ -131,175 +101,6 @@ test('קטע שנוסח מחדש מדווח כאבוד', () => {
   const orig = 'בית[[ של {{houseArea}} מ״ר]] בעיר'
   const r = rewrapOptional('בית גדול בעיר', orig)
   assert.deepEqual(r.lost, [' של {{houseArea}} מ״ר'])
-})
-
-/* ── ההמרה המלאה ── */
-
-console.log('\n ההמרה המלאה')
-
-test('שורת הפתיחה האמיתית — הלוך ושוב מדויק', () => {
-  const orig = template.sections.find(s => s.type === 'opening').greeting
-  const boxes = grammarBoxes(orig)
-  const { raw, warnings } = toTemplateRaw({ originalRaw: orig, singularText: boxes.singular, pluralText: boxes.plural })
-  assert.deepEqual(warnings, [])
-  assert.equal(resolveText(raw, VS, 1), resolveText(orig, VS, 1))
-  assert.equal(resolveText(raw, VP, 2), resolveText(orig, VP, 2))
-  assert.ok(raw.includes('{{firstNames}}'), 'המשתנה אבד: ' + raw)
-})
-
-test('פסקת הפתיחה האמיתית — משתנים וקטעים מותנים שורדים', () => {
-  const orig = template.sections.find(s => s.type === 'opening').intro
-  const boxes = grammarBoxes(orig)
-  const { raw } = toTemplateRaw({ originalRaw: orig, singularText: boxes.singular, pluralText: boxes.plural })
-  for (const n of varNamesIn(orig)) {
-    assert.ok(raw.includes(`{{${n}}}`), `${n} אבד`)
-  }
-  assert.equal((raw.match(/\[\[/g) || []).length, (orig.match(/\[\[/g) || []).length, 'קטע מותנה אבד')
-  assert.equal(resolveText(raw, VS, 1), resolveText(orig, VS, 1))
-  assert.equal(resolveText(raw, VP, 2), resolveText(orig, VP, 2))
-})
-
-test('כל שדות הטקסט בתבנית — הלוך ושוב בלי אובדן', () => {
-  const fails = []
-  const walk = (obj, path) => {
-    for (const [k, v] of Object.entries(obj ?? {})) {
-      if (typeof v === 'string' && (v.includes('{{') || v.includes('{') || v.includes('[['))) {
-        const boxes = grammarBoxes(v)
-        const { raw } = toTemplateRaw({ originalRaw: v, singularText: boxes.singular, pluralText: boxes.plural })
-        if (resolveText(raw, VS, 1) !== resolveText(v, VS, 1)) fails.push(`${path}.${k} יחיד`)
-        if (resolveText(raw, VP, 2) !== resolveText(v, VP, 2)) fails.push(`${path}.${k} רבים`)
-        for (const n of varNamesIn(v)) if (!raw.includes(`{{${n}}}`)) fails.push(`${path}.${k} איבד {{${n}}}`)
-      } else if (v && typeof v === 'object') {
-        walk(v, `${path}.${k}`)
-      }
-    }
-  }
-  walk(template, 'tpl')
-  assert.deepEqual(fails, [])
-})
-
-/* ── נוסח שנכנס לשדה לא בהקלדה (הצעה של העוזר שאושרה) ── */
-
-console.log('\n בסיס מחדש אחרי הצעה שאושרה')
-
-const RAW_SYNTAX = /\{\{|\}\}|\[\[|\]\]|\{[^{}]*\|[^{}]*\}/
-
-test('שדה דקדוקי — שתי התיבות מציגות טקסט פתור, לא תבנית', () => {
-  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
-  const reb = grammarRebase(next)
-  assert.notEqual(reb, null)
-  assert.equal(RAW_SYNTAX.test(reb.singular), false, 'ביחיד נשאר תחביר: ' + reb.singular)
-  assert.equal(RAW_SYNTAX.test(reb.plural), false, 'ברבים נשאר תחביר: ' + reb.plural)
-  assert.equal(reb.singular, 'לקוח1,\nבוא נתכנן\nלך בית.')
-  assert.equal(reb.plural, 'לקוח1 ולקוח2,\nבואו נתכנן\nלכם בית.')
-})
-
-test('תיבת הרבים מתעדכנת לנוסח החדש ולא נשארת על הישן', () => {
-  const before = template.sections.find(s => s.type === 'opening').greeting
-  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
-  const reb = grammarRebase(next, before)
-  assert.notEqual(reb.plural, grammarBoxes(before).plural)
-  assert.ok(reb.plural.includes('נתכנן'), 'הרבים נשאר על הנוסח הישן: ' + reb.plural)
-})
-
-test('השמירה לא משתנה — הלוך ושוב מחזיר בדיוק את נוסח ההצעה', () => {
-  const next = '{{firstNames}},\n{בוא|בואו} נתכנן\n{לך|לכם} בית.'
-  const reb = grammarRebase(next)
-  const { raw, warnings } = toTemplateRaw({
-    originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
-  })
-  assert.deepEqual(warnings, [])
-  assert.equal(raw, next)
-})
-
-test('הבסיס הוא הנוסח החדש — קטע מותנה שההצעה הוסיפה שורד שמירה', () => {
-  const before = 'בית מגורים ב{{settlement}}. {גלול|גללו} למטה.'
-  const next = 'בית מגורים[[ של כ-{{houseArea}} מ״ר]] ב{{settlement}}. {גלול|גללו} למטה.'
-  const reb = grammarRebase(next, before)
-  const { raw } = toTemplateRaw({
-    originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
-  })
-  assert.equal(raw, next)
-  assert.ok(raw.includes('[['), 'הקטע המותנה אבד: ' + raw)
-  assert.ok(raw.includes('{{houseArea}}'), 'המשתנה החדש אבד: ' + raw)
-})
-
-test('שדה בלי חלופות — אין מה לתקן', () => {
-  assert.equal(grammarRebase('בית מגורים ב{{settlement}}.'), null)
-})
-
-test('הצעה שמורידה חלופות משדה שהיה דקדוקי — עדיין מוצג פתור', () => {
-  const before = '{{firstNames}}, {בוא|בואו} נבנה.'
-  const next = '{{firstNames}}, נתחיל לבנות.'
-  const reb = grammarRebase(next, before)
-  assert.notEqual(reb, null)
-  assert.equal(RAW_SYNTAX.test(reb.singular), false)
-  assert.equal(reb.singular, 'לקוח1, נתחיל לבנות.')
-})
-
-test('כל שדה דקדוקי אמיתי בתבנית — בסיס מחדש וחזרה בלי אובדן', () => {
-  const fails = []
-  const walk = (obj, path) => {
-    for (const [k, v] of Object.entries(obj ?? {})) {
-      if (typeof v === 'string' && hasAlternates(v)) {
-        const reb = grammarRebase(v)
-        if (RAW_SYNTAX.test(reb.singular)) fails.push(`${path}.${k} יחיד נשאר תבנית`)
-        if (RAW_SYNTAX.test(reb.plural)) fails.push(`${path}.${k} רבים נשאר תבנית`)
-        const { raw } = toTemplateRaw({
-          originalRaw: reb.originalRaw, singularText: reb.singular, pluralText: reb.plural,
-        })
-        if (resolveText(raw, VS, 1) !== resolveText(v, VS, 1)) fails.push(`${path}.${k} יחיד`)
-        if (resolveText(raw, VP, 2) !== resolveText(v, VP, 2)) fails.push(`${path}.${k} רבים`)
-      } else if (v && typeof v === 'object') {
-        walk(v, `${path}.${k}`)
-      }
-    }
-  }
-  walk(template, 'tpl')
-  assert.deepEqual(fails, [])
-})
-
-test('עריכה אמיתית: עינב משנה את שורת הפתיחה בשני המצבים', () => {
-  const orig = template.sections.find(s => s.type === 'opening').greeting
-  const { raw, warnings } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'לקוח1, בוא נתכנן לך בית.',
-    pluralText: 'לקוח1 ולקוח2, בואו נתכנן לכם בית.',
-  })
-  assert.deepEqual(warnings, [])
-  assert.ok(raw.includes('{{firstNames}}'), raw)
-  assert.ok(!raw.includes('לקוח1'), 'שם הדוגמה נשאר בתבנית: ' + raw)
-  /* ולקוח אמיתי אחר מקבל את השם שלו */
-  assert.equal(resolveText(raw, { firstNames: 'דנה' }, 1), 'דנה, בוא נתכנן לך בית.')
-  assert.equal(resolveText(raw, { firstNames: 'דנה ויואב' }, 2), 'דנה ויואב, בואו נתכנן לכם בית.')
-})
-
-test('עריכה של שדה עם שטחים — הערכים חוזרים להיות משתנים', () => {
-  const orig = 'תכנון בית של כ-{{houseArea}} מ״ר ב{{settlement}}.'
-  const { raw } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'תכנון מלא לבית של כ-200 מ״ר בנגבה.',
-  })
-  assert.equal(raw, 'תכנון מלא לבית של כ-{{houseArea}} מ״ר ב{{settlement}}.')
-  assert.equal(resolveText(raw, { houseArea: '350', settlement: 'להב' }, 1),
-    'תכנון מלא לבית של כ-350 מ״ר בלהב.')
-})
-
-test('שדה בלי מנגנונים נשמר כמו שהוא', () => {
-  const { raw, warnings } = toTemplateRaw({ originalRaw: 'טקסט פשוט', singularText: 'טקסט חדש' })
-  assert.equal(raw, 'טקסט חדש')
-  assert.deepEqual(warnings, [])
-})
-
-test('כשלון בהרכבת חלופה משאיר את הנוסח המקורי', () => {
-  const orig = '{{firstNames}} {בוא|בואו}'
-  const { raw, warnings } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'לקוח1 בוא',
-    pluralText: 'כולם בואו',      // firstNames נעלם רק מצד אחד
-  })
-  assert.equal(raw, orig, 'הנוסח המקורי לא נשמר')
-  assert.equal(warnings.length, 1)
 })
 
 /* ── תיאור השינויים ── */
@@ -374,19 +175,18 @@ test('שדה ערוך מומר, שכנו לא נוגע', () => {
   const open = c.sections.find(s => s.type === 'opening')
   const origGreeting = open.greeting
   const origIntro = open.intro
-  open.greeting = 'לקוח1, בוא נתכנן לך בית.'
+  open.greeting = 'לקוח1 ולקוח2, בואו נתכנן לכם בית.'
   const { content, warnings } = buildTemplateFromEditor(c, {
     edited: ['sec_open.greeting'],
     origRaw: { 'sec_open.greeting': origGreeting },
-    plural: { 'sec_open.greeting': 'לקוח1 ולקוח2, בואו נתכנן לכם בית.' },
   })
   assert.deepEqual(warnings, [])
   const outOpen = content.sections.find(s => s.type === 'opening')
   assert.ok(outOpen.greeting.includes('{{firstNames}}'), outOpen.greeting)
   assert.ok(!outOpen.greeting.includes('לקוח1'), outOpen.greeting)
   assert.equal(outOpen.intro, origIntro, 'שדה שלא נערך השתנה')
-  assert.equal(resolveText(outOpen.greeting, { firstNames: 'דנה' }, 1), 'דנה, בוא נתכנן לך בית.')
-  assert.equal(resolveText(outOpen.greeting, { firstNames: 'דנה ויואב' }, 2), 'דנה ויואב, בואו נתכנן לכם בית.')
+  assert.equal(resolveText(outOpen.greeting, { firstNames: 'דנה ויואב' }, 2),
+    'דנה ויואב, בואו נתכנן לכם בית.')
 })
 
 test('"נגבה" בשדה שלא היה בו יישוב נשאר טקסט', () => {
@@ -423,98 +223,56 @@ test('מבנה ערוך — שלב שנמחק ושלב שנוסף שורדים',
 })
 
 /* ═══════════════════════════════════════════════════════════════
-   רגרסיה: עריכת תיבה אחת בשדה דקדוקי
-   הבאג — עינב ערכה את תיבת היחיד בלבד, תיבת הרבים נשארה על
-   הנוסח הישן, ו-toTemplateRaw ניסה לגזור חלופות מהשוואה בין שני
-   משפטים שונים לגמרי. התוצאה: או נפילה חזרה לנוסח המקורי
-   (העריכה נעלמת), או חלופה לכל מילה שהשתנתה.
+   תבנית ברבים בלבד
+   עד כאן התבנית החזיקה {יחיד|רבים} ושדה הוצג בשתי תיבות. עכשיו
+   היא טקסט רגיל ברבים, וההמרה ליחיד קורית פעם אחת ביצירת הצעה.
    ═══════════════════════════════════════════════════════════════ */
 
-test('תיבת יחיד בלבד — העריכה נשמרת והחלופות שורדות', () => {
-  const orig = '{{firstNames}}, {בוא|בואו} נבנה {לך|לכם} בית.'
+test('toTemplateRaw — טקסט רגיל, המשתנים חוזרים', () => {
   const { raw, warnings } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'לקוח1, בוא נבנה לך וילה.',
-    pluralText: undefined,
+    originalRaw: 'בית ב{{settlement}} של כ-{{houseArea}} מ״ר.',
+    text: 'בית בנגבה של כ-200 מ״ר.',
   })
-  assert.equal(raw, '{{firstNames}}, {בוא|בואו} נבנה {לך|לכם} וילה.')
+  assert.equal(raw, 'בית ב{{settlement}} של כ-{{houseArea}} מ״ר.')
   assert.equal(warnings.length, 0)
 })
 
-test('תיבת יחיד בלבד — הנוסח המקורי לא חוזר במקום העריכה', () => {
-  const orig = 'תודה, {{firstNames}}. ניצור {איתך|איתכם} קשר בימים הקרובים.'
+test('toTemplateRaw — קטע מותנה חוזר לסוגריים שלו', () => {
   const { raw } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'תודה, לקוח1. ניצור איתך קשר תוך יומיים.',
-    pluralText: undefined,
+    originalRaw: 'בית[[ של כ-{{houseArea}} מ״ר]].',
+    text: 'בית של כ-200 מ״ר.',
   })
-  assert.equal(raw.includes('תוך יומיים'), true)
-  assert.equal(raw.includes('בימים הקרובים'), false)
-  assert.equal(raw.includes('{איתך|איתכם}'), true)
+  assert.equal(raw, 'בית[[ של כ-{{houseArea}} מ״ר]].')
 })
 
-test('תיבת יחיד בלבד — מחיקת חלופה מדווחת, והעריכה לא נזרקת', () => {
-  const orig = '{{firstNames}}, {בוא|בואו} נבנה בית.'
+test('toTemplateRaw — עריכה שמוחקת קטע מותנה מדווחת', () => {
   const { raw, warnings } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'לקוח1, נתחיל לתכנן.',
-    pluralText: undefined,
+    originalRaw: 'בית[[ של כ-{{houseArea}} מ״ר]].',
+    text: 'בית.',
   })
-  assert.equal(raw, '{{firstNames}}, נתחיל לתכנן.')
+  assert.equal(raw, 'בית.')
   assert.equal(warnings.length, 1)
 })
 
-test('תיבת רבים בלבד — הרבים מכתיב, והחלופות נתפרות עליו', () => {
-  const orig = '{{firstNames}}, {בוא|בואו} נבנה בית.'
-  const { raw } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: grammarBoxes(orig).singular,
-    pluralText: 'לקוח1 ולקוח2, בואו נבנה וילה.',
-    singularEdited: false,
-  })
-  assert.equal(raw, '{{firstNames}}, {בוא|בואו} נבנה וילה.')
-})
-
-test('שתי התיבות נערכו — ההרכבה עדיין לפי השוואה ביניהן', () => {
-  const orig = '{בוא|בואו} נבנה בית.'
-  const { raw } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: 'בוא נבנה וילה.',
-    pluralText: 'בואו נבנה וילה.',
-  })
-  assert.equal(raw, '{בוא|בואו} נבנה וילה.')
-})
-
-test('הלוך ושוב בלי שינוי — הנוסח יוצא זהה', () => {
-  const orig = 'שירותים. {סמן|סמנו} מה {מעניין אותך|מעניין אתכם}.'
-  const { raw } = toTemplateRaw({
-    originalRaw: orig,
-    singularText: grammarBoxes(orig).singular,
-    pluralText: undefined,
-  })
+test('toTemplateRaw — הלוך ושוב בלי עריכה מחזיר את אותו נוסח', () => {
+  const orig = 'שירותים שלא כלולים בהצעה. סמנו מה מעניין אתכם.'
+  const { raw } = toTemplateRaw({ originalRaw: orig, text: orig })
   assert.equal(raw, orig)
 })
 
-test('rewrapAlternates — מדלג על חלופה שכבר בטקסט', () => {
-  const r = rewrapAlternates('{בוא|בואו} נבנה בית.', '{בוא|בואו} נבנה בית.')
-  assert.equal(r.raw, '{בוא|בואו} נבנה בית.')
-  assert.deepEqual(r.lost, [])
-})
-
-test('buildTemplateFromEditor — שדה דקדוקי עם תיבת יחיד בלבד נשמר', () => {
+test('buildTemplateFromEditor — תיבה אחת, הטקסט נשמר כמו שהוא', () => {
   const c = editorContent()
   const open = c.sections.find(s => s.type === 'opening')
-  const orig = template.sections.find(s => s.type === 'opening').greeting
-  open.greeting = grammarBoxes(orig).singular.replace('בית.', 'וילה.')
+  const orig = open.greeting
+  open.greeting = 'לקוח1 ולקוח2, בואו נבנה לכם וילה.'
   const { content } = buildTemplateFromEditor(c, {
     edited: [open.id + '.greeting'],
     origRaw: { [open.id + '.greeting']: orig },
-    sing: { [open.id + '.greeting']: open.greeting },
   })
   const out = content.sections.find(s => s.type === 'opening').greeting
-  assert.equal(out.includes('וילה.'), true)
-  assert.equal(out.includes('{בוא|בואו}'), true)
+  assert.equal(out.includes('וילה'), true)
   assert.equal(out.includes('{{firstNames}}'), true)
+  assert.equal(/\{[^{}|]*\|[^{}|]*\}/.test(out), false)
 })
 
 console.log('\n' + (failed === 0

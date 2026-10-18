@@ -91,109 +91,13 @@ export function detokenize(text, vars, allowedNames) {
   return out
 }
 
-/* ── הרכבת חלופות דקדוק ───────────────────────────────────────────── */
+/* ⚠️ כאן ישבו tokenize, lcsMatrix, rebuildAlternates, grammarBoxes
+   ו-grammarRebase — כל מנגנון שתי התיבות. התבנית כתובה ברבים
+   כטקסט רגיל, והמרה ליחיד קורית פעם אחת ביצירת הצעה
+   (api/quote-singularize). hasAlternates נשאר, כי הוא מזהה תבנית
+   שעדיין לא עברה את ההגירה; ו-resolve.js ממשיך לפתור
+   {יחיד|רבים} בהצעות שכבר נשלחו ונחתמו. */
 
-/** פיצול לאסימונים ששומר על רווחים, כדי שההרכבה תחזיר טקסט זהה. */
-function tokenize(s) {
-  return String(s ?? '').split(/(\s+)/).filter(t => t !== '')
-}
-
-/** LCS על אסימונים — בסיס ל"מה משותף ומה שונה". */
-function lcsMatrix(a, b) {
-  const m = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) {
-      m[i][j] = a[i] === b[j] ? m[i + 1][j + 1] + 1 : Math.max(m[i + 1][j], m[i][j + 1])
-    }
-  }
-  return m
-}
-
-const FORBIDDEN = /[{}|]/
-
-/**
- * מרכיב נוסח אחד עם חלופות {יחיד|רבים} משני ניסוחים.
- *
- * מקטעים זהים נשארים כמו שהם, ומקטעים שנבדלים נעטפים בחלופה.
- *
- * ⚠️ ה-resolver לא מרשה `{`, `}` או `|` בתוך חלופה, ולכן אם מקטע
- * שנבדל מכיל אחד מהם (למשל {{משתנה}} שנכנס רק לצד אחד) אי אפשר
- * לבנות חלופה תקינה. במקרה כזה מחזירים ok:false והקורא משאיר את
- * הנוסח המקורי — עדיף נוסח ישן מנוסח שבור.
- */
-export function rebuildAlternates(singular, plural) {
-  const a = tokenize(singular)
-  const b = tokenize(plural)
-
-  if (singular === plural) return { ok: true, raw: String(singular ?? '') }
-
-  const m = lcsMatrix(a, b)
-  const parts = []
-  let i = 0, j = 0
-  let da = [], db = []
-
-  const flush = () => {
-    if (!da.length && !db.length) return null
-    const s = da.join(''), p = db.join('')
-    if (FORBIDDEN.test(s) || FORBIDDEN.test(p)) {
-      return `בנוסח הזה יש הבדל בין יחיד לרבים שנוגע במשתנה — לא ניתן לבנות ממנו חלופה`
-    }
-    parts.push(`{${s}|${p}}`)
-    da = []; db = []
-    return null
-  }
-
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      const err = flush(); if (err) return { ok: false, reason: err }
-      parts.push(a[i]); i++; j++
-    } else if (m[i + 1][j] >= m[i][j + 1]) {
-      da.push(a[i]); i++
-    } else {
-      db.push(b[j]); j++
-    }
-  }
-  while (i < a.length) { da.push(a[i]); i++ }
-  while (j < b.length) { db.push(b[j]); j++ }
-  const err = flush(); if (err) return { ok: false, reason: err }
-
-  return { ok: true, raw: parts.join('') }
-}
-
-/**
- * מחזיר את החלופות של נוסח המקור אל טקסט שנערך בתיבה אחת בלבד.
- *
- * ⚠️ זה המסלול שתופס את הבאג: כשעינב עורכת רק את תיבת היחיד,
- * תיבת הרבים נשארת על הנוסח הישן — ו-rebuildAlternates, שמשווה
- * בין שני הניסוחים, רואה שני משפטים שונים לגמרי. הוא או נכשל
- * (והעריכה נזרקת) או "מצליח" ובונה חלופה לכל מילה שהשתנתה:
- * ‎{בדיקה|שירותים} {·|שלא}… כאן אין השוואה בכלל. הטקסט שנערך הוא
- * האמת, והחלופות מהנוסח הישן נתפרות עליו בחזרה — בדיוק כמו
- * ‎rewrapOptional עושה לקטעים המותנים.
- *
- * @param {string} text        הטקסט שנערך, אחרי החזרת המשתנים
- * @param {string} originalRaw נוסח התבנית לפני העריכה
- * @param {'singular'|'plural'} side איזו משתי התיבות נערכה
- */
-export function rewrapAlternates(text, originalRaw, side = 'singular') {
-  let out = String(text ?? '')
-  const lost = []
-  const pairs = []
-  String(originalRaw ?? '').replace(ALT_RE, (_m, s, p) => { pairs.push([s, p]); return '' })
-
-  for (const [s, p] of pairs) {
-    const whole = `{${s}|${p}}`
-    if (out.includes(whole)) continue
-    const mine = side === 'plural' ? p : s
-    /* מילה ריקה בצד שנערך (למשל ‎{|ו} ) אי אפשר לאתר בטקסט —
-       אין לה עוגן. היא נספרת כאבודה ולא מנוחשת. */
-    if (mine && out.includes(mine)) out = out.replace(mine, whole)
-    else lost.push(whole)
-  }
-  return { raw: out, lost }
-}
-
-/* ── החזרת קטעים מותנים ───────────────────────────────────────────── */
 
 /**
  * עוטף בחזרה ב-[[ ]] כל קטע מותנה מהנוסח המקורי שנשאר זהה בטקסט
@@ -223,92 +127,28 @@ export function rewrapOptional(raw, originalRaw) {
 /**
  * ממיר את מה שעינב רואה בחזרה לנוסח תבנית.
  *
+ * ⚠️ התבנית כתובה ברבים בלבד — אין יותר {יחיד|רבים} ואין שתי
+ * תיבות. מה שנשאר כאן הוא שתי המרות שאינן תלויות בדקדוק:
+ * ערכי הדוגמה חוזרים להיות {{משתנים}}, והקטעים המותנים חוזרים
+ * לסוגריים שלהם. הצעה ללקוח יחיד מומרת פעם אחת ביצירתה
+ * (api/quote-singularize), ולא דרך התבנית.
+ *
  * @param {object}  a
  * @param {string}  a.originalRaw   הנוסח בתבנית לפני העריכה
- * @param {string}  a.singularText  הטקסט כפי שנערך, בלשון יחיד
- * @param {string}  [a.pluralText]  הטקסט כפי שנערך, בלשון רבים.
- *   ⚠️ ‎null/undefined פירושו **שתיבת הרבים לא נערכה**, וזה הבדל
- *   מהותי: אז אין שני ניסוחים להשוות ביניהם, והחלופות של הנוסח
- *   המקורי נתפרות בחזרה על הטקסט שנערך. ערך מחרוזת פירושו
- *   שעינב ערכה את שתי התיבות, ואז ההרכבה היא השוואה ביניהן.
- * @param {boolean} [a.singularEdited] האם תיבת היחיד נערכה. כשרק
- *   תיבת הרבים נערכה, היא זו שמכתיבה את הטקסט.
+ * @param {string}  a.text          הטקסט כפי שנערך
  * @returns {{ raw: string, warnings: string[] }}
  */
-export function toTemplateRaw({ originalRaw, singularText, pluralText, singularEdited = true }) {
+export function toTemplateRaw({ originalRaw, text }) {
   const warnings = []
   const names = varNamesIn(originalRaw)
-  const vs = sampleVars(false)
-  const vp = sampleVars(true)
+  const vs = sampleVars(true)
 
-  const alt = hasAlternates(originalRaw)
-  const s = detokenize(singularText, vs, names)
-
-  let raw
-  if (alt && (pluralText == null || !singularEdited)) {
-    /* תיבה אחת נערכה. הטקסט שנערך הוא הבסיס, והחלופות נתפרות
-       עליו — ולא מחושבות מהשוואה לתיבה שלא נגעו בה. */
-    const side = pluralText == null ? 'singular' : 'plural'
-    const base = side === 'plural' ? detokenize(pluralText, vp, names) : s
-    const w = rewrapAlternates(base, originalRaw, side)
-    raw = w.raw
-    for (const seg of w.lost) {
-      warnings.push(`הניסוח "${resolveText(seg, vs, 1).trim()}" היה שונה בין לקוח אחד לשניים, ומעכשיו הוא אחיד`)
-    }
-  } else if (alt) {
-    const p = detokenize(pluralText, vp, names)
-    const built = rebuildAlternates(s, p)
-    if (!built.ok) {
-      warnings.push(built.reason)
-      return { raw: String(originalRaw ?? ''), warnings }
-    }
-    raw = built.raw
-  } else {
-    raw = s
-  }
-
+  const raw = detokenize(text, vs, names)
   const wrapped = rewrapOptional(raw, originalRaw)
   for (const seg of wrapped.lost) {
-    warnings.push(`הקטע "${resolveText(seg, vs, 1).trim()}" היה מותנה בשדה רשות, ומעכשיו יופיע תמיד`)
+    warnings.push(`הקטע "${resolveText(seg, vs, 2).trim()}" היה מותנה בשדה רשות, ומעכשיו יופיע תמיד`)
   }
   return { raw: wrapped.raw, warnings }
-}
-
-/** שני הניסוחים שמוצגים בשדה דקדוקי — יחיד ורבים, פתורים. */
-export function grammarBoxes(raw) {
-  return {
-    singular: resolveText(raw, sampleVars(false), 1),
-    plural: resolveText(raw, sampleVars(true), 2),
-  }
-}
-
-/**
- * מתרגמת נוסח תבנית חדש שנכנס לשדה **לא בהקלדה** (היום: הצעה של
- * העוזר שאושרה) למה שהעורך מציג.
- *
- * ⚠️ בשדה דקדוקי העורך לא מציג נוסח תבנית אלא שתי תיבות פתורות,
- * והערך שב-content הוא תיבת היחיד. מי שכותב לשם נוסח תבנית שובר
- * את ההנחה הזו: תיבת היחיד מציגה "{{firstNames}}" ותיבת הרבים
- * נשארת על הנוסח הישן. לכן הנוסח החדש הופך ל**בסיס** של השדה,
- * ומה שמוצג הוא הפתרון שלו — בדיוק כמו שדה שלא נגעו בו.
- *
- * originalRaw חוזר בכוונה כנוסח החדש ולא כישן: הוא מה שהשמירה
- * משתמשת בו כדי לדעת אילו משתנים וקטעים מותנים לשחזר, וקטעים
- * מותנים נמחקים בפתירה. עם הישן, קטע שההצעה הוסיפה או הסירה היה
- * נבנה מחדש לפי התבנית הקודמת.
- *
- * prevRaw הוא הנוסח שהשדה הציג קודם. הוא נחוץ רק למקרה הקצה שבו
- * ההצעה מורידה את החלופות משדה שהיה דקדוקי: גם אז התיבה שעל המסך
- * צריכה להציג טקסט פתור ולא תבנית.
- *
- * @returns {null|{originalRaw: string, singular: string, plural: string}}
- *          null כששני הנוסחים בלי חלופות — שם התצוגה ממילא פותרת
- *          את הנוסח, ואין מה לתקן.
- */
-export function grammarRebase(newRaw, prevRaw = newRaw) {
-  if (!hasAlternates(newRaw) && !hasAlternates(prevRaw)) return null
-  const { singular, plural } = grammarBoxes(newRaw)
-  return { originalRaw: String(newRaw ?? ''), singular, plural }
 }
 
 /* ── מה השתנה בתבנית ──────────────────────────────────────────────── */
@@ -381,12 +221,6 @@ export function buildTemplateFromEditor(content, meta) {
   const warnings = []
   const edited = new Set(meta?.edited ?? [])
   const origRaw = meta?.origRaw ?? {}
-  /* ⚠️ שתי המפות האלה מחזיקות **רק מה שנערך בפועל**. מפתח חסר
-     פירושו שהתיבה ההיא לא נגעו בה — וזה מה שמבדיל בין "עינב
-     כתבה את אותו דבר" לבין "עינב לא נגעה". קודם plural נזרע
-     בנוסח הישן בכל עריכה, והאבחנה הזו אבדה. */
-  const plural = meta?.plural ?? {}
-  const sing = meta?.sing ?? {}
 
   const convert = (ownerId, obj) => {
     const out = { ...obj }
@@ -394,20 +228,7 @@ export function buildTemplateFromEditor(content, meta) {
       if (typeof v !== 'string' || TEXT_FIELDS_SKIP.has(k)) continue
       const path = `${ownerId}.${k}`
       if (!edited.has(path)) continue
-      const original = origRaw[path] ?? v
-      /* ⚠️ בשדה דקדוקי ה-content מחזיק את תיבת היחיד — אבל רק אם
-         היא נערכה. אם נערכה רק תיבת הרבים, ב-content עדיין יושב
-         נוסח התבנית הגולמי, ושליחתו כ"טקסט שנערך" הייתה מכניסה
-         את התחביר עצמו אל תוך הנוסח. */
-      const alt = hasAlternates(original)
-      const singularEdited = !alt || sing[path] !== undefined
-      const r = toTemplateRaw({
-        originalRaw: original,
-        singularText: alt && !singularEdited ? grammarBoxes(original).singular : v,
-        /* undefined = תיבת הרבים לא נערכה. */
-        pluralText: plural[path],
-        singularEdited,
-      })
+      const r = toTemplateRaw({ originalRaw: origRaw[path] ?? v, text: v })
       out[k] = r.raw
       for (const w of r.warnings) warnings.push(`${path}: ${w}`)
     }

@@ -1,0 +1,105 @@
+/* ── דוח הצעות מחיר ──────────────────────────────────────────────
+   הצבעים, הגופנים וסגנון הטבלה מגיעים מ-ReportTable.css. כאן רק
+   מה שייחודי לדוח הזה: הפיצול לשני חצאים ומסגרת התצוגה. */
+
+/* ⚠️ הטבלה היא הילד הראשון ב-DOM, והמכל הוא dir="rtl" — ולכן
+   היא בימין ותצוגת ה-PDF משמאלה, בלי row-reverse. */
+.qr-split {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  direction: rtl;
+}
+
+.qr-table-wrap {
+  flex: 0 1 46%;
+  min-width: 0;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+  /* ⚠️ גובה התצוגה נקבע ב-vh; הטבלה מקבלת אותו גובה ומגלגלת
+     בפנים, כדי ששני החצאים יתחילו ויסתיימו באותו קו. */
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+}
+
+.qr-table thead th { position: sticky; top: 0; z-index: 1; }
+
+.qr-row { cursor: pointer; }
+.qr-row:hover td { background: #EEF4FB; }
+
+/* השורה הנבחרת — אותו כחול של הקישורים בדוחות, כפס בקצה ההתחלה
+   ובמילוי עדין, כדי שתהיה ברורה גם לצד שורות זוגיות/אי-זוגיות. */
+.qr-row--on td,
+.qr-row--on:hover td {
+  background: #DCEAF8;
+  font-weight: 600;
+}
+.qr-row--on td:first-child { box-shadow: inset 3px 0 0 #4F86C6; }
+
+.qr-file-col { text-align: center; width: 64px; }
+
+.qr-file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #4F86C6;
+  text-decoration: none;
+}
+.qr-file-btn:hover { background: #E3EDF8; }
+.qr-nofile { color: #9AA3AF; }
+
+/* ── תצוגת המסמך ── */
+.qr-preview {
+  flex: 1 1 54%;
+  min-width: 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 190px);
+  overflow: hidden;
+}
+
+.qr-preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #E5E7EB;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2D3748;
+}
+.qr-preview-date { font-weight: 400; color: #6B7280; font-size: 13px; }
+
+.qr-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  min-height: 0;
+  background: #525659;   /* הרקע של מציג ה-PDF, כדי שלא תהבהב לבן */
+}
+
+.qr-preview-msg {
+  margin: auto;
+  padding: 32px 24px;
+  text-align: center;
+  color: #6B7280;
+  font-size: 15px;
+}
+
+/* ── טלפון וטאבלט ──
+   ⚠️ אותו רוחב של NARROW_PX ב-QuotesReport.jsx, שקובע מתי לחיצה
+   על שורה גוללת אל התצוגה. אם אחד משתנה, שניהם משתנים. */
+@media (max-width: 899px) {
+  .qr-split { flex-direction: column; }
+  .qr-table-wrap { flex: none; width: 100%; max-height: 52vh; }
+  .qr-preview { flex: none; width: 100%; height: 78vh; }
+}

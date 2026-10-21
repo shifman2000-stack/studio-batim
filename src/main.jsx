@@ -18,6 +18,7 @@ import HoursReport from './pages/reports/HoursReport'
 import ProjectHoursReport from './pages/reports/ProjectHoursReport'
 import ClientUsabilityReport from './pages/reports/ClientUsabilityReport'
 import InquiriesReport from './pages/reports/InquiriesReport'
+import QuotesReport from './pages/reports/QuotesReport'
 import HouseBuilderConfigReport from './pages/reports/HouseBuilderConfigReport'
 import SiteHealthReport from './pages/reports/SiteHealthReport'
 import ParentProjectModelsReport from './pages/reports/ParentProjectModelsReport'
@@ -158,6 +159,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reports/client-usability" element={<ClientUsabilityReport />} />
           <Route path="/inquiries" element={<Inquiries />} />
           <Route path="/reports/inquiries" element={<InquiriesReport />} />
+          <Route path="/reports/quotes" element={<QuotesReport />} />
           <Route path="/reports/house-builder-config" element={<HouseBuilderConfigReport />} />
           <Route path="/reports/parent-project-models" element={<ParentProjectModelsReport />} />
           <Route path="/reports/site-health" element={<SiteHealthReport />} />

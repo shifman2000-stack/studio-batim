@@ -51,6 +51,11 @@ export default function Reports() {
             <div className="report-card-title">דוח פניות</div>
             <div className="report-card-desc">סיכום פניות לפי שנה, אחוז המרה לפרויקטים וגרף חודשי</div>
           </div>
+          <div className="report-card" onClick={() => navigate('/reports/quotes')}>
+            <div className="report-card-icon">✍️</div>
+            <div className="report-card-title">דוח הצעות מחיר</div>
+            <div className="report-card-desc">כל ההצעות שנחתמו, לפי תאריך החתימה — עם צפייה במסמך החתום</div>
+          </div>
         </div>
       </section>
 

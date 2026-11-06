@@ -657,6 +657,24 @@
    ⚠️ חל רק על התוויות האלה. חגים (.cal-holiday) ונקודות הפגישות
    אינם היעדרות ונשארים כפי שהם. */
 .cal-absence-name {
+  /* ⚠️ פי 2 מ-9px של .cal-annotations. זו השורה שצריך לראות
+     מרחוק — מי לא כאן היום — וב-9px היא נבלעה.
+     ⚠️ שורה אחת עם חיתוך: ‎white-space:nowrap מונע שבירה שתגלוש
+     מגובה התא (הגובה נגזר מ---cal-cell-h ואינו גדל עם הפונט),
+     ו-ellipsis משאיר "…" במקום טקסט חתוך באמצע. השם המלא נשאר
+     ב-title של התא. */
+  /* ⚠️ נגזר מגובה התא ולא קבוע. 18px (פי 2) יושבים יפה כשהתא
+     50px — ב-1440 — אבל ב-1366 התא יורד ל-45px וכל תווית, גם
+     "עדי בחל״ת" הקצרה, יצאה חתוכה ב-"…". כאן הגודל יורד עם התא
+     ונעצר ב-18px, כך שהמסכים הרחבים מקבלים את ההגדלה המלאה
+     והצרים מקבלים תווית שנכנסת. */
+  font-size: clamp(12px, calc(var(--cal-cell-h, 40px) * 0.30), 18px);
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
   font-weight: 600;
   color: #3a3426;
   unicode-bidi: plaintext;
@@ -1520,4 +1538,14 @@
 
 .gcal-disconnect-btn:hover {
   color: #e53935;
+}
+
+/* ── שגיאת שמירה ──
+   ⚠️ באותו מקום שבו הופיע "✓ נשמר", ובמקומו. שמירה שנכשלה
+   הציגה עד כה "נשמר" והשגיאה הלכה ל-console בלבד. */
+.hours-save-error {
+  color: #b4442c;
+  font-size: 13px;
+  font-weight: 600;
+  margin-inline-start: 10px;
 }

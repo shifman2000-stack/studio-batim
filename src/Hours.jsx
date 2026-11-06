@@ -190,6 +190,11 @@ function Hours() {
   const [origDeparture, setOrigDeparture] = useState('')
   const [saving, setSaving]             = useState(false)
   const [saved, setSaved]               = useState(false)
+  /* ⚠️ שגיאת שמירה גלויה. עד כאן כל השומרים רשמו את השגיאה
+     ל-console והמשיכו כאילו הצליחו: הם סימנו dayStatus ו-saved
+     ללא תנאי. כך נראה "מאושר ✓" על יום שלא נשמרה בו שורה —
+     בדיוק מה שקרה כשה-CHECK על day_type דחה 'unpaid'. */
+  const [saveError, setSaveError]       = useState('')
   const [arrivalError, setArrivalError]     = useState('')
   const [departureError, setDepartureError] = useState('')
 
@@ -819,6 +824,7 @@ function Hours() {
     setManualEntry(false)
     setArrivalError('')
     setDepartureError('')
+    setSaveError('')
     if (!userId) return
 
     const [{ data: attData }, { data: pendData }, { data: reps }] = await Promise.all([
@@ -982,36 +988,61 @@ function Hours() {
 
   // ── Save helpers ──
 
+  /* הכישלון, במקום אחד. מחזיר true כשהייתה שגיאה — ואז הקורא
+     יוצא מיד, בלי לסמן "נשמר" ובלי לגעת ב-dayStatus. הבחירה של
+     המשתמש/ת נשארת על המסך כפי שהייתה, כדי שאפשר לנסות שוב. */
+  const failIfError = (...errors) => {
+    const err = errors.find(Boolean)
+    if (!err) return false
+    console.error('hours save failed:', err)
+    setSaveError('השמירה נכשלה — לא נשמר דבר')
+    setSaved(false)
+    setSaving(false)
+    return true
+  }
+
+  /* ⚠️ אחרי שמירה מוצלחת הסטטוס נקרא מחדש מהמסד ולא נקבע
+     אופטימית. selectDay הוא הקוד היחיד שגוזר dayStatus משורה
+     אמיתית, וקריאה לו כאן היא מה שמבטיח שהתג "מאושר ✓" מופיע
+     רק כששורה מאושרת באמת קיימת. */
+  const afterSaveOk = async () => {
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+    await selectDay(selectedDate)
+    fetchCalendarData()
+    fetchMonthlySummary()
+  }
+
   // Vacation / sick: save directly to attendance as approved (no approval flow)
   const handleVacationSickSave = async () => {
     if (!selectedDate || !userId) return
     setSaving(true)
-    const { data: upserted } = await supabase
+    setSaveError('')
+    const { data: upserted, error } = await supabase
       .from('attendance')
       .upsert(
         { user_id: userId, date: selectedDate, day_type: dayType, arrival_time: null, departure_time: null, work_from_home: false },
         { onConflict: 'user_id,date' }
       )
       .select().single()
-    if (upserted) setAttendanceId(upserted.id)
+    /* ⚠️ גם "בלי שגיאה אבל בלי שורה" הוא כישלון. זה המסלול שבו
+       חל״ת נדחה על ידי ה-CHECK, וזה בדיוק מה שנבלע כאן. */
+    if (failIfError(error, upserted ? null : { message: 'attendance upsert returned no row' })) return
+    setAttendanceId(upserted.id)
     // Remove any pending entry for this day
     if (pendingId) {
       await supabase.from('pending_approvals').delete().eq('id', pendingId).eq('user_id', userId)
       setPendingId(null)
     }
-    setDayStatus('approved')
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-    fetchCalendarData()
-    fetchMonthlySummary()
+    await afterSaveOk()
   }
 
   // Auto work mode: save directly to attendance + hour_reports as approved
   const handleDirectSave = async () => {
     if (!selectedDate || !userId) return
     setSaving(true)
-    console.log('saving work_from_home:', workFromHome)
+    setSaveError('')
     const { data: upserted, error: directError } = await supabase
       .from('attendance')
       .upsert(
@@ -1019,30 +1050,22 @@ function Hours() {
         { onConflict: 'user_id,date' }
       )
       .select().single()
-    console.log('attendance result:', { data: upserted, error: directError })
-    if (upserted) setAttendanceId(upserted.id)
+    if (failIfError(directError, upserted ? null : { message: 'attendance upsert returned no row' })) return
+    setAttendanceId(upserted.id)
     const { error: deleteError } = await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
-    console.log('hour_reports delete result:', { error: deleteError })
     const inserts = buildHourReportInserts()
-    console.log('hour_reports rows to insert:', inserts)
-    const { data: insertData, error: insertError } = inserts.length > 0
+    const { error: insertError } = inserts.length > 0
       ? await supabase.from('hour_reports').insert(inserts).select()
-      : { data: null, error: null }
-    console.log('hour_reports insert result:', { data: insertData, error: insertError })
+      : { error: null }
+    if (failIfError(deleteError, insertError)) return
     // Clean up draft from pending_approvals if it exists
     if (pendingId) {
-      const { error: pendingDeleteError } = await supabase.from('pending_approvals').delete().eq('id', pendingId).eq('user_id', userId)
-      console.log('pending_approvals delete result:', { error: pendingDeleteError })
+      await supabase.from('pending_approvals').delete().eq('id', pendingId).eq('user_id', userId)
       setPendingId(null)
     }
-    setDayStatus('approved')
     setOrigArrival(arrival)
     setOrigDeparture(departure)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-    fetchCalendarData()
-    fetchMonthlySummary()
+    await afterSaveOk()
   }
 
   const buildHourReportInserts = () =>
@@ -1068,13 +1091,14 @@ function Hours() {
   const handleAdminSave = async () => {
     if (!selectedDate || !userId) return
     setSaving(true)
+    setSaveError('')
 
-    await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
+    const { error: delError } = await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
     const inserts = buildHourReportInserts()
     const { error: adminError } = inserts.length > 0
       ? await supabase.from('hour_reports').insert(inserts)
       : { error: null }
-    console.log('save error:', adminError)
+    if (failIfError(delError, adminError)) return
 
     // Clean up any pending entry for this day
     if (pendingId) {
@@ -1082,6 +1106,9 @@ function Hours() {
       setPendingId(null)
     }
 
+    /* ⚠️ ליום של מנהל/ת אין שורת attendance — השעות מאושרות מעצם
+       היותן, ו-selectDay לא יגזור מהן סטטוס. לכן הסטטוס נקבע כאן
+       ידנית, אבל **רק אחרי** שההכנסה ל-hour_reports הצליחה. */
     setDayStatus('approved')
     setSaving(false)
     setSaved(true)
@@ -1094,7 +1121,7 @@ function Hours() {
   const handleEmployeeSave = async () => {
     if (!selectedDate || !userId) return
     setSaving(true)
-    console.log('saving work_from_home:', workFromHome)
+    setSaveError('')
 
     const breakdownRows = dayType === 'work'
       ? records
@@ -1155,11 +1182,14 @@ function Hours() {
       if (data) setPendingId(data.id)
       saveError = error
     }
-    console.log('save result:', saveError)
+    /* ⚠️ המסלול של העובדת: כאן נדחה חל״ת על ידי ה-CHECK של
+       pending_approvals, והשגיאה נרשמה ל-console בלבד בזמן
+       שהמסך סימן "ממתין". */
+    if (failIfError(saveError)) return
 
     // Step 3: if an attendance record exists, also update it + replace hour_reports
     if (attendanceId) {
-      await supabase
+      const { error: attErr } = await supabase
         .from('attendance')
         .update({
           arrival_time:   arrival   || null,
@@ -1168,32 +1198,32 @@ function Hours() {
         })
         .eq('id', attendanceId)
         .eq('user_id', userId)
-      await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
+      const { error: hrDelErr } = await supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate)
       const inserts = buildHourReportInserts()
-      if (inserts.length > 0) await supabase.from('hour_reports').insert(inserts)
+      const { error: hrInsErr } = inserts.length > 0
+        ? await supabase.from('hour_reports').insert(inserts)
+        : { error: null }
+      if (failIfError(attErr, hrDelErr, hrInsErr)) return
     }
 
-    setDayStatus('pending')
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-    fetchCalendarData()
-    fetchMonthlySummary()
+    await afterSaveOk()
   }
 
   // Employee: update project distribution for an approved past work day
   const handleUpdateDistribution = async () => {
     if (!selectedDate || !userId) return
     setSaving(true)
-    console.log('updating work_from_home:', workFromHome)
+    setSaveError('')
 
-    const [, { error: wfhError }] = await Promise.all([
+    const [{ error: hrDelError }, { error: wfhError }] = await Promise.all([
       supabase.from('hour_reports').delete().eq('user_id', userId).eq('date', selectedDate),
       supabase.from('attendance').update({ work_from_home: workFromHome }).eq('user_id', userId).eq('date', selectedDate),
     ])
-    console.log('save error:', wfhError)
     const inserts = buildHourReportInserts()
-    if (inserts.length > 0) await supabase.from('hour_reports').insert(inserts)
+    const { error: hrInsError } = inserts.length > 0
+      ? await supabase.from('hour_reports').insert(inserts)
+      : { error: null }
+    if (failIfError(hrDelError, wfhError, hrInsError)) return
 
     setSaving(false)
     setSaved(true)
@@ -1276,28 +1306,43 @@ function Hours() {
       const { error: insertError } = await supabase
         .from('hour_reports')
         .insert(hrInserts)
+      if (deleteError || insertError) {
+        console.error('approve: hour_reports write failed', deleteError || insertError)
+        return { error: deleteError || insertError }
+      }
     }
+    /* ⚠️ מחזיר את השגיאה במקום לבלוע אותה. אישור שנכשל (למשל
+       day_type שה-CHECK דוחה) הסיר עד כה את השורה מרשימת
+       האישורים כאילו טופלה. */
+    return { error: pendingError || upsertError || null }
   }
 
   const handleApproveRecord = async (rec) => {
-    await doApprove(rec)
+    const { error } = await doApprove(rec)
+    if (error) { setSaveError('השמירה נכשלה — לא נשמר דבר'); return }
     setApprovalsList(prev => prev.filter(r => r.id !== rec.id))
     fetchCalendarData()
     fetchMonthlySummary()
   }
 
   const handleRejectRecord = async (id) => {
-    await supabase.from('pending_approvals')
+    const { error } = await supabase.from('pending_approvals')
       .update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: userId })
       .eq('id', id)
+    if (error) { console.error('reject failed:', error); setSaveError('השמירה נכשלה — לא נשמר דבר'); return }
     setApprovalsList(prev => prev.filter(r => r.id !== id))
   }
 
   const handleApproveAll = async () => {
+    /* ⚠️ רק מה שבאמת אושר יורד מהרשימה. קודם הרשימה רוקנה כולה,
+       ורשומה שהכתיבה שלה נכשלה נעלמה מהמסך כאילו טופלה. */
+    const failed = []
     for (const rec of [...approvalsList]) {
-      await doApprove(rec)
+      const { error } = await doApprove(rec)
+      if (error) failed.push(rec.id)
     }
-    setApprovalsList([])
+    setApprovalsList(prev => prev.filter(r => failed.includes(r.id)))
+    if (failed.length) setSaveError('השמירה נכשלה — לא נשמר דבר')
     fetchCalendarData()
     fetchMonthlySummary()
   }
@@ -1705,7 +1750,8 @@ function Hours() {
             </svg>
           </button>
         )}
-        {saved && <span className="hours-saved-indicator">✓ נשמר</span>}
+        {saved && !saveError && <span className="hours-saved-indicator">✓ נשמר</span>}
+        {saveError && <span className="hours-save-error">{saveError}</span>}
       </div>
     </>
   )

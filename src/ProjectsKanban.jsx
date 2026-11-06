@@ -1361,7 +1361,10 @@ ${authCode || '—'}
                               }}
                               title={childCounts[project.id] > 0 ? `${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים` : 'פרויקט אב — לחיצה למעבר לתצוגת הילדים'}
                             >
-                              <IconFolder size={12} />
+                              {/* ⚠️ 24 ולא 12. התגית מסמנת פרויקט אב, והיא הייתה
+                                  קטנה מכדי להבחין בה על הכרטיס. המרכוז האנכי מול
+                                  שם הפרויקט מגיע מ-alignItems:center של העטיפה. */}
+                              <IconFolder size={24} />
                               {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                             </span>
                           )}
@@ -1526,7 +1529,8 @@ ${authCode || '—'}
                                     }}
                                     title={childCounts[project.id] > 0 ? `${childCounts[project.id]} פרויקטי בן — לחיצה למעבר לתצוגת הילדים` : 'פרויקט אב — לחיצה למעבר לתצוגת הילדים'}
                                   >
-                                    <IconFolder size={12} />
+                                    {/* ⚠️ 24 ולא 12 — אותה תגית, בתצוגת פרויקטי הבן. */}
+                                    <IconFolder size={24} />
                                     {childCounts[project.id] > 0 && <span>{childCounts[project.id]}</span>}
                                   </span>
                                 )}

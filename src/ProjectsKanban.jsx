@@ -5,6 +5,7 @@ import { generateUniqueAuthCode } from './lib/generateAuthCode'
 import { markProjectAsParent, inheritClientInfoFromParent } from './lib/parentProjectInheritance'
 import NewTaskModal from './NewTaskModal'
 import ClientPreviewOverlay from './components/ClientPreviewOverlay'
+import ContractorPreviewOverlay from './components/ContractorPreviewOverlay'
 import InlineField from './components/InlineField'
 import { ActionRequiredDot } from './components/ActionRequiredBadge'
 import { loadAllProjectStreams } from './lib/staffNotifications'
@@ -99,6 +100,21 @@ const IconSmartphone = ({ size = 16 }) => (
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
     <line x1="12" y1="18" x2="12.01" y2="18"/>
+  </svg>
+)
+
+/* Feather-style hard-hat glyph — "תצוגת קבלן", beside "תצוגת לקוח" in
+   the "הגדרות פרויקט" modal. A helmet rather than a second phone: both
+   previews open the same device frame, and the difference the button
+   has to carry is WHO is looking. */
+const IconHardHat = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 18h20"/>
+    <path d="M4 18v-2a8 8 0 0 1 16 0v2"/>
+    <path d="M10 4h4v4"/>
+    <path d="M10 4a6 6 0 0 0-3 3"/>
+    <path d="M14 4a6 6 0 0 1 3 3"/>
   </svg>
 )
 
@@ -217,6 +233,13 @@ function ProjectsKanban() {
   // mounted underneath so closing the preview returns to it). See
   // src/components/ClientPreviewOverlay.jsx.
   const [clientPreviewProject, setClientPreviewProject] = useState(null) // project | null
+  /* "תצוגת קבלן" — the same preview, for the project's assigned
+     contractor. Holds { project, contractorId }. The id comes from
+     client_info.contractor_id, loaded with the settings draft below. */
+  const [contractorPreview, setContractorPreview] = useState(null)
+  /* client_info.contractor_id of the project whose settings modal is
+     open — null when none is assigned, undefined while loading. */
+  const [settingsContractorId, setSettingsContractorId] = useState(undefined)
   // Inline warning shown when the admin tries to uncheck "פרויקט אב" on a
   // project that still has real children — see the checkbox's onChange.
   const [settingsError,  setSettingsError]  = useState('')
@@ -678,6 +701,20 @@ function ProjectsKanban() {
      a Hebrew "ברוכים הבאים" message that includes the per-contact
      emails + the project's auth_code, and opens a popup with a copy
      button. ── */
+  /* ⚠️ הקבלן של הפרויקט נטען כשנפתח מודאל ההגדרות, ולא מראש:
+     client_info אינו חלק משליפת הקנבן, ולכפתור "תצוגת קבלן" דרוש
+     רק ה-id של הפרויקט שההגדרות שלו פתוחות. undefined = עדיין
+     נטען (הכפתור מושבת), null = לא שויך קבלן. */
+  useEffect(() => {
+    if (!settingsTarget?.id) { setSettingsContractorId(undefined); return undefined }
+    let cancelled = false
+    setSettingsContractorId(undefined)
+    supabase.from('client_info').select('contractor_id')
+      .eq('project_id', settingsTarget.id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setSettingsContractorId(data?.contractor_id ?? null) })
+    return () => { cancelled = true }
+  }, [settingsTarget?.id])
+
   const handleOpenWelcomeMessage = async () => {
     if (!settingsTarget) return
     const projectId = settingsTarget.id
@@ -2204,6 +2241,21 @@ ${authCode || '—'}
                         <IconSmartphone size={16} />
                         <span>תצוגת לקוח</span>
                       </button>
+                      {/* ⚠️ אחרי כפתור הלקוח ב-DOM, ולכן **משמאלו**
+                          על המסך — השורה היא RTL. */}
+                      <button
+                        type="button"
+                        className="pdset-check pdset-check-btn"
+                        disabled={!settingsContractorId}
+                        onClick={() => settingsContractorId && setContractorPreview({
+                          project: settingsTarget, contractorId: settingsContractorId,
+                        })}
+                        title={settingsContractorId ? 'תצוגת קבלן' : 'לא שויך קבלן לפרויקט'}
+                        aria-label="פתיחת תצוגת קבלן"
+                      >
+                        <IconHardHat size={16} />
+                        <span>תצוגת קבלן</span>
+                      </button>
                     </div>
                   )}
                 </section>
@@ -2268,6 +2320,14 @@ ${authCode || '—'}
         <ClientPreviewOverlay
           project={clientPreviewProject}
           onClose={() => setClientPreviewProject(null)}
+        />
+      )}
+
+      {contractorPreview && (
+        <ContractorPreviewOverlay
+          project={contractorPreview.project}
+          contractorId={contractorPreview.contractorId}
+          onClose={() => setContractorPreview(null)}
         />
       )}
 

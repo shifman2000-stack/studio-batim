@@ -43,27 +43,18 @@
 //   mounted — see the guard's own comment for why that's centralized
 //   there instead of touching every client screen individually.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase, setSupabasePreviewMode } from '../supabaseClient'
 import { ClientContext } from './ClientRoute'
 import ClientPortal from '../pages/ClientPortal'
+import { usePreviewWindow, usePreviewEscape } from './previewWindow'
 import './ClientPreviewOverlay.css'
 
-const DEFAULT_MARGIN = 24
-/* Synchronous fallback for the very first paint, before the frame
-   exists in the DOM to measure — .cpv-device-frame's real (unscaled)
-   size is 422×876 (390×844 screen + 16px padding on every side), and
-   the CSS scale(0.83) shrinks its RENDERED footprint to roughly this.
-   Corrected against the actual measured box the moment it mounts — see
-   the useLayoutEffect below. */
-const FALLBACK_WIDTH = 350
-const FALLBACK_HEIGHT = 727
-
-function defaultPosition(width = FALLBACK_WIDTH, height = FALLBACK_HEIGHT) {
-  const x = Math.max(DEFAULT_MARGIN, window.innerWidth  - width  - DEFAULT_MARGIN)
-  const y = Math.max(DEFAULT_MARGIN, window.innerHeight - height - DEFAULT_MARGIN)
-  return { x, y }
-}
+/* ⚠️ The spawn position, the dragging and the one-time re-measure moved
+   to previewWindow.js, unchanged, so "תצוגת קבלן" uses the same window
+   rather than a second copy of it. The reasons they are written the way
+   they are — getBoundingClientRect() over CSS width/height, measure
+   once, never after a manual drag — are documented there. */
 
 /**
  * @param {{ project: { id: string, name: string }, onClose: () => void }} props
@@ -71,10 +62,8 @@ function defaultPosition(width = FALLBACK_WIDTH, height = FALLBACK_HEIGHT) {
 export default function ClientPreviewOverlay({ project, onClose }) {
   const [phase,   setPhase]   = useState('loading') // 'loading' | 'ready' | 'empty' | 'error'
   const [contact, setContact] = useState(null)
-  const [pos, setPos] = useState(defaultPosition)
-  const dragRef = useRef(null) // { startX, startY, origX, origY } while dragging, else null
-  const didDragRef = useRef(false) // true once the admin has ever dragged — stops the re-measure below from clobbering a manual move
-  const frameRef = useRef(null) // the rendered (post-transform) .cpv-device-frame element
+  const { pos, frameRef, startDrag, stopDragPropagation } = usePreviewWindow(phase === 'ready')
+  usePreviewEscape(true, onClose)
 
   /* Flip the write guard on for the overlay's entire lifetime, and back
      off unconditionally on close/unmount — including an accidental
@@ -110,51 +99,6 @@ export default function ClientPreviewOverlay({ project, onClose }) {
     load()
     return () => { cancelled = true }
   }, [project?.id])
-
-  /* Once the real device-frame first mounts, re-anchor the default
-     spawn position against its ACTUAL rendered (post scale(0.83)) box
-     via getBoundingClientRect() instead of the FALLBACK_WIDTH/HEIGHT
-     estimate above — the frame's raw CSS width/height (422×~908) is
-     NOT what's visually on screen, only the transformed box is. Runs
-     once; skipped entirely if the admin already dragged the loading/
-     error/empty status panel to somewhere else before this fired. */
-  const measuredRef = useRef(false)
-  useLayoutEffect(() => {
-    if (phase !== 'ready' || measuredRef.current || didDragRef.current) return
-    const el = frameRef.current
-    if (!el) return
-    measuredRef.current = true
-    const rect = el.getBoundingClientRect()
-    setPos(defaultPosition(rect.width, rect.height))
-  }, [phase])
-
-  /* ── Dragging — plain mouse listeners on window while a drag is live,
-     started from the header/banner only (see the drag-handle elements
-     below). Cleaned up on mouseup AND on unmount, so closing the window
-     mid-drag never leaves stray listeners behind. */
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (!dragRef.current) return
-      const { startX, startY, origX, origY } = dragRef.current
-      setPos({ x: origX + (e.clientX - startX), y: origY + (e.clientY - startY) })
-    }
-    const handleUp = () => { dragRef.current = null }
-    window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-    return () => {
-      window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-    }
-  }, [])
-
-  const startDrag = (e) => {
-    e.preventDefault()
-    didDragRef.current = true
-    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y }
-  }
-  /* The close button lives inside the draggable header — stop its own
-     mousedown from also starting a drag. */
-  const stopDragPropagation = (e) => e.stopPropagation()
 
   const contactName = contact
     ? [contact.first_name, contact.last_name].filter(Boolean).join(' ').trim() || 'לקוח'

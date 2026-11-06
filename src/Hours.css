@@ -649,10 +649,23 @@
   unicode-bidi: plaintext;
 }
 
-.cal-vacation-name {
-  font-weight: 400;
-  color: #777;
+/* ⚠️ תווית היעדרות — סימון מרקר. זה הדבר היחיד בתא שצריך לקפוץ
+   לעין: מי לא כאן היום. הגרדיאנט מתחיל ב-35% מגובה השורה, ולכן
+   הצבע יושב על החלק התחתון של הטקסט כמו מרקר שהועבר עליו, ולא
+   כמלבן מלא. ‎display:inline הוא מה שמצמיד את הסימון לרוחב
+   הטקסט עצמו ולא לרוחב השורה.
+   ⚠️ חל רק על התוויות האלה. חגים (.cal-holiday) ונקודות הפגישות
+   אינם היעדרות ונשארים כפי שהם. */
+.cal-absence-name {
+  font-weight: 600;
+  color: #3a3426;
   unicode-bidi: plaintext;
+  padding: 0 2px;
+  background-image: linear-gradient(transparent 35%, #ffe27a 35%, #ffe27a 92%, transparent 92%);
+  /* ⚠️ box-decoration-break: תווית שנשברת לשתי שורות מקבלת בלעדיו
+     סימון שמדלג על קצות השורות. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 /* Vacation: green background */

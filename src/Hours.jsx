@@ -54,6 +54,34 @@ const DAY_NAMES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
    own everywhere and never folded into חופש or מחלה. */
 const DAY_TYPE_LABELS = { work: 'עבודה', vacation: 'חופש', sick: 'מחלה', unpaid: 'חל״ת' }
 
+/* הניסוח של תווית ההיעדרות בתא היומן: "עדי בחופש", "עדי במחלה",
+   "עדי בחל״ת". ⚠️ שלושת הסוגים כאן, ולא רק חופש — מפתח שחסר כאן
+   פירושו תווית בלי מילה, ולכן סוג חדש ב-DAY_TYPE_LABELS חייב
+   להגיע גם לכאן. 'work' לא נמצא כאן בכוונה: יום עבודה אינו
+   היעדרות ואין לו תווית. */
+const ABSENCE_WORD = { vacation: 'בחופש', sick: 'במחלה', unpaid: 'בחל״ת' }
+
+/**
+ * מפת ההיעדרויות לתאי היומן, משורות attendance.
+ * { 'YYYY-MM-DD': [{ userId, dayType }, ...] }
+ *
+ * ⚠️ משמשת את שני הענפים של fetchMonthlySummary. בענף האדמין
+ * הקלט הוא כל השורות של החודש, ובענף העובדת רק שלה — ההפרדה
+ * נעשית בשאילתה, לא כאן, וכך אי אפשר לדלוף היעדרות של אחר.
+ * אדם עם שתי שורות באותו יום נרשם פעם אחת.
+ */
+function buildAbsenceMap(rows) {
+  const map = {}
+  for (const a of (rows || [])) {
+    if (!a?.date || !ABSENCE_WORD[a.day_type]) continue
+    if (!map[a.date]) map[a.date] = []
+    if (!map[a.date].some(x => x.userId === a.user_id)) {
+      map[a.date].push({ userId: a.user_id, dayType: a.day_type })
+    }
+  }
+  return map
+}
+
 /* toMins / isoDate / formatDDMMYY / formatTotalHHMM live in
    src/lib/hoursDetail.js — imported above so this component and the
    standalone "דוח שעות עבודה" page share one source of truth for the
@@ -177,14 +205,22 @@ function Hours() {
      (with `date` added to the SELECT). Rendered below the calendar as a
      per-day view keyed by the user's currently selected day. */
   const [dailyByEmployee, setDailyByEmployee] = useState([])
-  /* Who is on vacation on each day of the calendar's viewed month (ADMIN view).
-     Shape: { 'YYYY-MM-DD': [userId, ...] }. Derived in fetchMonthlySummary's
-     admin branch from the `allAtt` rows it ALREADY fetches for the month — no
-     query of its own, so an employee's screen issues nothing extra. Names are
-     resolved at render time from `allUsers`, which init() loads for admins.
-     Replaced wholesale on every month change, so navigating back and forth
-     cannot accumulate entries. */
-  const [vacationByDate, setVacationByDate] = useState({})
+  /* Who is away on each day of the calendar's viewed month.
+     Shape: { 'YYYY-MM-DD': [{ userId, dayType }, ...] }.
+     Derived in BOTH branches of fetchMonthlySummary from rows those branches
+     already fetch — no query of its own, so neither screen issues anything
+     extra. Names are resolved at render time from `allUsers`, which init()
+     fills with every user for an admin and with the current user alone for
+     an employee. Replaced wholesale on every month change, so navigating
+     back and forth cannot accumulate entries.
+
+     ⚠️ שלושת סוגי ההיעדרות, לא רק חופש. קודם נאסף כאן day_type
+     'vacation' בלבד, ולכן מחלה וחל״ת לא קיבלו תווית באף תצוגה.
+     ⚠️ ובשני הענפים: קודם המפה נבנתה רק בענף האדמין, ועובדת לא
+     ראתה את ההיעדרות של עצמה בלוח שלה. בענף העובדת הנתונים הם
+     השורות שלה בלבד (user_id = userId), ולכן אין כאן חשיפה של
+     היעדרויות של אחרים. */
+  const [absenceByDate, setAbsenceByDate] = useState({})
 
   /* ── Drill-down state ──
      Calendar drill-down (below the calendar — keyed by userId).
@@ -481,7 +517,11 @@ function Hours() {
     const { first, last } = pairRange(viewYear, viewMonth)
 
     const [{ data: attData }, { data: repData }, { data: pendData }] = await Promise.all([
-      supabase.from('attendance').select('day_type, work_from_home, arrival_time, departure_time')
+      /* ⚠️ date ו-user_id נוספו ל-SELECT הקיים — בלעדיהם אי אפשר
+         לבנות את מפת ההיעדרויות של העובדת. אותה שאילתה, בלי
+         סיבוב נוסף לשרת. */
+      supabase.from('attendance')
+        .select('user_id, date, day_type, work_from_home, arrival_time, departure_time')
         .eq('user_id', userId).gte('date', first).lte('date', last),
       supabase.from('hour_reports').select('hours, minutes')
         .eq('user_id', userId).gte('date', first).lte('date', last),
@@ -526,6 +566,11 @@ function Hours() {
 
     setMonthlySummary({ sickDays, vacationDays, unpaidDays, totalMins, pendingMins, rejectedMins, officeDays, wfhDays })
 
+    /* ⚠️ נבנית גם בענף הזה. attData הן השורות של המשתמשת הנוכחית
+       בלבד, ולכן העובדת רואה את ההיעדרויות שלה ואת שלהן בלבד.
+       בענף האדמין המפה נדרסת מיד אחר כך בגרסה המלאה. */
+    setAbsenceByDate(buildAbsenceMap(attData))
+
     /* For admin: also build a per-employee daily breakdown for the same month.
        Renders below the calendar as a per-day view (one row per selected
        employee for the user's selected day). Uses the SAME two queries with
@@ -540,17 +585,11 @@ function Hours() {
           .gte('date', first).lte('date', last),
       ])
 
-      /* Vacation names for the calendar cells. Rides on `allAtt` above, which
+      /* Absence names for the calendar cells. Rides on `allAtt` above, which
          is already the whole month for EVERY user — including admins, who are
          missing from `employees` (role = 'employee') and so never reach
-         empDaily. A user with two rows on one day is counted once. */
-      const vacMap = {}
-      for (const a of (allAtt || [])) {
-        if (a.day_type !== 'vacation') continue
-        if (!vacMap[a.date]) vacMap[a.date] = []
-        if (!vacMap[a.date].includes(a.user_id)) vacMap[a.date].push(a.user_id)
-      }
-      setVacationByDate(vacMap)
+         empDaily. A user with two rows on one day is listed once. */
+      setAbsenceByDate(buildAbsenceMap(allAtt))
 
       const empDaily = (employees || []).map(emp => {
         const empAtt = allAtt ? allAtt.filter(a => a.user_id === emp.id) : []
@@ -857,23 +896,25 @@ function Hours() {
   const isPast  = !!(selectedDate && selectedDate < today)
   const isToday  = !!(selectedDate && selectedDate === today)
 
-  /* First names for the calendar's vacation lines. The first name is what the
+  /* First names for the calendar's absence lines. The first name is what the
      cell shows; when it is missing we fall back to the same display name the
      rest of this screen uses for a profile — "first last", or "-" when there
      is nothing at all (see the `name` field built in fetchMonthlySummary and
      the approvals list). Sorted so the order is stable across re-renders and
      month navigation. */
-  const vacationNamesFor = (ds) => {
-    const ids = vacationByDate[ds]
-    if (!ids || ids.length === 0) return []
-    return ids
-      .map(id => {
-        const u = allUsers.find(x => x.id === id)
+  const absencesFor = (ds) => {
+    const list = absenceByDate[ds]
+    if (!list || list.length === 0) return []
+    return list
+      .map(({ userId: uid, dayType }) => {
+        const u = allUsers.find(x => x.id === uid)
         const first = (u?.first_name || '').trim()
-        if (first) return first
-        return [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim() || '-'
+        const name = first
+          || [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim()
+          || '-'
+        return { name, dayType }
       })
-      .sort((a, b) => a.localeCompare(b, 'he'))
+      .sort((a, b) => a.name.localeCompare(b.name, 'he'))
   }
 
   // Time fields editable: admin always, employee only in manual-entry mode
@@ -1381,10 +1422,10 @@ function Hours() {
           if (isSel)        cls += ' cal-selected'
 
           const dots = gcalDots[ds] || []
-          /* Admin-only. For an employee vacationByDate is never populated —
-             the query it derives from lives in the admin branch — and the
-             guard below keeps the cell byte-identical to today's. */
-          const vacationNames = isAdmin ? vacationNamesFor(ds) : []
+          /* ⚠️ בלי שער isAdmin. המפה נבנית בשני הענפים, וכל צד
+             רואה בדיוק את מה שהשאילתה שלו מחזירה: האדמין את כולם,
+             העובדת את עצמה. */
+          const absences = absencesFor(ds)
           /* Admin-only too: gcalHolidays is only ever filled by the Google
              panel, which exists only in the admin layout. */
           const holiday = isAdmin ? gcalHolidays[ds] : null
@@ -1397,7 +1438,7 @@ function Hours() {
              library. */
           const annotations = [
             ...(holiday ? [{ text: holiday, cls: 'cal-holiday' }] : []),
-            ...vacationNames.map(n => ({ text: `${n} בחופש`, cls: 'cal-vacation-name' })),
+            ...absences.map(a => ({ text: `${a.name} ${ABSENCE_WORD[a.dayType] || ''}`.trim(), cls: 'cal-absence-name' })),
           ]
           const hasMarks = Boolean(calStatus)
 

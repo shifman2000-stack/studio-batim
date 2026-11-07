@@ -23,6 +23,7 @@ import { supabase, isPreviewBlockedError } from '../../supabaseClient'
 import { resolveUserNames } from '../../lib/resolveUserNames'
 import { useClient } from '../../components/ClientRoute'
 import { logError } from '../../lib/clientActivityLog'
+import { notifyClientSharedUpload } from '../../lib/staffNotify'
 
 const BUCKET = 'project-shared-files'
 
@@ -211,6 +212,14 @@ export default function ClientSharedFiles() {
           uploaded_by: userId,
         })
       if (insErr) throw insErr
+
+      /* ⚠️ ההתראה לצוות נשלחת אחרי שההעלאה כבר הצליחה, ובכוונה מחוץ
+         ל-throw: כישלון בהתראה לא הופך העלאה מוצלחת לשגיאה על המסך
+         של הלקוח. notifyClientSharedUpload לעולם לא זורק (הוא תופס
+         בפנים ומתעד ל-console), כולל מצב שבו שורה כבר קיימת —
+         ה-conflict על ה-unique index הוא ההתנהגות הרצויה, נקודה אחת
+         לפרויקט, לא שגיאה. */
+      void notifyClientSharedUpload({ projectId: project_id, actorId: userId })
 
       await loadItems()
       if (!isMounted.current) return

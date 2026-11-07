@@ -15,3 +15,12 @@ first explicitly asking the user in plain text and getting a clear "yes"/"כן":
 - Deploying edge functions (`deploy_edge_function`)
 
 For all of the above: stop, describe exactly what you're about to do and why, and wait for the user's explicit confirmation before proceeding. Everything else (local file edits, git add/commit, npm/build/test commands, reading data, Supabase read-only queries) can proceed without asking.
+
+## SPEED RULES
+- Do only what the prompt asks. No refactors, no extracting shared code, no "while I'm here" improvements.
+- Verification: run build + existing tests only. Do NOT build a headless browser lab, fixtures or seeded test data unless the prompt explicitly asks.
+- Do not investigate side issues (e.g. checking master baseline). Mention them in one line and move on.
+- If you hit a blocker that needs a design decision, stop and report instead of exploring alternatives.
+- Never write to the Prod DB or Storage. Read-only SELECTs only.
+- Before saying "no SQL needed" for any new value/column the code writes, check the Prod constraints read-only.
+- Final report: max 10 lines.

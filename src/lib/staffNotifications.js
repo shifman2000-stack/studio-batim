@@ -46,6 +46,10 @@ export function notificationText(row) {
   return NOTIFICATION_TEXT[`${row.actor_role}:${row.action}`] || null
 }
 
+/* ה-action של העלאת לקוח למרחב המשותף. document_id שלו NULL, בדיוק
+   כמו שורות השאלון, ולכן ה-action הוא הדבר היחיד שמפריד ביניהן. */
+export const SHARED_UPLOAD_ACTION = 'shared_upload'
+
 /* ── Kanban: ONE query for the WHOLE BOARD ────────────────────────────
    Exactly the shape tasksByProject already uses — one round-trip, then
    grouped in memory. No per-card query, no N+1.
@@ -60,27 +64,30 @@ export function notificationText(row) {
    the stage-group badges, the per-row lines and the link all carry real
    counts, derived from loadProjectNotifications() further down.
 
-   @returns {Promise<Object>} { [project_id]: { documents:bool, questionnaire:bool } },
+   @returns {Promise<Object>} { [project_id]: { documents:bool, questionnaire:bool, sharedUpload:bool } },
                               {} on failure */
 export async function loadAllProjectStreams() {
   try {
     const { data, error } = await supabase
       .from(STAFF_NOTIFICATIONS_TABLE)
-      .select('project_id, document_id')
+      .select('project_id, document_id, action')
     if (error) throw error
 
     const byProject = {}
     for (const row of data || []) {
       if (!row.project_id) continue
       if (!byProject[row.project_id]) {
-        byProject[row.project_id] = { documents: false, questionnaire: false }
+        byProject[row.project_id] = { documents: false, questionnaire: false, sharedUpload: false }
       }
-      /* Same rule as documentNotifications / questionnaireNotifications:
-         a row with a document belongs to the document stream, one
-         without belongs to the questionnaire stream. Exact complements,
-         so every row raises exactly one of the two flags. */
-      if (row.document_id) byProject[row.project_id].documents = true
-      else                 byProject[row.project_id].questionnaire = true
+      /* Same rule as documentNotifications / questionnaireNotifications /
+         sharedUploadNotifications: a row with a document belongs to the
+         document stream; a row without one belongs to the shared-space
+         stream if its action says so, otherwise to the questionnaire
+         stream. Three exact complements, so every row raises exactly one
+         of the three flags. */
+      if (row.document_id)                            byProject[row.project_id].documents    = true
+      else if (row.action === SHARED_UPLOAD_ACTION)   byProject[row.project_id].sharedUpload = true
+      else                                            byProject[row.project_id].questionnaire = true
     }
     return byProject
   } catch (e) {
@@ -118,11 +125,20 @@ export function documentNotifications(rows) {
   return (Array.isArray(rows) ? rows : []).filter(r => r && r.document_id)
 }
 
-/* The other half of the same array: project-targeted rows, no document.
-   Exactly the complement of documentNotifications(), so every row belongs
-   to precisely one stream and the two counts can never double-count. */
+/* Project-targeted rows, no document, that are NOT shared-space uploads.
+   ⚠️ ה-filter על action הוא לא קוסמטיקה: העלאה למרחב המשותף היא גם
+   היא שורה בלי document_id, ובלי ההחרגה הזאת היא הייתה מופיעה כנקודה
+   על טאב "פגישות ושאלון" — טאב שלא מציג אותה בכלל. */
 export function questionnaireNotifications(rows) {
-  return (Array.isArray(rows) ? rows : []).filter(r => r && !r.document_id)
+  return (Array.isArray(rows) ? rows : [])
+    .filter(r => r && !r.document_id && r.action !== SHARED_UPLOAD_ACTION)
+}
+
+/* The third stream: client uploads to the shared space (מרחב משותף).
+   Project-targeted like the questionnaire rows, told apart by action. */
+export function sharedUploadNotifications(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter(r => r && !r.document_id && r.action === SHARED_UPLOAD_ACTION)
 }
 
 /* Is one SIDE still pending? action is 'questionnaire_done' | 'house_done'.
@@ -230,5 +246,33 @@ export async function clearQuestionnaireSide(projectId, action) {
   } catch (e) {
     console.error('[staffNotifications] side clear threw', e)
     return false
+  }
+}
+
+/* ── ניקוי ההתראה של המרחב המשותף ────────────────────────────────────
+   אותו pattern כמו clearQuestionnaireSide, עם תוספת אחת: ‎.select('id')‎
+   כדי לדעת כמה שורות נמחקו באמת. בלי זה, DELETE שה-RLS סינן ממנו הכל
+   מחזיר error=null — "הצלחה" שלא מחקה כלום, והנקודה האדומה הייתה
+   חוזרת בטעינה הבאה בלי שום סימן למה.
+
+   @returns {Promise<number>} מספר השורות שנמחקו, -1 בכישלון */
+export async function clearSharedUpload(projectId) {
+  if (!projectId) return -1
+  try {
+    const { data, error } = await supabase
+      .from(STAFF_NOTIFICATIONS_TABLE)
+      .delete()
+      .eq('project_id', projectId)
+      .eq('action', SHARED_UPLOAD_ACTION)
+      .is('document_id', null)
+      .select('id')
+    if (error) {
+      console.error('[staffNotifications] shared-upload clear failed', { projectId, code: error.code, error })
+      return -1
+    }
+    return Array.isArray(data) ? data.length : 0
+  } catch (e) {
+    console.error('[staffNotifications] shared-upload clear threw', e)
+    return -1
   }
 }

@@ -174,3 +174,11 @@ export const notifyContractorApprove  = (args) => writeDocumentEvent('contractor
 
 export const notifyClientQuestionnaireDone = (args) => writeQuestionnaireEvent('questionnaire_done', args)
 export const notifyClientHouseDone         = (args) => writeQuestionnaireEvent('house_done',         args)
+
+/* ── מרחב משותף ──
+   העלאה של הלקוח למרחב המשותף היא גם היא אירוע ברמת הפרויקט ולא
+   ברמת מסמך: הקבצים האלה יושבים ב-shared_files, לא ב-documents, ולכן
+   document_id נשאר NULL. ה-unique index החלקי על (project_id, action)
+   WHERE document_id IS NULL הוא מה שמקבץ כמה העלאות לנקודה אחת —
+   אותה התנהגות כמו השאלון, וזו ההחלטה המכוונת. */
+export const notifyClientSharedUpload      = (args) => writeQuestionnaireEvent('shared_upload',      args)

@@ -26,6 +26,8 @@ import {
   loadProjectNotifications,
   documentNotifications,
   questionnaireNotifications,
+  sharedUploadNotifications,
+  clearSharedUpload,
 } from './lib/staffNotifications'
 import './ProjectDetail.css'
 
@@ -36,6 +38,10 @@ const NOTIF_LABEL = (n) => `${n} עדכונים חדשים`
    DOCUMENT notifications; the questionnaire stream gets its own home in
    step 3 and is deliberately not counted here. */
 const DOCUMENTS_TAB_ID = 2
+
+/* "מרחב משותף" — הבית של זרם ההעלאות של הלקוח. אותו מספר שמופיע
+   ב-TABS ובתנאי הרינדור למטה, במקום אחד. */
+const SHARED_TAB_ID = 10
 
 /* Lookup: manager tab id → CONTROLLABLE_TABS entry (or undefined). Used
    in the tab bar to know whether a given tab gets the person icon + the
@@ -403,6 +409,27 @@ function ProjectDetail() {
      them they account for every row once and never twice. */
   const documentNotifCount      = documentNotifications(notifications).length
   const questionnaireNotifCount = questionnaireNotifications(notifications).length
+  /* הזרם השלישי: העלאות הלקוח למרחב המשותף. אותו מערך, אותו badge. */
+  const sharedNotifCount        = sharedUploadNotifications(notifications).length
+
+  /* ── פתיחת הטאב = קריאה ─────────────────────────────────────────────
+     כמו בשאלון: הנוכחות של השורה היא ההתראה, ולכן הניקוי הוא מחיקה.
+     התנאי על sharedNotifCount הוא מה שמונע DELETE בכל מעבר לטאב כשאין
+     מה למחוק. אחרי המחיקה המערך נטען מחדש — מקור אמת אחד — ורק אם
+     באמת נמחקה שורה; מחיקה שהחזירה 0 שורות (RLS שסינן הכל) נרשמת
+     ל-console ומשאירה את הנקודה במקום, כי היא עדיין שם במסד. */
+  useEffect(() => {
+    if (activeTab !== SHARED_TAB_ID || sharedNotifCount === 0 || !id) return
+    let cancelled = false
+    ;(async () => {
+      const deleted = await clearSharedUpload(id)
+      if (deleted === 0) {
+        console.warn('[ProjectDetail] shared-upload clear deleted 0 rows', { projectId: id })
+      }
+      if (!cancelled && deleted > 0) await reloadNotifications()
+    })()
+    return () => { cancelled = true }
+  }, [activeTab, sharedNotifCount, id, reloadNotifications])
 
   /* professionals list */
   const [profList, setProfList] = useState([])
@@ -1080,6 +1107,10 @@ function ProjectDetail() {
                   complementary half of the rows. */}
               {tab.id === MEETINGS_TAB_ID && (
                 <ActionRequiredBadge count={questionnaireNotifCount} label={NOTIF_LABEL} />
+              )}
+              {/* מרחב משותף — העלאות הלקוח. אותו מערך, שליש שלישי שלו. */}
+              {tab.id === SHARED_TAB_ID && (
+                <ActionRequiredBadge count={sharedNotifCount} label={NOTIF_LABEL} />
               )}
               {ctrl && visible && (
                 <span

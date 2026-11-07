@@ -15,7 +15,8 @@ import './ProjectsKanban.css'
 /* ── The card's notification dots ──────────────────────────────────────
    The board shows PRESENCE, not quantity: one dot if anything is pending
    in the document stream, a second if anything is pending in the
-   questionnaire stream. 0, 1 or 2 dots, never a number.
+   questionnaire stream, a third if anything is pending in the shared
+   space. 0 to 3 dots, never a number.
 
    Counting continues everywhere below the board — the two tab badges,
    the stage-group badges, the per-row lines and the שאלון פרוגרמה link
@@ -1422,7 +1423,7 @@ ${authCode || '—'}
                           פעילות) in isVisible() above and nothing else. */}
                       {(() => {
                         const n = notifsByProject[project.id]
-                        if (!n || (!n.documents && !n.questionnaire)) return null
+                        if (!n || (!n.documents && !n.questionnaire && !n.sharedUpload)) return null
                         return (
                           <div className="kanban-card-notifs">
                             {n.documents && (
@@ -1430,6 +1431,9 @@ ${authCode || '—'}
                             )}
                             {n.questionnaire && (
                               <ActionRequiredDot size={NOTIF_DOT_SIZE} label="עדכון חדש בשאלון פרוגרמה" />
+                            )}
+                            {n.sharedUpload && (
+                              <ActionRequiredDot size={NOTIF_DOT_SIZE} label="קובץ חדש במרחב המשותף" />
                             )}
                           </div>
                         )

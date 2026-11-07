@@ -256,6 +256,12 @@ export default function ClientSharedFiles() {
         })
       if (error) throw error
 
+      /* אותה התראה בדיוק כמו בהעלאת קובץ, ובכוונה אותו action: מבחינת
+         הצוות "משהו חדש במרחב המשותף" הוא אירוע אחד, וה-unique index
+         מקבץ קובץ והערה לאותה נקודה אחת. גם כאן מחוץ ל-throw —
+         כישלון בהתראה לא הופך שמירה מוצלחת לשגיאה על מסך הלקוח. */
+      void notifyClientSharedUpload({ projectId: project_id, actorId: userId })
+
       setNoteText('')
       setNoteFormOpen(false)
       await loadItems()

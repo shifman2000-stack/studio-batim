@@ -877,7 +877,19 @@
    pane body — which keeps overflow-y:auto — scrolls as a last resort,
    so a very short window degrades to an internal scroll rather than
    clipping the buttons. Scoped to this pane so the regular summary
-   editor and the client portal's rich text are untouched. */
+   editor and the client portal's rich text are untouched.
+
+   ⚠️ שורת הסיכום היא היחידה בשרשרת שאסור לה לשאת min-height: 0.
+   ‎flex: 1‎ הוא ‎flex-basis: 0‎, וכשהמקום הפנוי שלילי הכיווץ מתחלק לפי
+   basis — כלומר השורה הזאת לא "מתכווצת" אלא נשארת על ה-basis שלה,
+   0, ונחתכת רק על ידי המינימום האוטומטי שלה. עם min-height: 0 המינימום
+   הזה מתאפס: גובה השורה קרס ל-8px בזמן ש-‎.rte-content‎ שבתוכה מסרבת
+   לרדת מתחת ל-120px, גלשה החוצה מהשורה, ותיבת המשימות הבאה — שמציירת
+   אחריה ב-DOM — כיסתה אותה. זה בדיוק מה שנראה כאילו "תיבת המשימות
+   החליפה את הסיכום", ובמדידה: הסיכום ב-top 424 גובה 120, ותיבת הלקוח
+   מתחילה ב-432. בלי ההצהרה המינימום חוזר להיות min-content (סרגל
+   הכלים + 120px), השורה לא קורסת, והגלילה עוברת ל-‎.ms-program-pane-body‎
+   כמתוכנן. */
 .ms-program-pane--editor .ms-program-pane-body {
   display: flex;
   flex-direction: column;
@@ -891,7 +903,6 @@
 
 .ms-program-pane--editor .ms-edit-row--grow {
   flex: 1;
-  min-height: 0;
 }
 
 .ms-program-pane--editor .ms-edit-row--grow .rte-root {

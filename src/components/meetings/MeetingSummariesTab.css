@@ -873,17 +873,11 @@
    editor (.ms-edit-row--grow) absorbs whatever is left, and scrolls
    INSIDE itself when the text is longer than that.
 
-   ⚠️ הרצפה היא 300px, בדיוק כמו ‎.rte-content‎ הרגיל, וזה לא מספר
-   שרירותי. ‎.ms-edit-row--grow‎ הוא ‎flex: 1‎ — כלומר ‎flex-basis: 0‎ —
-   ואילו כל תיבת משימות שנפתחת מתחתיו כופה 300px של ‎.rte-content‎ בלי
-   יכולת לכווץ. ברגע שהמקום הפנוי נהפך שלילי, ‎flex-shrink‎ מתחלק
-   לפי ‎basis‎, ולכן העורך הראשי לא "מתכווץ" אלא נופל ישר ל-min שלו:
-   עם רצפה של 120px הוא התמוטט לסרגל כלים ועוד שורה וחצי, ונראה כאילו
-   תיבת המשימות החליפה את הסיכום. עם 300px הוא נשאר שטח כתיבה מלא
-   ו-‎.ms-program-pane-body‎ — ששומר ‎overflow-y:auto‎ — גולל במקומו.
-   זה תקף לשני הכפתורים ולשני המסכים: המסך המלא נושא גם הוא את
-   ‎.ms-program-pane--editor‎. Scoped to this pane so the client portal's
-   rich text is untouched. */
+   The floor is 120px: below that the editor stops shrinking and the
+   pane body — which keeps overflow-y:auto — scrolls as a last resort,
+   so a very short window degrades to an internal scroll rather than
+   clipping the buttons. Scoped to this pane so the regular summary
+   editor and the client portal's rich text are untouched. */
 .ms-program-pane--editor .ms-program-pane-body {
   display: flex;
   flex-direction: column;
@@ -922,7 +916,7 @@
 
 .ms-program-pane--editor .ms-edit-row--grow .rte-content {
   flex: 1;
-  min-height: 300px;
+  min-height: 120px;
   overflow-y: auto;
 }
 
